@@ -18,7 +18,7 @@ contributors:
 
 # Change Process
 
-This document is governed by the [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1) (COSS).
+This document is governed by the process in [`process/`](https://github.com/ethereum/access-layer-specs/tree/main/process) of ethereum/access-layer-specs, which superseded [1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss).
 
 # Language
 

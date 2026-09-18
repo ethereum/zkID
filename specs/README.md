@@ -11,10 +11,9 @@ reference implementation.
 
 ## Change Process
 
-Specs in this directory are governed by the
-[1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1)
-change-control process. Status promotion (`raw` → `draft` → ...) follows the
-COSS lifecycle.
+Specs in this directory are governed by the process in
+[`process/`](https://github.com/ethereum/access-layer-specs/tree/main/process) of
+ethereum/access-layer-specs, which superseded 1/COSS.
 
 ## Editorial History
 
