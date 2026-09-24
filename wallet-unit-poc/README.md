@@ -18,9 +18,9 @@ We're actively scoping support for additional credential formats (e.g. W3C VC-JW
 Compile the circom circuits with secq256r1 as native field:
 
 ```sh
-yarn
-yarn compile:jwt
-yarn compile:ecdsa
+pnpm install
+pnpm compile:jwt
+pnpm compile:ecdsa
 ```
 
 This creates a build folder containing R1CS and WASM files for circuits.

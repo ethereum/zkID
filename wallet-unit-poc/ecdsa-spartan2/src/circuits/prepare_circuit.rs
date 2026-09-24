@@ -53,7 +53,7 @@ pub(crate) fn call_jwt_witness(
         name => {
             eprintln!(
                 "Circuit '{}' is not compiled into this binary.\n\
-                 Run `yarn compile:jwt:{} && cargo build --release` first.",
+                 Run `pnpm compile:jwt:{} && cargo build --release` first.",
                 name,
                 name.strip_prefix("jwt_").unwrap_or(name)
             );

@@ -73,7 +73,8 @@ export class NativeBackend {
 
   private findBinary(): string {
     const candidates = [
-      join(dirname(new URL(import.meta.url).pathname), "..", "..", "ecdsa-spartan2", "target", "release", "ecdsa-spartan2"),
+      // ecdsa-spartan2 is a member of the root Cargo workspace, so it builds into <repo>/target.
+      join(dirname(new URL(import.meta.url).pathname), "..", "..", "..", "target", "release", "ecdsa-spartan2"),
       join(process.cwd(), "target", "release", "ecdsa-spartan2"),
     ];
 
@@ -104,7 +105,9 @@ export class NativeBackend {
   // When running via `cargo run`, Cargo sets DYLD_LIBRARY_PATH automatically;
   // when invoking via execFile we must set it ourselves.
   private buildDylibEnv(): Record<string, string> {
-    const buildDir = join(this.workDir, "target", "release", "build");
+    // Build-script output sits beside the binary in <target>/<profile>/build; a binary
+    // outside Cargo's target dir gets no library path.
+    const buildDir = join(dirname(this.binaryPath), "build");
     if (!existsSync(buildDir)) return {};
 
     const entries = readdirSync(buildDir);

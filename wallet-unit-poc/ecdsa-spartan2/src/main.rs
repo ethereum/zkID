@@ -305,14 +305,14 @@ fn run_prove_pipeline(
         let jwt_input = path_config.input_json("jwt");
         if !jwt_input.exists() {
             return Err(format!(
-                "JWT inputs not found for size {size}:\n  {}\nRun: yarn generate:inputs --size {size}",
+                "JWT inputs not found for size {size}:\n  {}\nRun: pnpm generate:inputs --size {size}",
                 jwt_input.display()
             ));
         }
         let show_input = path_config.input_json("show");
         if !show_input.exists() {
             return Err(format!(
-                "Show inputs not found for size {size}:\n  {}\nRun: yarn generate:inputs --size {size}",
+                "Show inputs not found for size {size}:\n  {}\nRun: pnpm generate:inputs --size {size}",
                 show_input.display()
             ));
         }
@@ -514,13 +514,13 @@ fn run_mdoc_prove_pipeline(
     let resolved_mdoc_input = mdoc_input.unwrap_or_else(|| path_config.input_json("mdoc"));
     if !resolved_mdoc_input.exists() {
         return Err(format!(
-            "MDOC inputs not found:\n  {}\nRun: yarn generate:inputs:mdoc",
+            "MDOC inputs not found:\n  {}\nRun: pnpm generate:inputs:mdoc",
             resolved_mdoc_input.display()
         ));
     }
     if !show_mdoc_input.exists() {
         return Err(format!(
-            "Show inputs for mdoc flow not found:\n  {}\nRun: yarn generate:inputs:mdoc",
+            "Show inputs for mdoc flow not found:\n  {}\nRun: pnpm generate:inputs:mdoc",
             show_mdoc_input.display()
         ));
     }
@@ -1233,10 +1233,10 @@ Options:
 
 Typical workflow:
   # 1. Compile circuits (Circom side)
-  cd ../circom && yarn compile:all
+  cd ../circom && pnpm compile:all
 
   # 2. Generate inputs for each size
-  yarn generate:inputs --all
+  pnpm generate:inputs --all
 
   # 3. Generate setup keys (one-time, slow)
   cargo run --release -- prepare setup --size 1k

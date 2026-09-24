@@ -179,7 +179,7 @@ export class WasmBridge {
     } else {
       try {
         // The wasm/pkg/openac_wasm.js module is generated at build time by
-        // `npm run build:wasm` (wasm-pack output, --target web). In Node the
+        // `pnpm build:wasm` (wasm-pack output, --target web). In Node the
         // wasm binary must be loaded explicitly; browsers auto-fetch via the
         // module's default export.
         // @ts-ignore wasm-pack output is generated at runtime by build:wasm
@@ -199,7 +199,7 @@ export class WasmBridge {
       } catch (e) {
         throw new WasmError(
           "WASM_LOAD_FAILED",
-          `Could not load bundled WASM module: ${e instanceof Error ? e.message : String(e)}. Build it first (npm run build:wasm) or provide wasmPath/wasmModule.`,
+          `Could not load bundled WASM module: ${e instanceof Error ? e.message : String(e)}. Build it first (pnpm build:wasm) or provide wasmPath/wasmModule.`,
         );
       }
     }

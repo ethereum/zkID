@@ -39,7 +39,7 @@ pub(crate) fn call_mdoc_witness(inputs_json: &str) -> Result<Vec<u8>, SynthesisE
         let _ = inputs_json;
         eprintln!(
             "MDOC circuit not compiled into this binary.\n\
-             Run `yarn compile:mdoc && cargo build --release` first."
+             Run `pnpm compile:mdoc && cargo build --release` first."
         );
         Err(SynthesisError::Unsatisfiable)
     }

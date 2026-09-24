@@ -1,0 +1,15 @@
+packages:
+  - wallet-unit-poc/circom
+  - wallet-unit-poc/openac-sdk
+  - wallet-unit-poc/openac-studio
+  - wallet-unit-poc/web-demo
+
+# One lockfile per package, so packages don't share resolutions.
+sharedWorkspaceLockfile: false
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  # Pins every snarkjs, including the git fork @zk-email/helpers asks for (was circom's yarn resolution).
+  snarkjs: npm:snarkjs@0.7.6

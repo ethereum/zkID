@@ -59,7 +59,7 @@ if [ -d "$CIRCOM_BUILD" ]; then
     echo "Circuit artifacts copied to $ASSETS_DIR/"
 else
     echo "Warning: Circom build directory not found at $CIRCOM_BUILD"
-    echo "Run 'yarn compile:all' from the circom directory first."
+    echo "Run 'pnpm compile:all' from the circom directory first."
 fi
 
 # Bundle Show verifying keys (~3 MB each x 4 sizes = ~12 MB).

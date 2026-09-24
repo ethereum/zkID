@@ -38,14 +38,20 @@ jobs:
       - name: Print Circom version
         run: circom --version
 
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install dependencies
-        run: cd wallet-unit-poc/circom && yarn
+        run: pnpm install --frozen-lockfile --filter ./wallet-unit-poc/circom
 
       - name: Compile JWT circuit (1k size for CI)
-        run: cd wallet-unit-poc/circom && yarn compile:jwt:1k
+        run: cd wallet-unit-poc/circom && pnpm compile:jwt:1k
 
       - name: Compile Show circuit
-        run: cd wallet-unit-poc/circom && yarn compile:show
+        run: cd wallet-unit-poc/circom && pnpm compile:show
 
       - name: Run ecdsa-spartan2 end-to-end flow
         run: |
@@ -61,4 +67,4 @@ jobs:
           cargo run --release -- show verify --size 1k
 
       - name: Run tests
-        run: cd wallet-unit-poc/circom && yarn test
+        run: cd wallet-unit-poc/circom && pnpm test

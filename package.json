@@ -1,0 +1,5 @@
+{
+  "name": "zkid",
+  "private": true,
+  "packageManager": "pnpm@11.13.1"
+}
