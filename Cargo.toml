@@ -2,11 +2,10 @@
 members = [
     "wallet-unit-poc/ecdsa-spartan2",
 ]
-# lto and codegen-units can only be set workspace-wide, so crates that tune them
-# stay standalone with their own lockfile and [profile.release].
+# Cargo ignores [profile] outside the workspace root and can't set lto per
+# package, so crates with their own release profile stay standalone.
 exclude = [
     "wallet-unit-poc/mobile",
-    "wallet-unit-poc/mobile/mopro_flutter_bindings/rust",
     "wallet-unit-poc/openac-sdk/wasm",
 ]
 resolver = "2"

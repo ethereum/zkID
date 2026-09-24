@@ -4,12 +4,12 @@ packages:
   - wallet-unit-poc/openac-studio
   - wallet-unit-poc/web-demo
 
-# Per-package lockfiles keep the versions resolved before the yarn/npm migration.
+# One lockfile per package, so packages don't share resolutions.
 sharedWorkspaceLockfile: false
 
 allowBuilds:
   esbuild: true
 
 overrides:
-  # @zk-email/helpers pulls a snarkjs git fork; circom has always resolved it to the npm release.
+  # Pins every snarkjs, including the git fork @zk-email/helpers asks for (was circom's yarn resolution).
   snarkjs: npm:snarkjs@0.7.6

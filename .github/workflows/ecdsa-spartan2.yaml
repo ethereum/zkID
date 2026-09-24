@@ -45,7 +45,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: cd wallet-unit-poc/circom && pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter ./wallet-unit-poc/circom
 
       - name: Compile JWT circuit (1k size for CI)
         run: cd wallet-unit-poc/circom && pnpm compile:jwt:1k

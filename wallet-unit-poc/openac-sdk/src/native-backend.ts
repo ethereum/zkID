@@ -105,7 +105,8 @@ export class NativeBackend {
   // When running via `cargo run`, Cargo sets DYLD_LIBRARY_PATH automatically;
   // when invoking via execFile we must set it ourselves.
   private buildDylibEnv(): Record<string, string> {
-    // Cargo puts build-script output next to the binary: <target>/release/build.
+    // Build-script output sits beside the binary in <target>/<profile>/build; a binary
+    // outside Cargo's target dir gets no library path.
     const buildDir = join(dirname(this.binaryPath), "build");
     if (!existsSync(buildDir)) return {};
 
