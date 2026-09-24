@@ -1,0 +1,15 @@
+packages:
+  - wallet-unit-poc/circom
+  - wallet-unit-poc/openac-sdk
+  - wallet-unit-poc/openac-studio
+  - wallet-unit-poc/web-demo
+
+# Per-package lockfiles keep the versions resolved before the yarn/npm migration.
+sharedWorkspaceLockfile: false
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  # @zk-email/helpers pulls a snarkjs git fork; circom has always resolved it to the npm release.
+  snarkjs: npm:snarkjs@0.7.6

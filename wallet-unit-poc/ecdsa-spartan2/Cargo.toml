@@ -37,6 +37,3 @@ base64 = "0.22"
 
 [build-dependencies]
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }
-
-[profile.release]
-debug = true

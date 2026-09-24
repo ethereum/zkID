@@ -28,7 +28,7 @@ You can test the circuits in two main ways:
 ### 1. Using circom_tester via typescript
 
 ```
-yarn test
+pnpm test
 ```
 
 ### 2. Using circomkit CLI

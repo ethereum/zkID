@@ -25,12 +25,12 @@
   "scripts": {
     "build": "tsup",
     "build:wasm": "bash scripts/build-wasm.sh",
-    "build:all": "npm run build:wasm && npm run build",
+    "build:all": "pnpm run build:wasm && pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build:all"
+    "prepublishOnly": "pnpm run build:all"
   },
   "dependencies": {
     "@noble/curves": "^1.8.1",

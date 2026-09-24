@@ -1,0 +1,12 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  snarkjs: npm:snarkjs@0.7.6
+
+importers:
+
+  .: {}
