@@ -11,5 +11,5 @@ exclude = [
 ]
 resolver = "2"
 
-[profile.release.package.ecdsa-spartan2]
+[profile.release]
 debug = true

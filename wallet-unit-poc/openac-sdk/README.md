@@ -226,7 +226,7 @@ Deterministic keys; JWT is sized to fit the chosen circuit slot.
 ```bash
 pnpm install
 pnpm build:all     # WASM (needs Rust + wasm-pack) + TypeScript
-npm test
+pnpm test
 ```
 
 ## Dependencies

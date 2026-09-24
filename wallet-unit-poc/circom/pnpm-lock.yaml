@@ -71,10 +71,16 @@ importers:
       safe-buffer:
         specifier: ^5.2.1
         version: 5.2.1
+      safer-buffer:
+        specifier: ^2.1.2
+        version: 2.1.2
+      snarkjs:
+        specifier: npm:snarkjs@0.7.6
+        version: 0.7.6
     devDependencies:
       '@auth0/mdl':
         specifier: ^3.0.1
-        version: 3.0.1
+        version: 3.0.1(supports-color@8.1.1)
       '@peculiar/x509':
         specifier: ^2.0.0
         version: 2.0.0
@@ -1514,7 +1520,7 @@ packages:
 
 snapshots:
 
-  '@auth0/mdl@3.0.1':
+  '@auth0/mdl@3.0.1(supports-color@8.1.1)':
     dependencies:
       '@noble/curves': 1.9.7
       '@panva/hkdf': 1.2.1
