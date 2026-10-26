@@ -5,10 +5,13 @@
 
 import 'dart:async';
 import 'dart:convert';
+
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
 import 'third_party/openac_mobile_app.dart';
 
 /// Main entrypoint of the Rust API
@@ -64,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1383991712;
+  int get rustContentHash => 911850839;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,6 +82,10 @@ abstract class RustLibApi extends BaseApi {
     required BigInt bytes,
   });
 
+  Future<BigInt> openacMobileAppCurrentRssKb();
+
+  Future<String> openacMobileAppDeviceProfile();
+
   Future<String> openacMobileAppGenerateSharedBlinds({
     required String documentsPath,
   });
@@ -92,6 +99,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String> openacMobileAppMoproHelloWorld();
 
+  Future<BigInt> openacMobileAppPeakRssKb();
+
   Future<ProofResult> openacMobileAppProveJwt({required String documentsPath});
 
   Future<ProofResult> openacMobileAppProveShow({required String documentsPath});
@@ -104,8 +113,16 @@ abstract class RustLibApi extends BaseApi {
     required String documentsPath,
   });
 
+  Future<bool> openacMobileAppResetPeakRss();
+
   Future<BenchmarkResults> openacMobileAppRunCompleteBenchmark({
     required String documentsPath,
+  });
+
+  Future<BenchmarkResults> openacMobileAppRunCompleteBenchmarkWith({
+    required String documentsPath,
+    required int numThreads,
+    required bool pinBigCores,
   });
 
   Future<String> openacMobileAppSetupJwtKeys({required String documentsPath});
@@ -113,6 +130,10 @@ abstract class RustLibApi extends BaseApi {
   Future<String> openacMobileAppSetupShowKeys({required String documentsPath});
 
   Future<bool> openacMobileAppVerifyJwt({required String documentsPath});
+
+  Future<bool> openacMobileAppVerifyPresentation({
+    required String documentsPath,
+  });
 
   Future<bool> openacMobileAppVerifyShow({required String documentsPath});
 
@@ -167,6 +188,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> openacMobileAppCurrentRssKb() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kOpenacMobileAppCurrentRssKbConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppCurrentRssKbConstMeta =>
+      const TaskConstMeta(debugName: "current_rss_kb", argNames: []);
+
+  @override
+  Future<String> openacMobileAppDeviceProfile() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kOpenacMobileAppDeviceProfileConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppDeviceProfileConstMeta =>
+      const TaskConstMeta(debugName: "device_profile", argNames: []);
+
+  @override
   Future<String> openacMobileAppGenerateSharedBlinds({
     required String documentsPath,
   }) {
@@ -178,7 +253,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 4,
             port: port_,
           );
         },
@@ -214,7 +289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 5,
             port: port_,
           );
         },
@@ -245,7 +320,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 6,
             port: port_,
           );
         },
@@ -272,7 +347,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 7,
             port: port_,
           );
         },
@@ -291,6 +366,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "mopro_hello_world", argNames: []);
 
   @override
+  Future<BigInt> openacMobileAppPeakRssKb() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kOpenacMobileAppPeakRssKbConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppPeakRssKbConstMeta =>
+      const TaskConstMeta(debugName: "peak_rss_kb", argNames: []);
+
+  @override
   Future<ProofResult> openacMobileAppProveJwt({required String documentsPath}) {
     return handler.executeNormal(
       NormalTask(
@@ -300,7 +402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 9,
             port: port_,
           );
         },
@@ -331,7 +433,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 10,
             port: port_,
           );
         },
@@ -362,7 +464,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 11,
             port: port_,
           );
         },
@@ -395,7 +497,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 12,
             port: port_,
           );
         },
@@ -417,6 +519,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<bool> openacMobileAppResetPeakRss() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kOpenacMobileAppResetPeakRssConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppResetPeakRssConstMeta =>
+      const TaskConstMeta(debugName: "reset_peak_rss", argNames: []);
+
+  @override
   Future<BenchmarkResults> openacMobileAppRunCompleteBenchmark({
     required String documentsPath,
   }) {
@@ -428,7 +557,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 14,
             port: port_,
           );
         },
@@ -451,6 +580,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BenchmarkResults> openacMobileAppRunCompleteBenchmarkWith({
+    required String documentsPath,
+    required int numThreads,
+    required bool pinBigCores,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(documentsPath, serializer);
+          sse_encode_u_32(numThreads, serializer);
+          sse_encode_bool(pinBigCores, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_benchmark_results,
+          decodeErrorData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
+        ),
+        constMeta: kOpenacMobileAppRunCompleteBenchmarkWithConstMeta,
+        argValues: [documentsPath, numThreads, pinBigCores],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppRunCompleteBenchmarkWithConstMeta =>
+      const TaskConstMeta(
+        debugName: "run_complete_benchmark_with",
+        argNames: ["documentsPath", "numThreads", "pinBigCores"],
+      );
+
+  @override
   Future<String> openacMobileAppSetupJwtKeys({required String documentsPath}) {
     return handler.executeNormal(
       NormalTask(
@@ -460,7 +627,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 16,
             port: port_,
           );
         },
@@ -492,7 +659,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 17,
             port: port_,
           );
         },
@@ -524,7 +691,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 18,
             port: port_,
           );
         },
@@ -544,6 +711,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "verify_jwt", argNames: ["documentsPath"]);
 
   @override
+  Future<bool> openacMobileAppVerifyPresentation({
+    required String documentsPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(documentsPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
+        ),
+        constMeta: kOpenacMobileAppVerifyPresentationConstMeta,
+        argValues: [documentsPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppVerifyPresentationConstMeta =>
+      const TaskConstMeta(
+        debugName: "verify_presentation",
+        argNames: ["documentsPath"],
+      );
+
+  @override
   Future<bool> openacMobileAppVerifyShow({required String documentsPath}) {
     return handler.executeNormal(
       NormalTask(
@@ -553,7 +754,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 20,
             port: port_,
           );
         },
@@ -610,8 +811,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BenchmarkResults dco_decode_benchmark_results(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 30)
+      throw Exception('unexpected arr length: expect 30 but see ${arr.length}');
     return BenchmarkResults(
       jwtSetupMs: dco_decode_u_64(arr[0]),
       showSetupMs: dco_decode_u_64(arr[1]),
@@ -622,14 +823,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reblindShowMs: dco_decode_u_64(arr[6]),
       verifyJwtMs: dco_decode_u_64(arr[7]),
       verifyShowMs: dco_decode_u_64(arr[8]),
-      jwtProvingKeyBytes: dco_decode_u_64(arr[9]),
-      jwtVerifyingKeyBytes: dco_decode_u_64(arr[10]),
-      showProvingKeyBytes: dco_decode_u_64(arr[11]),
-      showVerifyingKeyBytes: dco_decode_u_64(arr[12]),
-      jwtProofBytes: dco_decode_u_64(arr[13]),
-      showProofBytes: dco_decode_u_64(arr[14]),
-      jwtWitnessBytes: dco_decode_u_64(arr[15]),
-      showWitnessBytes: dco_decode_u_64(arr[16]),
+      peakRssJwtSetupKb: dco_decode_u_64(arr[9]),
+      peakRssShowSetupKb: dco_decode_u_64(arr[10]),
+      peakRssGenerateBlindsKb: dco_decode_u_64(arr[11]),
+      peakRssProveJwtKb: dco_decode_u_64(arr[12]),
+      peakRssReblindJwtKb: dco_decode_u_64(arr[13]),
+      peakRssProveShowKb: dco_decode_u_64(arr[14]),
+      peakRssReblindShowKb: dco_decode_u_64(arr[15]),
+      peakRssVerifyJwtKb: dco_decode_u_64(arr[16]),
+      peakRssVerifyShowKb: dco_decode_u_64(arr[17]),
+      rssPerStep: dco_decode_bool(arr[18]),
+      poolThreads: dco_decode_u_32(arr[19]),
+      pinnedThreads: dco_decode_u_32(arr[20]),
+      pinnedThreadsEnd: dco_decode_u_32(arr[21]),
+      jwtProvingKeyBytes: dco_decode_u_64(arr[22]),
+      jwtVerifyingKeyBytes: dco_decode_u_64(arr[23]),
+      showProvingKeyBytes: dco_decode_u_64(arr[24]),
+      showVerifyingKeyBytes: dco_decode_u_64(arr[25]),
+      jwtProofBytes: dco_decode_u_64(arr[26]),
+      showProofBytes: dco_decode_u_64(arr[27]),
+      jwtWitnessBytes: dco_decode_u_64(arr[28]),
+      showWitnessBytes: dco_decode_u_64(arr[29]),
     );
   }
 
@@ -658,6 +872,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       proofSizeBytes: dco_decode_u_64(arr[3]),
       commWShared: dco_decode_String(arr[4]),
     );
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -727,6 +947,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reblindShowMs = sse_decode_u_64(deserializer);
     var var_verifyJwtMs = sse_decode_u_64(deserializer);
     var var_verifyShowMs = sse_decode_u_64(deserializer);
+    var var_peakRssJwtSetupKb = sse_decode_u_64(deserializer);
+    var var_peakRssShowSetupKb = sse_decode_u_64(deserializer);
+    var var_peakRssGenerateBlindsKb = sse_decode_u_64(deserializer);
+    var var_peakRssProveJwtKb = sse_decode_u_64(deserializer);
+    var var_peakRssReblindJwtKb = sse_decode_u_64(deserializer);
+    var var_peakRssProveShowKb = sse_decode_u_64(deserializer);
+    var var_peakRssReblindShowKb = sse_decode_u_64(deserializer);
+    var var_peakRssVerifyJwtKb = sse_decode_u_64(deserializer);
+    var var_peakRssVerifyShowKb = sse_decode_u_64(deserializer);
+    var var_rssPerStep = sse_decode_bool(deserializer);
+    var var_poolThreads = sse_decode_u_32(deserializer);
+    var var_pinnedThreads = sse_decode_u_32(deserializer);
+    var var_pinnedThreadsEnd = sse_decode_u_32(deserializer);
     var var_jwtProvingKeyBytes = sse_decode_u_64(deserializer);
     var var_jwtVerifyingKeyBytes = sse_decode_u_64(deserializer);
     var var_showProvingKeyBytes = sse_decode_u_64(deserializer);
@@ -745,6 +978,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reblindShowMs: var_reblindShowMs,
       verifyJwtMs: var_verifyJwtMs,
       verifyShowMs: var_verifyShowMs,
+      peakRssJwtSetupKb: var_peakRssJwtSetupKb,
+      peakRssShowSetupKb: var_peakRssShowSetupKb,
+      peakRssGenerateBlindsKb: var_peakRssGenerateBlindsKb,
+      peakRssProveJwtKb: var_peakRssProveJwtKb,
+      peakRssReblindJwtKb: var_peakRssReblindJwtKb,
+      peakRssProveShowKb: var_peakRssProveShowKb,
+      peakRssReblindShowKb: var_peakRssReblindShowKb,
+      peakRssVerifyJwtKb: var_peakRssVerifyJwtKb,
+      peakRssVerifyShowKb: var_peakRssVerifyShowKb,
+      rssPerStep: var_rssPerStep,
+      poolThreads: var_poolThreads,
+      pinnedThreads: var_pinnedThreads,
+      pinnedThreadsEnd: var_pinnedThreadsEnd,
       jwtProvingKeyBytes: var_jwtProvingKeyBytes,
       jwtVerifyingKeyBytes: var_jwtVerifyingKeyBytes,
       showProvingKeyBytes: var_showProvingKeyBytes,
@@ -784,6 +1030,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       proofSizeBytes: var_proofSizeBytes,
       commWShared: var_commWShared,
     );
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
   }
 
   @protected
@@ -862,6 +1114,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.reblindShowMs, serializer);
     sse_encode_u_64(self.verifyJwtMs, serializer);
     sse_encode_u_64(self.verifyShowMs, serializer);
+    sse_encode_u_64(self.peakRssJwtSetupKb, serializer);
+    sse_encode_u_64(self.peakRssShowSetupKb, serializer);
+    sse_encode_u_64(self.peakRssGenerateBlindsKb, serializer);
+    sse_encode_u_64(self.peakRssProveJwtKb, serializer);
+    sse_encode_u_64(self.peakRssReblindJwtKb, serializer);
+    sse_encode_u_64(self.peakRssProveShowKb, serializer);
+    sse_encode_u_64(self.peakRssReblindShowKb, serializer);
+    sse_encode_u_64(self.peakRssVerifyJwtKb, serializer);
+    sse_encode_u_64(self.peakRssVerifyShowKb, serializer);
+    sse_encode_bool(self.rssPerStep, serializer);
+    sse_encode_u_32(self.poolThreads, serializer);
+    sse_encode_u_32(self.pinnedThreads, serializer);
+    sse_encode_u_32(self.pinnedThreadsEnd, serializer);
     sse_encode_u_64(self.jwtProvingKeyBytes, serializer);
     sse_encode_u_64(self.jwtVerifyingKeyBytes, serializer);
     sse_encode_u_64(self.showProvingKeyBytes, serializer);
@@ -896,6 +1161,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.totalMs, serializer);
     sse_encode_u_64(self.proofSizeBytes, serializer);
     sse_encode_String(self.commWShared, serializer);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
   }
 
   @protected

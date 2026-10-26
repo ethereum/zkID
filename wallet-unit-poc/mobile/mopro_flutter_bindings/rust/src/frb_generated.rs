@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1383991712;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 911850839;
 
 // Section: executor
 
@@ -75,6 +75,70 @@ fn wire__openac_mobile_app__benchmark_results_format_size_impl(
                     let output_ok = Result::<_, ()>::Ok(
                         openac_mobile_app::BenchmarkResults::format_size(api_bytes),
                     )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__openac_mobile_app__current_rss_kb_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "current_rss_kb",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(openac_mobile_app::current_rss_kb())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__openac_mobile_app__device_profile_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "device_profile",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(openac_mobile_app::device_profile())?;
                     Ok(output_ok)
                 })())
             }
@@ -215,6 +279,38 @@ fn wire__openac_mobile_app__mopro_hello_world_impl(
         },
     )
 }
+fn wire__openac_mobile_app__peak_rss_kb_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "peak_rss_kb",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(openac_mobile_app::peak_rss_kb())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__openac_mobile_app__prove_jwt_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -347,6 +443,38 @@ fn wire__openac_mobile_app__reblind_show_impl(
         },
     )
 }
+fn wire__openac_mobile_app__reset_peak_rss_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "reset_peak_rss",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(openac_mobile_app::reset_peak_rss())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__openac_mobile_app__run_complete_benchmark_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -374,6 +502,45 @@ fn wire__openac_mobile_app__run_complete_benchmark_impl(
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
                     let output_ok = openac_mobile_app::run_complete_benchmark(api_documents_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__openac_mobile_app__run_complete_benchmark_with_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "run_complete_benchmark_with",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_documents_path = <String>::sse_decode(&mut deserializer);
+            let api_num_threads = <u32>::sse_decode(&mut deserializer);
+            let api_pin_big_cores = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ZkProofError>((move || {
+                    let output_ok = openac_mobile_app::run_complete_benchmark_with(
+                        api_documents_path,
+                        api_num_threads,
+                        api_pin_big_cores,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -479,6 +646,39 @@ fn wire__openac_mobile_app__verify_jwt_impl(
         },
     )
 }
+fn wire__openac_mobile_app__verify_presentation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "verify_presentation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_documents_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ZkProofError>((move || {
+                    let output_ok = openac_mobile_app::verify_presentation(api_documents_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__openac_mobile_app__verify_show_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -528,6 +728,19 @@ const _: fn() = || {
         let _: u64 = BenchmarkResults.reblind_show_ms;
         let _: u64 = BenchmarkResults.verify_jwt_ms;
         let _: u64 = BenchmarkResults.verify_show_ms;
+        let _: u64 = BenchmarkResults.peak_rss_jwt_setup_kb;
+        let _: u64 = BenchmarkResults.peak_rss_show_setup_kb;
+        let _: u64 = BenchmarkResults.peak_rss_generate_blinds_kb;
+        let _: u64 = BenchmarkResults.peak_rss_prove_jwt_kb;
+        let _: u64 = BenchmarkResults.peak_rss_reblind_jwt_kb;
+        let _: u64 = BenchmarkResults.peak_rss_prove_show_kb;
+        let _: u64 = BenchmarkResults.peak_rss_reblind_show_kb;
+        let _: u64 = BenchmarkResults.peak_rss_verify_jwt_kb;
+        let _: u64 = BenchmarkResults.peak_rss_verify_show_kb;
+        let _: bool = BenchmarkResults.rss_per_step;
+        let _: u32 = BenchmarkResults.pool_threads;
+        let _: u32 = BenchmarkResults.pinned_threads;
+        let _: u32 = BenchmarkResults.pinned_threads_end;
         let _: u64 = BenchmarkResults.jwt_proving_key_bytes;
         let _: u64 = BenchmarkResults.jwt_verifying_key_bytes;
         let _: u64 = BenchmarkResults.show_proving_key_bytes;
@@ -595,6 +808,19 @@ impl SseDecode for openac_mobile_app::BenchmarkResults {
         let mut var_reblindShowMs = <u64>::sse_decode(deserializer);
         let mut var_verifyJwtMs = <u64>::sse_decode(deserializer);
         let mut var_verifyShowMs = <u64>::sse_decode(deserializer);
+        let mut var_peakRssJwtSetupKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssShowSetupKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssGenerateBlindsKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssProveJwtKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssReblindJwtKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssProveShowKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssReblindShowKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssVerifyJwtKb = <u64>::sse_decode(deserializer);
+        let mut var_peakRssVerifyShowKb = <u64>::sse_decode(deserializer);
+        let mut var_rssPerStep = <bool>::sse_decode(deserializer);
+        let mut var_poolThreads = <u32>::sse_decode(deserializer);
+        let mut var_pinnedThreads = <u32>::sse_decode(deserializer);
+        let mut var_pinnedThreadsEnd = <u32>::sse_decode(deserializer);
         let mut var_jwtProvingKeyBytes = <u64>::sse_decode(deserializer);
         let mut var_jwtVerifyingKeyBytes = <u64>::sse_decode(deserializer);
         let mut var_showProvingKeyBytes = <u64>::sse_decode(deserializer);
@@ -613,6 +839,19 @@ impl SseDecode for openac_mobile_app::BenchmarkResults {
             reblind_show_ms: var_reblindShowMs,
             verify_jwt_ms: var_verifyJwtMs,
             verify_show_ms: var_verifyShowMs,
+            peak_rss_jwt_setup_kb: var_peakRssJwtSetupKb,
+            peak_rss_show_setup_kb: var_peakRssShowSetupKb,
+            peak_rss_generate_blinds_kb: var_peakRssGenerateBlindsKb,
+            peak_rss_prove_jwt_kb: var_peakRssProveJwtKb,
+            peak_rss_reblind_jwt_kb: var_peakRssReblindJwtKb,
+            peak_rss_prove_show_kb: var_peakRssProveShowKb,
+            peak_rss_reblind_show_kb: var_peakRssReblindShowKb,
+            peak_rss_verify_jwt_kb: var_peakRssVerifyJwtKb,
+            peak_rss_verify_show_kb: var_peakRssVerifyShowKb,
+            rss_per_step: var_rssPerStep,
+            pool_threads: var_poolThreads,
+            pinned_threads: var_pinnedThreads,
+            pinned_threads_end: var_pinnedThreadsEnd,
             jwt_proving_key_bytes: var_jwtProvingKeyBytes,
             jwt_verifying_key_bytes: var_jwtVerifyingKeyBytes,
             show_proving_key_bytes: var_showProvingKeyBytes,
@@ -659,6 +898,13 @@ impl SseDecode for openac_mobile_app::ProofResult {
             proof_size_bytes: var_proofSizeBytes,
             comm_w_shared: var_commWShared,
         };
+    }
+}
+
+impl SseDecode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u32::<NativeEndian>().unwrap()
     }
 }
 
@@ -710,23 +956,34 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        2 => {
+        2 => wire__openac_mobile_app__current_rss_kb_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__openac_mobile_app__device_profile_impl(port, ptr, rust_vec_len, data_len),
+        4 => {
             wire__openac_mobile_app__generate_shared_blinds_impl(port, ptr, rust_vec_len, data_len)
         }
-        3 => wire__openac_mobile_app__get_comm_w_shared_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__openac_mobile_app__init_app_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__openac_mobile_app__mopro_hello_world_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__openac_mobile_app__prove_jwt_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__openac_mobile_app__prove_show_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__openac_mobile_app__reblind_jwt_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__openac_mobile_app__reblind_show_impl(port, ptr, rust_vec_len, data_len),
-        10 => {
+        5 => wire__openac_mobile_app__get_comm_w_shared_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__openac_mobile_app__init_app_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__openac_mobile_app__mopro_hello_world_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__openac_mobile_app__peak_rss_kb_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__openac_mobile_app__prove_jwt_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__openac_mobile_app__prove_show_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__openac_mobile_app__reblind_jwt_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__openac_mobile_app__reblind_show_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__openac_mobile_app__reset_peak_rss_impl(port, ptr, rust_vec_len, data_len),
+        14 => {
             wire__openac_mobile_app__run_complete_benchmark_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__openac_mobile_app__setup_jwt_keys_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__openac_mobile_app__setup_show_keys_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__openac_mobile_app__verify_jwt_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__openac_mobile_app__verify_show_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__openac_mobile_app__run_complete_benchmark_with_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        16 => wire__openac_mobile_app__setup_jwt_keys_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__openac_mobile_app__setup_show_keys_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__openac_mobile_app__verify_jwt_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__openac_mobile_app__verify_presentation_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__openac_mobile_app__verify_show_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -773,6 +1030,22 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<openac_mobile_app::BenchmarkRe
             self.0.reblind_show_ms.into_into_dart().into_dart(),
             self.0.verify_jwt_ms.into_into_dart().into_dart(),
             self.0.verify_show_ms.into_into_dart().into_dart(),
+            self.0.peak_rss_jwt_setup_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_show_setup_kb.into_into_dart().into_dart(),
+            self.0
+                .peak_rss_generate_blinds_kb
+                .into_into_dart()
+                .into_dart(),
+            self.0.peak_rss_prove_jwt_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_reblind_jwt_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_prove_show_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_reblind_show_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_verify_jwt_kb.into_into_dart().into_dart(),
+            self.0.peak_rss_verify_show_kb.into_into_dart().into_dart(),
+            self.0.rss_per_step.into_into_dart().into_dart(),
+            self.0.pool_threads.into_into_dart().into_dart(),
+            self.0.pinned_threads.into_into_dart().into_dart(),
+            self.0.pinned_threads_end.into_into_dart().into_dart(),
             self.0.jwt_proving_key_bytes.into_into_dart().into_dart(),
             self.0.jwt_verifying_key_bytes.into_into_dart().into_dart(),
             self.0.show_proving_key_bytes.into_into_dart().into_dart(),
@@ -858,6 +1131,19 @@ impl SseEncode for openac_mobile_app::BenchmarkResults {
         <u64>::sse_encode(self.reblind_show_ms, serializer);
         <u64>::sse_encode(self.verify_jwt_ms, serializer);
         <u64>::sse_encode(self.verify_show_ms, serializer);
+        <u64>::sse_encode(self.peak_rss_jwt_setup_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_show_setup_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_generate_blinds_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_prove_jwt_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_reblind_jwt_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_prove_show_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_reblind_show_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_verify_jwt_kb, serializer);
+        <u64>::sse_encode(self.peak_rss_verify_show_kb, serializer);
+        <bool>::sse_encode(self.rss_per_step, serializer);
+        <u32>::sse_encode(self.pool_threads, serializer);
+        <u32>::sse_encode(self.pinned_threads, serializer);
+        <u32>::sse_encode(self.pinned_threads_end, serializer);
         <u64>::sse_encode(self.jwt_proving_key_bytes, serializer);
         <u64>::sse_encode(self.jwt_verifying_key_bytes, serializer);
         <u64>::sse_encode(self.show_proving_key_bytes, serializer);
@@ -894,6 +1180,13 @@ impl SseEncode for openac_mobile_app::ProofResult {
         <u64>::sse_encode(self.total_ms, serializer);
         <u64>::sse_encode(self.proof_size_bytes, serializer);
         <String>::sse_encode(self.comm_w_shared, serializer);
+    }
+}
+
+impl SseEncode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
     }
 }
 

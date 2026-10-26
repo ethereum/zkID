@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`, `from`
@@ -65,13 +66,35 @@ Future<bool> verifyJwt({required String documentsPath}) =>
 Future<bool> verifyShow({required String documentsPath}) => RustLib.instance.api
     .openacMobileAppVerifyShow(documentsPath: documentsPath);
 
+/// Verify a full presentation: both proofs verify AND commit to the same shared
+/// witness (Item 12). This is the check a verifier must make — verifying the two
+/// proofs separately does not bind them to the same credential.
+Future<bool> verifyPresentation({required String documentsPath}) => RustLib
+    .instance
+    .api
+    .openacMobileAppVerifyPresentation(documentsPath: documentsPath);
+
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
-/// Returns comprehensive timing and size metrics
+/// Returns comprehensive timing, peak memory and size metrics
 Future<BenchmarkResults> runCompleteBenchmark({
   required String documentsPath,
 }) => RustLib.instance.api.openacMobileAppRunCompleteBenchmark(
   documentsPath: documentsPath,
+);
+
+/// Run the complete benchmark on a dedicated rayon pool.
+/// `num_threads` 0 means rayon's default, or the big-core count when pinning.
+/// `pin_big_cores` restricts pool threads to the big cores (Android/Linux only).
+/// (0, false) uses the global pool.
+Future<BenchmarkResults> runCompleteBenchmarkWith({
+  required String documentsPath,
+  required int numThreads,
+  required bool pinBigCores,
+}) => RustLib.instance.api.openacMobileAppRunCompleteBenchmarkWith(
+  documentsPath: documentsPath,
+  numThreads: numThreads,
+  pinBigCores: pinBigCores,
 );
 
 /// Get the shared witness commitment for a circuit
@@ -83,6 +106,23 @@ Future<String> getCommWShared({
   documentsPath: documentsPath,
   circuitType: circuitType,
 );
+
+/// Resets the kernel's VmHWM to the current RSS. Returns false when unsupported
+/// or denied.
+Future<bool> resetPeakRss() =>
+    RustLib.instance.api.openacMobileAppResetPeakRss();
+
+/// Peak resident set size of this process in KiB since the last reset.
+Future<BigInt> peakRssKb() => RustLib.instance.api.openacMobileAppPeakRssKb();
+
+/// Current resident set size in KiB, or 0 where /proc is unavailable.
+Future<BigInt> currentRssKb() =>
+    RustLib.instance.api.openacMobileAppCurrentRssKb();
+
+/// Compact JSON describing the device: SoC, model, RAM, per-core max
+/// frequencies, the big-core set and rayon's default thread count.
+Future<String> deviceProfile() =>
+    RustLib.instance.api.openacMobileAppDeviceProfile();
 
 /// Test function for basic UniFFI integration
 Future<String> moproHelloWorld() =>
@@ -102,6 +142,30 @@ class BenchmarkResults {
   final BigInt reblindShowMs;
   final BigInt verifyJwtMs;
   final BigInt verifyShowMs;
+  final BigInt peakRssJwtSetupKb;
+  final BigInt peakRssShowSetupKb;
+  final BigInt peakRssGenerateBlindsKb;
+  final BigInt peakRssProveJwtKb;
+  final BigInt peakRssReblindJwtKb;
+  final BigInt peakRssProveShowKb;
+  final BigInt peakRssReblindShowKb;
+  final BigInt peakRssVerifyJwtKb;
+  final BigInt peakRssVerifyShowKb;
+
+  /// False when the high-water mark could not be reset between steps, so the
+  /// peaks are process-wide and non-decreasing.
+  final bool rssPerStep;
+
+  /// Threads in the rayon pool the benchmark ran on.
+  final int poolThreads;
+
+  /// Pool threads whose effective affinity mask equalled the requested
+  /// big-core set right after pinning at thread start; 0 when not pinning.
+  final int pinnedThreads;
+
+  /// The same check repeated after the run. Affinity can be reset mid-run by
+  /// cpuset moves on pre-6.2 kernels, so this can be lower than `pinned_threads`.
+  final int pinnedThreadsEnd;
   final BigInt jwtProvingKeyBytes;
   final BigInt jwtVerifyingKeyBytes;
   final BigInt showProvingKeyBytes;
@@ -121,6 +185,19 @@ class BenchmarkResults {
     required this.reblindShowMs,
     required this.verifyJwtMs,
     required this.verifyShowMs,
+    required this.peakRssJwtSetupKb,
+    required this.peakRssShowSetupKb,
+    required this.peakRssGenerateBlindsKb,
+    required this.peakRssProveJwtKb,
+    required this.peakRssReblindJwtKb,
+    required this.peakRssProveShowKb,
+    required this.peakRssReblindShowKb,
+    required this.peakRssVerifyJwtKb,
+    required this.peakRssVerifyShowKb,
+    required this.rssPerStep,
+    required this.poolThreads,
+    required this.pinnedThreads,
+    required this.pinnedThreadsEnd,
     required this.jwtProvingKeyBytes,
     required this.jwtVerifyingKeyBytes,
     required this.showProvingKeyBytes,
@@ -148,6 +225,19 @@ class BenchmarkResults {
       reblindShowMs.hashCode ^
       verifyJwtMs.hashCode ^
       verifyShowMs.hashCode ^
+      peakRssJwtSetupKb.hashCode ^
+      peakRssShowSetupKb.hashCode ^
+      peakRssGenerateBlindsKb.hashCode ^
+      peakRssProveJwtKb.hashCode ^
+      peakRssReblindJwtKb.hashCode ^
+      peakRssProveShowKb.hashCode ^
+      peakRssReblindShowKb.hashCode ^
+      peakRssVerifyJwtKb.hashCode ^
+      peakRssVerifyShowKb.hashCode ^
+      rssPerStep.hashCode ^
+      poolThreads.hashCode ^
+      pinnedThreads.hashCode ^
+      pinnedThreadsEnd.hashCode ^
       jwtProvingKeyBytes.hashCode ^
       jwtVerifyingKeyBytes.hashCode ^
       showProvingKeyBytes.hashCode ^
@@ -171,6 +261,19 @@ class BenchmarkResults {
           reblindShowMs == other.reblindShowMs &&
           verifyJwtMs == other.verifyJwtMs &&
           verifyShowMs == other.verifyShowMs &&
+          peakRssJwtSetupKb == other.peakRssJwtSetupKb &&
+          peakRssShowSetupKb == other.peakRssShowSetupKb &&
+          peakRssGenerateBlindsKb == other.peakRssGenerateBlindsKb &&
+          peakRssProveJwtKb == other.peakRssProveJwtKb &&
+          peakRssReblindJwtKb == other.peakRssReblindJwtKb &&
+          peakRssProveShowKb == other.peakRssProveShowKb &&
+          peakRssReblindShowKb == other.peakRssReblindShowKb &&
+          peakRssVerifyJwtKb == other.peakRssVerifyJwtKb &&
+          peakRssVerifyShowKb == other.peakRssVerifyShowKb &&
+          rssPerStep == other.rssPerStep &&
+          poolThreads == other.poolThreads &&
+          pinnedThreads == other.pinnedThreads &&
+          pinnedThreadsEnd == other.pinnedThreadsEnd &&
           jwtProvingKeyBytes == other.jwtProvingKeyBytes &&
           jwtVerifyingKeyBytes == other.jwtVerifyingKeyBytes &&
           showProvingKeyBytes == other.showProvingKeyBytes &&

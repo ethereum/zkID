@@ -14,7 +14,9 @@ use ecdsa_spartan2::{
     setup::{setup_circuit_keys, setup_circuit_keys_no_save},
     CircuitSize, PathConfig, PrepareCircuit, ShowCircuit, E,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 // Initializes the shared UniFFI scaffolding and defines the `MoproError` enum.
 mopro_ffi::app!();
@@ -49,6 +51,27 @@ pub struct BenchmarkResults {
     pub reblind_show_ms: u64,
     pub verify_jwt_ms: u64,
     pub verify_show_ms: u64,
+    // Peak resident set size per step (KiB)
+    pub peak_rss_jwt_setup_kb: u64,
+    pub peak_rss_show_setup_kb: u64,
+    pub peak_rss_generate_blinds_kb: u64,
+    pub peak_rss_prove_jwt_kb: u64,
+    pub peak_rss_reblind_jwt_kb: u64,
+    pub peak_rss_prove_show_kb: u64,
+    pub peak_rss_reblind_show_kb: u64,
+    pub peak_rss_verify_jwt_kb: u64,
+    pub peak_rss_verify_show_kb: u64,
+    /// False when the high-water mark could not be reset between steps, so the
+    /// peaks are process-wide and non-decreasing.
+    pub rss_per_step: bool,
+    /// Threads in the rayon pool the benchmark ran on.
+    pub pool_threads: u32,
+    /// Pool threads whose effective affinity mask equalled the requested
+    /// big-core set right after pinning at thread start; 0 when not pinning.
+    pub pinned_threads: u32,
+    /// The same check repeated after the run. Affinity can be reset mid-run by
+    /// cpuset moves on pre-6.2 kernels, so this can be lower than `pinned_threads`.
+    pub pinned_threads_end: u32,
     // Size metrics (bytes)
     pub jwt_proving_key_bytes: u64,
     pub jwt_verifying_key_bytes: u64,
@@ -416,16 +439,74 @@ pub fn verify_presentation(documents_path: String) -> Result<bool, ZkProofError>
 
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
-/// Returns comprehensive timing and size metrics
+/// Returns comprehensive timing, peak memory and size metrics
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn run_complete_benchmark(
     documents_path: String,
 ) -> Result<BenchmarkResults, ZkProofError> {
-    let config = make_config(&documents_path);
-    let jwt_input =
-        PathBuf::from(&documents_path).join(format!("{}_input.json", JWT_CIRCUIT_NAME));
+    run_complete_benchmark_with(documents_path, 0, false)
+}
+
+/// Run the complete benchmark on a dedicated rayon pool.
+/// `num_threads` 0 means rayon's default, or the big-core count when pinning.
+/// `pin_big_cores` restricts pool threads to the big cores (Android/Linux only).
+/// (0, false) uses the global pool.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn run_complete_benchmark_with(
+    documents_path: String,
+    num_threads: u32,
+    pin_big_cores: bool,
+) -> Result<BenchmarkResults, ZkProofError> {
+    if num_threads == 0 && !pin_big_cores {
+        return benchmark_pipeline(&documents_path);
+    }
+
+    let big_cores = if pin_big_cores {
+        classify_big_cores(&read_cpu_max_freqs_khz())
+    } else {
+        Vec::new()
+    };
+    let pinned = Arc::new(AtomicUsize::new(0));
+    let handler_pinned = Arc::clone(&pinned);
+    let end_check_cores = big_cores.clone();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(pool_size(num_threads, big_cores.len()))
+        .start_handler(move |_| {
+            if pin_current_thread(&big_cores) {
+                handler_pinned.fetch_add(1, Ordering::SeqCst);
+            }
+        })
+        .build()
+        .map_err(|e| ZkProofError::IoError {
+            message: format!("Failed to build thread pool: {}", e),
+        })?;
+    // Start handlers run on the worker threads; broadcast returns only after
+    // every worker has passed its handler, so the count below is final.
+    pool.broadcast(|_| ());
+    let mut results = pool.install(|| benchmark_pipeline(&documents_path))?;
+    results.pinned_threads = pinned.load(Ordering::SeqCst) as u32;
+    results.pinned_threads_end = pool
+        .broadcast(|_| affinity_is(&end_check_cores))
+        .into_iter()
+        .filter(|&ok| ok)
+        .count() as u32;
+    Ok(results)
+}
+
+/// 0 lets rayon pick its default; with pinning, 0 means one thread per big core.
+fn pool_size(num_threads: u32, big_cores: usize) -> usize {
+    match (num_threads, big_cores) {
+        (0, n) => n,
+        (k, _) => k as usize,
+    }
+}
+
+fn benchmark_pipeline(documents_path: &str) -> Result<BenchmarkResults, ZkProofError> {
+    let mut rss_per_step = true;
+    let config = make_config(documents_path);
+    let jwt_input = PathBuf::from(documents_path).join(format!("{}_input.json", JWT_CIRCUIT_NAME));
     let show_input =
-        PathBuf::from(&documents_path).join(format!("{}_input.json", SHOW_CIRCUIT_NAME));
+        PathBuf::from(documents_path).join(format!("{}_input.json", SHOW_CIRCUIT_NAME));
 
     // Note: While circuits have 98 shared values (2 keybindings + 96 claim scalars),
     // Hyrax batches all these into a single commitment point.
@@ -434,9 +515,8 @@ pub fn run_complete_benchmark(
 
     // Step 1: Setup JWT Circuit
     let jwt_circuit = PrepareCircuit::new(config.clone(), Some(jwt_input.clone()));
-    let start = std::time::Instant::now();
-    let (jwt_pk, jwt_vk) = setup_circuit_keys_no_save(jwt_circuit);
-    let jwt_setup_ms = start.elapsed().as_millis() as u64;
+    let ((jwt_pk, jwt_vk), jwt_setup_ms, peak_rss_jwt_setup_kb) =
+        measure(&mut rss_per_step, || setup_circuit_keys_no_save(jwt_circuit));
 
     // Save JWT keys after timing
     save_keys(
@@ -451,9 +531,8 @@ pub fn run_complete_benchmark(
 
     // Step 2: Setup Show Circuit
     let show_circuit = ShowCircuit::new(config.clone(), Some(show_input.clone()));
-    let start = std::time::Instant::now();
-    let (show_pk, show_vk) = setup_circuit_keys_no_save(show_circuit);
-    let show_setup_ms = start.elapsed().as_millis() as u64;
+    let ((show_pk, show_vk), show_setup_ms, peak_rss_show_setup_kb) =
+        measure(&mut rss_per_step, || setup_circuit_keys_no_save(show_circuit));
 
     // Save Show keys after timing
     save_keys(
@@ -467,21 +546,21 @@ pub fn run_complete_benchmark(
     })?;
 
     // Step 3: Generate Shared Blinds
-    let start = std::time::Instant::now();
-    gen_shared_blinds::<E>(config.artifact_path(SHARED_BLINDS), NUM_SHARED);
-    let generate_blinds_ms = start.elapsed().as_millis() as u64;
+    let ((), generate_blinds_ms, peak_rss_generate_blinds_kb) = measure(&mut rss_per_step, || {
+        gen_shared_blinds::<E>(config.artifact_path(SHARED_BLINDS), NUM_SHARED)
+    });
 
     // Step 4: Prove JWT Circuit
-    let start = std::time::Instant::now();
-    let jwt_circuit = PrepareCircuit::new(config.clone(), Some(jwt_input));
-    prove_circuit_with_pk(
-        jwt_circuit,
-        &jwt_pk,
-        config.artifact_path(PREPARE_INSTANCE),
-        config.artifact_path(PREPARE_WITNESS),
-        config.artifact_path(PREPARE_PROOF),
-    );
-    let prove_jwt_ms = start.elapsed().as_millis() as u64;
+    let ((), prove_jwt_ms, peak_rss_prove_jwt_kb) = measure(&mut rss_per_step, || {
+        let jwt_circuit = PrepareCircuit::new(config.clone(), Some(jwt_input));
+        prove_circuit_with_pk(
+            jwt_circuit,
+            &jwt_pk,
+            config.artifact_path(PREPARE_INSTANCE),
+            config.artifact_path(PREPARE_WITNESS),
+            config.artifact_path(PREPARE_PROOF),
+        )
+    });
 
     // Step 5: Reblind JWT
     // Load data before timing (file I/O should not be part of reblind benchmark)
@@ -502,29 +581,29 @@ pub fn run_complete_benchmark(
             }
         })?;
 
-    let start = std::time::Instant::now();
-    reblind_with_loaded_data(
-        &jwt_pk,
-        jwt_instance,
-        jwt_witness,
-        &shared_blinds,
-        config.artifact_path(PREPARE_INSTANCE),
-        config.artifact_path(PREPARE_WITNESS),
-        config.artifact_path(PREPARE_PROOF),
-    );
-    let reblind_jwt_ms = start.elapsed().as_millis() as u64;
+    let ((), reblind_jwt_ms, peak_rss_reblind_jwt_kb) = measure(&mut rss_per_step, || {
+        reblind_with_loaded_data(
+            &jwt_pk,
+            jwt_instance,
+            jwt_witness,
+            &shared_blinds,
+            config.artifact_path(PREPARE_INSTANCE),
+            config.artifact_path(PREPARE_WITNESS),
+            config.artifact_path(PREPARE_PROOF),
+        )
+    });
 
     // Step 6: Prove Show Circuit
-    let start = std::time::Instant::now();
-    let show_circuit = ShowCircuit::new(config.clone(), Some(show_input));
-    prove_circuit_with_pk(
-        show_circuit,
-        &show_pk,
-        config.artifact_path(SHOW_INSTANCE),
-        config.artifact_path(SHOW_WITNESS),
-        config.artifact_path(SHOW_PROOF),
-    );
-    let prove_show_ms = start.elapsed().as_millis() as u64;
+    let ((), prove_show_ms, peak_rss_prove_show_kb) = measure(&mut rss_per_step, || {
+        let show_circuit = ShowCircuit::new(config.clone(), Some(show_input));
+        prove_circuit_with_pk(
+            show_circuit,
+            &show_pk,
+            config.artifact_path(SHOW_INSTANCE),
+            config.artifact_path(SHOW_WITNESS),
+            config.artifact_path(SHOW_PROOF),
+        )
+    });
 
     // Step 7: Reblind Show
     // Load data before timing (file I/O should not be part of reblind benchmark)
@@ -540,17 +619,17 @@ pub fn run_complete_benchmark(
     })?;
     // Reuse shared_blinds from JWT step (already loaded)
 
-    let start = std::time::Instant::now();
-    reblind_with_loaded_data(
-        &show_pk,
-        show_instance,
-        show_witness,
-        &shared_blinds,
-        config.artifact_path(SHOW_INSTANCE),
-        config.artifact_path(SHOW_WITNESS),
-        config.artifact_path(SHOW_PROOF),
-    );
-    let reblind_show_ms = start.elapsed().as_millis() as u64;
+    let ((), reblind_show_ms, peak_rss_reblind_show_kb) = measure(&mut rss_per_step, || {
+        reblind_with_loaded_data(
+            &show_pk,
+            show_instance,
+            show_witness,
+            &shared_blinds,
+            config.artifact_path(SHOW_INSTANCE),
+            config.artifact_path(SHOW_WITNESS),
+            config.artifact_path(SHOW_PROOF),
+        )
+    });
 
     // Step 8: Verify JWT
     // Load proof before timing (file I/O should not be part of verify benchmark)
@@ -560,9 +639,9 @@ pub fn run_complete_benchmark(
         }
     })?;
 
-    let start = std::time::Instant::now();
-    verify_circuit_with_loaded_data(&jwt_proof, &jwt_vk);
-    let verify_jwt_ms = start.elapsed().as_millis() as u64;
+    let (_, verify_jwt_ms, peak_rss_verify_jwt_kb) = measure(&mut rss_per_step, || {
+        verify_circuit_with_loaded_data(&jwt_proof, &jwt_vk)
+    });
 
     // Step 9: Verify Show
     // Load proof before timing (file I/O should not be part of verify benchmark)
@@ -571,9 +650,9 @@ pub fn run_complete_benchmark(
             message: format!("Failed to load show proof: {}", e),
         })?;
 
-    let start = std::time::Instant::now();
-    verify_circuit_with_loaded_data(&show_proof, &show_vk);
-    let verify_show_ms = start.elapsed().as_millis() as u64;
+    let (_, verify_show_ms, peak_rss_verify_show_kb) = measure(&mut rss_per_step, || {
+        verify_circuit_with_loaded_data(&show_proof, &show_vk)
+    });
 
     // Measure file sizes
     let jwt_proving_key_bytes = get_proof_size(&config.key_path(PREPARE_PROVING_KEY))?;
@@ -595,6 +674,19 @@ pub fn run_complete_benchmark(
         reblind_show_ms,
         verify_jwt_ms,
         verify_show_ms,
+        peak_rss_jwt_setup_kb,
+        peak_rss_show_setup_kb,
+        peak_rss_generate_blinds_kb,
+        peak_rss_prove_jwt_kb,
+        peak_rss_reblind_jwt_kb,
+        peak_rss_prove_show_kb,
+        peak_rss_reblind_show_kb,
+        peak_rss_verify_jwt_kb,
+        peak_rss_verify_show_kb,
+        rss_per_step,
+        pool_threads: rayon::current_num_threads() as u32,
+        pinned_threads: 0,
+        pinned_threads_end: 0,
         jwt_proving_key_bytes,
         jwt_verifying_key_bytes,
         show_proving_key_bytes,
@@ -671,6 +763,236 @@ fn get_proof_size(proof_path: impl AsRef<std::path::Path>) -> Result<u64, ZkProo
 }
 
 // ============================================================================
+// Device Profiling
+// ============================================================================
+
+/// Parse a "Key:   12345 kB" line out of /proc/self/status or /proc/meminfo.
+fn parse_status_kb(text: &str, key: &str) -> Option<u64> {
+    text.lines()
+        .find_map(|l| l.strip_prefix(key))
+        .and_then(|v| v.split_whitespace().next())
+        .and_then(|v| v.parse().ok())
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn parse_vmhwm_kb(status: &str) -> Option<u64> {
+    parse_status_kb(status, "VmHWM:")
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn parse_vmrss_kb(status: &str) -> Option<u64> {
+    parse_status_kb(status, "VmRSS:")
+}
+
+/// Cores above the lowest frequency tier are "big"; with a single tier (or no
+/// readable frequencies) every core counts as big. Unreadable cores in a mixed
+/// layout are not big.
+fn classify_big_cores(max_freqs_khz: &[Option<u64>]) -> Vec<usize> {
+    let lowest = max_freqs_khz.iter().flatten().min();
+    let highest = max_freqs_khz.iter().flatten().max();
+    if lowest == highest {
+        return (0..max_freqs_khz.len()).collect();
+    }
+    max_freqs_khz
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.is_some_and(|f| Some(&f) > lowest))
+        .map(|(i, _)| i)
+        .collect()
+}
+
+fn read_cpu_max_freqs_khz() -> Vec<Option<u64>> {
+    (0..)
+        .map(|n| format!("/sys/devices/system/cpu/cpu{}", n))
+        .take_while(|dir| Path::new(dir).exists())
+        .map(|dir| {
+            std::fs::read_to_string(format!("{}/cpufreq/cpuinfo_max_freq", dir))
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+        })
+        .collect()
+}
+
+/// True when both lists name the same CPUs, ignoring order and duplicates.
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn affinity_matches(requested: &[usize], effective: &[usize]) -> bool {
+    let normalize = |cpus: &[usize]| {
+        let mut v = cpus.to_vec();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    normalize(requested) == normalize(effective)
+}
+
+/// Whether the calling thread's effective affinity mask equals `cores`.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn affinity_is(cores: &[usize]) -> bool {
+    if cores.is_empty() {
+        return false;
+    }
+    // SAFETY: cpu_set_t is plain data, valid when zeroed; the pointer and size
+    // passed to sched_getaffinity describe this local value.
+    let effective = unsafe {
+        let mut got: libc::cpu_set_t = std::mem::zeroed();
+        if libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut got) != 0 {
+            tracing::warn!("sched_getaffinity failed: {}", std::io::Error::last_os_error());
+            return false;
+        }
+        (0..libc::CPU_SETSIZE as usize)
+            .filter(|&c| libc::CPU_ISSET(c, &got))
+            .collect::<Vec<_>>()
+    };
+    let matches = affinity_matches(cores, &effective);
+    if !matches {
+        tracing::warn!("affinity is {:?}, requested {:?}", effective, cores);
+    }
+    matches
+}
+
+/// Pins the calling thread to `cores` and reads the mask back: the kernel
+/// intersects the request with the app's cpuset, so a successful call alone
+/// does not prove the thread landed on the requested cores.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn pin_current_thread(cores: &[usize]) -> bool {
+    if cores.is_empty() {
+        return false;
+    }
+    // SAFETY: cpu_set_t is plain data, valid when zeroed; the pointer and size
+    // passed to sched_setaffinity describe this local value.
+    let rc = unsafe {
+        let mut set: libc::cpu_set_t = std::mem::zeroed();
+        for &c in cores {
+            libc::CPU_SET(c, &mut set);
+        }
+        libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set)
+    };
+    if rc != 0 {
+        tracing::warn!("sched_setaffinity failed: {}", std::io::Error::last_os_error());
+        return false;
+    }
+    affinity_is(cores)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn pin_current_thread(_cores: &[usize]) -> bool {
+    false
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn affinity_is(_cores: &[usize]) -> bool {
+    false
+}
+
+/// Resets the kernel's VmHWM to the current RSS. Returns false when unsupported
+/// or denied.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn reset_peak_rss() -> bool {
+    cfg!(any(target_os = "linux", target_os = "android"))
+        && std::fs::write("/proc/self/clear_refs", "5").is_ok()
+}
+
+/// Peak resident set size of this process in KiB since the last reset.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn peak_rss_kb() -> u64 {
+    read_peak_rss_kb()
+}
+
+/// Current resident set size in KiB, or 0 where /proc is unavailable.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn current_rss_kb() -> u64 {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| parse_vmrss_kb(&s))
+            .unwrap_or(0)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        0
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn read_peak_rss_kb() -> u64 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| parse_vmhwm_kb(&s))
+        .unwrap_or(0)
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+fn read_peak_rss_kb() -> u64 {
+    // SAFETY: rusage is plain data and getrusage fills the zeroed local.
+    let max_rss = unsafe {
+        let mut usage: libc::rusage = std::mem::zeroed();
+        libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+        usage.ru_maxrss as u64
+    };
+    // ru_maxrss is bytes on Apple platforms, KiB elsewhere.
+    if cfg!(target_vendor = "apple") {
+        max_rss / 1024
+    } else {
+        max_rss
+    }
+}
+
+#[cfg(not(unix))]
+fn read_peak_rss_kb() -> u64 {
+    0
+}
+
+/// Runs `f`, returning its output, elapsed ms and the peak RSS reached during it.
+/// Clears `per_step` if the peak could not be reset beforehand.
+fn measure<T>(per_step: &mut bool, f: impl FnOnce() -> T) -> (T, u64, u64) {
+    if !reset_peak_rss() {
+        *per_step = false;
+    }
+    let start = std::time::Instant::now();
+    let out = f();
+    let ms = start.elapsed().as_millis() as u64;
+    (out, ms, read_peak_rss_kb())
+}
+
+#[cfg(target_os = "android")]
+fn android_prop(name: &str) -> String {
+    std::process::Command::new("getprop")
+        .arg(name)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+#[cfg(not(target_os = "android"))]
+fn android_prop(_name: &str) -> String {
+    String::new()
+}
+
+/// Compact JSON describing the device: SoC, model, RAM, per-core max
+/// frequencies, the big-core set and rayon's default thread count.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn device_profile() -> String {
+    let freqs = read_cpu_max_freqs_khz();
+    let mem_total_kb = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| parse_status_kb(&s, "MemTotal:"))
+        .unwrap_or(0);
+    serde_json::json!({
+        "soc_model": android_prop("ro.soc.model"),
+        "soc_manufacturer": android_prop("ro.soc.manufacturer"),
+        "product_model": android_prop("ro.product.model"),
+        "manufacturer": android_prop("ro.product.manufacturer"),
+        "android_sdk": android_prop("ro.build.version.sdk"),
+        "mem_total_kb": mem_total_kb,
+        "cpu_max_freq_khz": freqs,
+        "big_cores": classify_big_cores(&freqs),
+        "rayon_default_threads": rayon::current_num_threads(),
+    })
+    .to_string()
+}
+
+// ============================================================================
 // Legacy Test Function
 // ============================================================================
 
@@ -718,6 +1040,178 @@ mod tests {
         let result = get_comm_w_shared(".".to_string(), "invalid".to_string());
         assert!(matches!(result, Err(ZkProofError::InvalidInput { .. })));
     }
+
+    #[test]
+    fn test_parse_vmhwm_kb() {
+        let status = "Name:\tflutter\nVmPeak:\t 3000000 kB\nVmHWM:\t 2345678 kB\nVmRSS:\t 100 kB\n";
+        assert_eq!(parse_vmhwm_kb(status), Some(2345678));
+    }
+
+    #[test]
+    fn test_parse_vmhwm_kb_missing_or_malformed() {
+        assert_eq!(parse_vmhwm_kb("VmRSS:\t 100 kB\n"), None);
+        assert_eq!(parse_vmhwm_kb("VmHWM:\t lots kB\n"), None);
+        assert_eq!(parse_vmhwm_kb(""), None);
+    }
+
+    #[test]
+    fn test_affinity_matches() {
+        assert!(affinity_matches(&[4, 5, 6, 7], &[7, 6, 5, 4]));
+        assert!(affinity_matches(&[2, 2, 3], &[3, 2]));
+        // The kernel narrowed the mask to the app's cpuset.
+        assert!(!affinity_matches(&[4, 5, 6, 7], &[4, 5]));
+        assert!(!affinity_matches(&[4, 5], &[0, 1, 2, 3, 4, 5]));
+    }
+
+    #[test]
+    fn test_pool_size() {
+        assert_eq!(pool_size(0, 0), 0);
+        assert_eq!(pool_size(0, 4), 4);
+        assert_eq!(pool_size(3, 0), 3);
+        assert_eq!(pool_size(3, 4), 3);
+    }
+
+    #[test]
+    fn test_parse_vmrss_kb() {
+        let status = "VmHWM:\t 2345678 kB\nVmRSS:\t 1234 kB\n";
+        assert_eq!(parse_vmrss_kb(status), Some(1234));
+        assert_eq!(parse_vmrss_kb("VmHWM:\t 5 kB\n"), None);
+    }
+
+    #[test]
+    fn test_parse_meminfo_total_kb() {
+        let meminfo = "MemTotal:        5890204 kB\nMemFree:          123 kB\n";
+        assert_eq!(parse_status_kb(meminfo, "MemTotal:"), Some(5890204));
+    }
+
+    #[test]
+    fn test_big_cores_one_three_four() {
+        let f = |khz| Some(khz);
+        let freqs = [
+            f(1_800_000), f(1_800_000), f(1_800_000), f(1_800_000),
+            f(2_400_000), f(2_400_000), f(2_400_000), f(3_000_000),
+        ];
+        assert_eq!(classify_big_cores(&freqs), vec![4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn test_big_cores_two_six() {
+        let freqs = [
+            Some(2_000_000), Some(2_000_000), Some(2_000_000), Some(2_000_000),
+            Some(2_000_000), Some(2_000_000), Some(2_800_000), Some(2_800_000),
+        ];
+        assert_eq!(classify_big_cores(&freqs), vec![6, 7]);
+    }
+
+    #[test]
+    fn test_big_cores_all_equal_or_unreadable() {
+        assert_eq!(classify_big_cores(&[Some(2_000_000); 4]), vec![0, 1, 2, 3]);
+        assert_eq!(classify_big_cores(&[None, None, None]), vec![0, 1, 2]);
+        assert!(classify_big_cores(&[]).is_empty());
+    }
+
+    #[test]
+    fn test_big_cores_skips_unreadable_in_mixed_layout() {
+        let freqs = [Some(1_500_000), None, Some(2_500_000)];
+        assert_eq!(classify_big_cores(&freqs), vec![2]);
+    }
+
+    #[test]
+    fn test_parse_status_kb_separators_and_suffix() {
+        assert_eq!(parse_status_kb("VmHWM:\t42 kB\n", "VmHWM:"), Some(42));
+        assert_eq!(parse_status_kb("VmHWM:     42 kB\n", "VmHWM:"), Some(42));
+        assert_eq!(parse_status_kb("VmHWM:42 kB\n", "VmHWM:"), Some(42));
+        assert_eq!(parse_status_kb("VmHWM:\t42\n", "VmHWM:"), Some(42));
+        assert_eq!(parse_status_kb("VmHWM:\t42", "VmHWM:"), Some(42));
+        assert_eq!(parse_status_kb("VmHWM:\t42 MB\n", "VmHWM:"), Some(42));
+    }
+
+    #[test]
+    fn test_parse_status_kb_key_edge_cases() {
+        // Different key sharing a prefix, and an empty value.
+        assert_eq!(parse_vmhwm_kb("VmHWMx:\t5 kB\n"), None);
+        assert_eq!(parse_vmhwm_kb("VmHWM:\n"), None);
+        assert_eq!(parse_vmhwm_kb("VmHWM:\t-5 kB\n"), None);
+        assert_eq!(parse_vmhwm_kb("  VmHWM:\t5 kB\n"), None);
+        // Key must be at line start; a longer key does not shadow the real one.
+        assert_eq!(parse_vmhwm_kb("VmHWMx:\t5 kB\nVmHWM:\t7 kB\n"), Some(7));
+        assert_eq!(parse_vmhwm_kb("VmHWM:\t7 kB\r\n"), Some(7));
+        // First matching line wins, even when it is malformed.
+        assert_eq!(parse_vmhwm_kb("VmHWM:\tx kB\nVmHWM:\t7 kB\n"), None);
+        assert_eq!(parse_vmhwm_kb("VmHWM:\t99999999999999999999999 kB\n"), None);
+        assert_eq!(parse_vmrss_kb("VmRSS:\t0 kB\n"), Some(0));
+    }
+
+    #[test]
+    fn test_big_cores_one_three_four_prime_first() {
+        let freqs = [
+            Some(3_000_000), Some(2_000_000), Some(2_000_000), Some(2_000_000),
+            Some(1_000_000), Some(1_000_000), Some(1_000_000), Some(1_000_000),
+        ];
+        assert_eq!(classify_big_cores(&freqs), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_big_cores_tensor_g5_one_five_two() {
+        let freqs = [
+            Some(3_800_000), Some(3_050_000), Some(3_050_000), Some(3_050_000),
+            Some(3_050_000), Some(3_050_000), Some(2_200_000), Some(2_200_000),
+        ];
+        assert_eq!(classify_big_cores(&freqs), vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_big_cores_single_core_and_one_tier_with_unreadable() {
+        assert_eq!(classify_big_cores(&[Some(1_000_000)]), vec![0]);
+        assert_eq!(classify_big_cores(&[None]), vec![0]);
+        // One readable tier plus unreadable cores counts as a single tier.
+        assert_eq!(classify_big_cores(&[Some(2_000_000), None]), vec![0, 1]);
+    }
+
+    #[test]
+    fn test_big_cores_leading_unreadable_and_unsorted() {
+        let freqs = [None, Some(2_800_000), Some(1_500_000), Some(2_800_000)];
+        assert_eq!(classify_big_cores(&freqs), vec![1, 3]);
+    }
+
+    #[test]
+    fn test_device_profile_is_valid_json_with_expected_keys() {
+        let v: serde_json::Value = serde_json::from_str(&device_profile()).expect("valid JSON");
+        for k in [
+            "soc_model", "soc_manufacturer", "product_model", "manufacturer", "android_sdk",
+        ] {
+            #[cfg(not(target_os = "android"))]
+            assert_eq!(v[k], serde_json::json!(""), "{k}");
+            #[cfg(target_os = "android")]
+            assert!(v[k].is_string(), "{k}");
+        }
+        assert!(v["mem_total_kb"].is_u64());
+        let freqs = v["cpu_max_freq_khz"].as_array().expect("freqs array");
+        let big = v["big_cores"].as_array().expect("big_cores array");
+        assert!(big.iter().all(|i| i.as_u64().is_some()));
+        assert!(freqs.iter().all(|f| f.is_null() || f.is_u64()));
+        assert!(v["rayon_default_threads"].as_u64().unwrap() >= 1);
+        // No cpufreq sysfs off Linux/Android.
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        {
+            assert!(freqs.is_empty());
+            assert!(big.is_empty());
+            assert_eq!(v["mem_total_kb"], 0);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_rss_helpers_on_macos() {
+        assert!(!reset_peak_rss());
+        assert!(peak_rss_kb() > 0);
+        assert_eq!(current_rss_kb(), 0);
+        let mut per_step = true;
+        let (out, _ms, peak) = measure(&mut per_step, || 7);
+        assert_eq!(out, 7);
+        assert!(!per_step);
+        assert!(peak > 0);
+    }
 }
 
 // ============================================================================
@@ -748,7 +1242,7 @@ mod e2e_tests {
     ///     show_input.json                       ← show inputs (for prove_show + run_complete_benchmark)
     ///
     /// Returns the documents_path string.
-    fn setup_mobile_docs(path: &PathBuf) -> String {
+    fn setup_mobile_docs(path: &Path) -> String {
         let docs = path.join("circom");
         let circom = circom_root();
 
@@ -788,7 +1282,7 @@ mod e2e_tests {
     fn e2e_full_workflow() {
         let temp = tempfile::tempdir().expect("create temp dir");
 
-        let docs = setup_mobile_docs(&temp);
+        let docs = setup_mobile_docs(temp.path());
 
         // Step 1: Setup JWT keys
         let r = setup_jwt_keys(docs.clone());
@@ -863,12 +1357,25 @@ mod e2e_tests {
     #[ignore = "Long-running e2e (~10 min); run with: cargo test -- --ignored e2e_complete_benchmark"]
     fn e2e_complete_benchmark() {
         let temp = tempfile::tempdir().expect("create temp dir");
-        let docs = setup_mobile_docs(&temp);
+        let docs = setup_mobile_docs(temp.path());
 
         let r = run_complete_benchmark(docs);
         assert!(r.is_ok(), "run_complete_benchmark failed: {:?}", r.err());
 
         let b = r.unwrap();
+        println!(
+            "peak_rss_kb setup={}/{} blinds={} prove={}/{} reblind={}/{} verify={}/{} per_step={}",
+            b.peak_rss_jwt_setup_kb,
+            b.peak_rss_show_setup_kb,
+            b.peak_rss_generate_blinds_kb,
+            b.peak_rss_prove_jwt_kb,
+            b.peak_rss_prove_show_kb,
+            b.peak_rss_reblind_jwt_kb,
+            b.peak_rss_reblind_show_kb,
+            b.peak_rss_verify_jwt_kb,
+            b.peak_rss_verify_show_kb,
+            b.rss_per_step
+        );
 
         // Long-running operations must record positive ms timings.
         // generate_blinds is sub-millisecond so we only assert it doesn't panic.
@@ -880,6 +1387,11 @@ mod e2e_tests {
         assert!(b.reblind_show_ms > 0, "reblind_show_ms must be > 0");
         assert!(b.verify_jwt_ms > 0, "verify_jwt_ms must be > 0");
         assert!(b.verify_show_ms > 0, "verify_show_ms must be > 0");
+
+        // Proving dominates memory; the other steps may legitimately report less.
+        assert!(b.peak_rss_prove_jwt_kb > 0, "peak_rss_prove_jwt_kb must be > 0");
+        assert!(b.peak_rss_prove_show_kb > 0, "peak_rss_prove_show_kb must be > 0");
+        assert!(b.peak_rss_jwt_setup_kb > 0, "peak_rss_jwt_setup_kb must be > 0");
 
         // All artifacts must be non-empty
         assert!(b.jwt_proof_bytes > 0, "jwt_proof_bytes must be > 0");

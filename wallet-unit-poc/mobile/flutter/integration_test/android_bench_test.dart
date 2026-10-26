@@ -1,0 +1,279 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:mopro_flutter_bindings/src/rust/frb_generated.dart';
+import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.dart'
+    show
+        BenchmarkResults,
+        currentRssKb,
+        deviceProfile,
+        generateSharedBlinds,
+        peakRssKb,
+        proveJwt,
+        proveShow,
+        reblindJwt,
+        reblindShow,
+        resetPeakRss,
+        runCompleteBenchmarkWith,
+        setupJwtKeys,
+        setupShowKeys,
+        verifyJwt,
+        verifyShow;
+import 'package:openac/assets.dart';
+
+const _warmup = int.fromEnvironment('BENCH_WARMUP', defaultValue: 1);
+const _itersA = int.fromEnvironment('BENCH_ITERS_A', defaultValue: 5);
+const _itersB = int.fromEnvironment('BENCH_ITERS_B', defaultValue: 3);
+const _itersP = int.fromEnvironment('BENCH_ITERS_P', defaultValue: 3);
+const _cooldownS = int.fromEnvironment('BENCH_COOLDOWN_S', defaultValue: 20);
+
+// logcat truncates lines near 1 KiB; the Test Lab parser reads one JSON per line.
+const _maxLineBytes = 900;
+
+// Error text is cut by UTF-8 bytes, then shrunk until the whole line fits.
+const _maxErrorBytes = 300;
+
+void _print(String line) {
+  // ignore: avoid_print
+  print(line);
+}
+
+void _logError(String config, int iter, Object error) {
+  var bytes = utf8.encode(error.toString());
+  if (bytes.length > _maxErrorBytes) bytes = bytes.sublist(0, _maxErrorBytes);
+  while (true) {
+    final line = 'OPENAC_ERROR ${jsonEncode({
+          'config': config,
+          'iter': iter,
+          'error': utf8.decode(bytes, allowMalformed: true),
+        })}';
+    if (utf8.encode(line).length < _maxLineBytes || bytes.isEmpty) {
+      _print(line);
+      return;
+    }
+    bytes = bytes.sublist(0, bytes.length * 4 ~/ 5);
+  }
+}
+
+/// Prints one marker line. A line too long for logcat is replaced by an
+/// OPENAC_ERROR and reported as false; this never throws.
+bool _log(String marker, Map<String, Object?> obj,
+    {String config = '-', int iter = -1}) {
+  final line = '$marker ${jsonEncode(obj)}';
+  if (utf8.encode(line).length >= _maxLineBytes) {
+    _logError(config, iter, '$marker line exceeds $_maxLineBytes bytes');
+    return false;
+  }
+  _print(line);
+  return true;
+}
+
+int _i(BigInt v) => v.toInt();
+
+Map<String, Object?> _metrics(BenchmarkResults r) => {
+      'jwt_setup_ms': _i(r.jwtSetupMs),
+      'show_setup_ms': _i(r.showSetupMs),
+      'generate_blinds_ms': _i(r.generateBlindsMs),
+      'prove_jwt_ms': _i(r.proveJwtMs),
+      'reblind_jwt_ms': _i(r.reblindJwtMs),
+      'prove_show_ms': _i(r.proveShowMs),
+      'reblind_show_ms': _i(r.reblindShowMs),
+      'verify_jwt_ms': _i(r.verifyJwtMs),
+      'verify_show_ms': _i(r.verifyShowMs),
+      'peak_rss_jwt_setup_kb': _i(r.peakRssJwtSetupKb),
+      'peak_rss_show_setup_kb': _i(r.peakRssShowSetupKb),
+      'peak_rss_generate_blinds_kb': _i(r.peakRssGenerateBlindsKb),
+      'peak_rss_prove_jwt_kb': _i(r.peakRssProveJwtKb),
+      'peak_rss_reblind_jwt_kb': _i(r.peakRssReblindJwtKb),
+      'peak_rss_prove_show_kb': _i(r.peakRssProveShowKb),
+      'peak_rss_reblind_show_kb': _i(r.peakRssReblindShowKb),
+      'peak_rss_verify_jwt_kb': _i(r.peakRssVerifyJwtKb),
+      'peak_rss_verify_show_kb': _i(r.peakRssVerifyShowKb),
+      'rss_per_step': r.rssPerStep,
+    };
+
+Map<String, Object?> _sizes(String config, BenchmarkResults r) => {
+      'config': config,
+      'jwt_proving_key_bytes': _i(r.jwtProvingKeyBytes),
+      'jwt_verifying_key_bytes': _i(r.jwtVerifyingKeyBytes),
+      'show_proving_key_bytes': _i(r.showProvingKeyBytes),
+      'show_verifying_key_bytes': _i(r.showVerifyingKeyBytes),
+      'jwt_proof_bytes': _i(r.jwtProofBytes),
+      'show_proof_bytes': _i(r.showProofBytes),
+      'jwt_witness_bytes': _i(r.jwtWitnessBytes),
+      'show_witness_bytes': _i(r.showWitnessBytes),
+    };
+
+class _Probe<T> {
+  final T out;
+  final int baseKb;
+  final int peakKb;
+  final bool perStep;
+  _Probe(this.out, this.baseKb, this.peakKb, this.perStep);
+}
+
+/// Runs [f] with the kernel peak-RSS mark reset, so the peak covers only [f].
+Future<_Probe<T>> _probe<T>(Future<T> Function() f) async {
+  final base = _i(await currentRssKb());
+  final perStep = await resetPeakRss();
+  final out = await f();
+  return _Probe(out, base, _i(await peakRssKb()), perStep);
+}
+
+class _Config {
+  final String name;
+  final bool pinBigCores;
+  final int warmups;
+  final int iters;
+  const _Config(this.name, this.pinBigCores, this.warmups, this.iters);
+}
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('openac android benchmark', (tester) async {
+    await RustLib.init();
+    final docs = await prepareAssets();
+
+    _log('OPENAC_DEVICE',
+        jsonDecode(await deviceProfile()) as Map<String, Object?>);
+
+    var first = true;
+    var okP = 0;
+    var errors = 0;
+
+    // Config P: the production path, measured per step. Setup and asset
+    // decompression run in this same process first, so the residue they leave
+    // shows up in base RSS; peak RSS is the high-water mark during each call.
+    if (_itersP > 0) {
+      var setupOk = true;
+      try {
+        await setupJwtKeys(documentsPath: docs);
+        await setupShowKeys(documentsPath: docs);
+        await generateSharedBlinds(documentsPath: docs);
+      } catch (e) {
+        setupOk = false;
+        errors++;
+        _logError('P', -1, e);
+      }
+      for (var iter = 0; setupOk && iter < _itersP; iter++) {
+        if (!first) {
+          await Future<void>.delayed(const Duration(seconds: _cooldownS));
+        }
+        first = false;
+        try {
+          final pj = await _probe(() => proveJwt(documentsPath: docs));
+          final rj = await _probe(() => reblindJwt(documentsPath: docs));
+          final ps = await _probe(() => proveShow(documentsPath: docs));
+          final rs = await _probe(() => reblindShow(documentsPath: docs));
+          var vjMs = 0;
+          final vj = await _probe(() async {
+            final sw = Stopwatch()..start();
+            final ok = await verifyJwt(documentsPath: docs);
+            vjMs = sw.elapsedMilliseconds;
+            return ok;
+          });
+          var vsMs = 0;
+          final vs = await _probe(() async {
+            final sw = Stopwatch()..start();
+            final ok = await verifyShow(documentsPath: docs);
+            vsMs = sw.elapsedMilliseconds;
+            return ok;
+          });
+          if (!vj.out || !vs.out) throw StateError('verify returned false');
+          final steps = {
+            'prove_jwt': pj,
+            'reblind_jwt': rj,
+            'prove_show': ps,
+            'reblind_show': rs,
+            'verify_jwt': vj,
+            'verify_show': vs,
+          };
+          final logged = _log(
+              'OPENAC_PROD',
+              {
+                'iter': iter,
+                'prove_jwt_ms': _i(pj.out.proveMs),
+                'reblind_jwt_ms': _i(rj.out.proveMs),
+                'prove_show_ms': _i(ps.out.proveMs),
+                'reblind_show_ms': _i(rs.out.proveMs),
+                // Wall time of the Dart call: includes key/proof load and FFI.
+                'verify_jwt_wall_ms': vjMs,
+                'verify_show_wall_ms': vsMs,
+                for (final e in steps.entries) ...{
+                  'base_rss_${e.key}_kb': e.value.baseKb,
+                  'peak_rss_${e.key}_kb': e.value.peakKb,
+                },
+                'rss_per_step': steps.values.every((p) => p.perStep),
+              },
+              config: 'P',
+              iter: iter);
+          if (logged) {
+            okP++;
+          } else {
+            errors++;
+          }
+        } catch (e) {
+          errors++;
+          _logError('P', iter, e);
+        }
+      }
+    }
+
+    const configs = [
+      _Config('A', false, _warmup, _itersA),
+      _Config('B', true, 0, _itersB),
+    ];
+    final ok = {'A': 0, 'B': 0};
+
+    for (final c in configs) {
+      var sizesLogged = false;
+      for (var iter = 0; iter < c.warmups + c.iters; iter++) {
+        if (!first) {
+          await Future<void>.delayed(const Duration(seconds: _cooldownS));
+        }
+        first = false;
+        try {
+          final r = await runCompleteBenchmarkWith(
+            documentsPath: docs,
+            numThreads: 0,
+            pinBigCores: c.pinBigCores,
+          );
+          if (!sizesLogged) {
+            _log('OPENAC_SIZES', _sizes(c.name, r), config: c.name, iter: iter);
+            sizesLogged = true;
+          }
+          final logged = _log(
+              'OPENAC_BENCH',
+              {
+                'config': c.name,
+                'iter': iter,
+                'warmup': iter < c.warmups,
+                'num_threads': 0,
+                'pin_big_cores': c.pinBigCores,
+                'pool_threads': r.poolThreads,
+                'pinned_threads': r.pinnedThreads,
+                'pinned_threads_end': r.pinnedThreadsEnd,
+                ..._metrics(r),
+              },
+              config: c.name,
+              iter: iter);
+          if (logged) {
+            ok[c.name] = ok[c.name]! + 1;
+          } else {
+            errors++;
+          }
+        } catch (e) {
+          errors++;
+          _logError(c.name, iter, e);
+        }
+      }
+    }
+
+    _log('OPENAC_DONE',
+        {'ok_p': okP, 'ok_a': ok['A'], 'ok_b': ok['B'], 'errors': errors});
+    expect(okP + ok['A']! + ok['B']!, greaterThan(0),
+        reason: 'no iteration succeeded');
+  }, timeout: Timeout.none);
+}
