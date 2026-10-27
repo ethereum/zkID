@@ -412,37 +412,15 @@ def summary_md(devices):
     return "\n".join(out) + "\n"
 
 
-def write_prod_csv(devices, path):
+def write_csv(devices, path, fields, key):
     with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=PROD_CSV_FIELDS, extrasaction="ignore", restval="")
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore", restval="")
         w.writeheader()
         for dev in devices:
             d = dev["device"] or {}
-            for r in dev["prod"]:
+            for r in dev[key]:
                 w.writerow({"device": dev["label"], "soc_model": d.get("soc_model", ""),
                             "mem_total_kb": d.get("mem_total_kb", ""), **r})
-
-
-def write_iter_csv(devices, path):
-    with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=ITER_CSV_FIELDS, extrasaction="ignore", restval="")
-        w.writeheader()
-        for dev in devices:
-            d = dev["device"] or {}
-            for r in dev["iters"]:
-                w.writerow({"device": dev["label"], "soc_model": d.get("soc_model", ""),
-                            "mem_total_kb": d.get("mem_total_kb", ""), **r})
-
-
-def write_csv(devices, path):
-    with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore", restval="")
-        w.writeheader()
-        for dev in devices:
-            d = dev["device"] or {}
-            for b in dev["bench"]:
-                w.writerow({"device": dev["label"], "soc_model": d.get("soc_model", ""),
-                            "mem_total_kb": d.get("mem_total_kb", ""), **b})
 
 
 def main(argv=None):
@@ -461,9 +439,9 @@ def main(argv=None):
     if not devices:
         print("no logcat files found", file=sys.stderr)
         return 1
-    write_csv(devices, os.path.join(out_dir, "bench_iterations.csv"))
-    write_prod_csv(devices, os.path.join(out_dir, "bench_prod.csv"))
-    write_iter_csv(devices, os.path.join(out_dir, "bench_iter.csv"))
+    write_csv(devices, os.path.join(out_dir, "bench_iterations.csv"), CSV_FIELDS, "bench")
+    write_csv(devices, os.path.join(out_dir, "bench_prod.csv"), PROD_CSV_FIELDS, "prod")
+    write_csv(devices, os.path.join(out_dir, "bench_iter.csv"), ITER_CSV_FIELDS, "iters")
     md = summary_md(devices)
     with open(os.path.join(out_dir, "bench_summary.md"), "w") as f:
         f.write(md)

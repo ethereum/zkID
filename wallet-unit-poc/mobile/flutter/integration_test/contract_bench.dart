@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.dart'
     show
-        currentRssKb,
         deviceProfile,
         loadPrepareKey,
         loadPrepareReblindData,
@@ -13,7 +13,6 @@ import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.da
         presentLoaded,
         provePrepareLoaded,
         proveShowLoaded,
-        resetPeakRss,
         stageFile,
         zkErrorMessage,
         ZkProofError;
@@ -50,15 +49,13 @@ Future<String> benchConfigPath() async => '$_benchDir/bench_config.json';
 
 /// Proofs and instances of the last iteration land here, for the
 /// host to pull and verify (scripts/verify_device_proofs.sh).
-Future<String> _outDir() async => '$_benchDir/out';
+const _outDir = '$_benchDir/out';
 
 const _outStems = {
   'prepare': ['prepare'],
   'show': ['show'],
   'present': ['present_prepare', 'present_show'],
 };
-
-Future<String> _pushedDir() async => _benchDir;
 
 Future<void> _error(String step, int iter, Object e) async => logError(
     'OPENAC_',
@@ -115,7 +112,7 @@ Future<int> runContractBench() async {
       final sw = Stopwatch()..start();
       for (final f in files) {
         await stageFile(
-            src: '${await _pushedDir()}/$f', dest: '${staging.path}/$f');
+            src: '$_benchDir/$f', dest: '${staging.path}/$f');
       }
       stageMs = sw.elapsedMilliseconds;
     } catch (e) {
@@ -125,7 +122,7 @@ Future<int> runContractBench() async {
     }
 
     // A failed run must not leave a previous run's proofs to be pulled and verified.
-    final out = await _outDir();
+    const out = _outDir;
     for (final stem in _outStems[step]!) {
       for (final ext in ['proof', 'instance']) {
         final f = File('$out/$stem.$ext');
@@ -186,28 +183,44 @@ Future<int> runContractBench() async {
   return ok;
 }
 
+Map<String, Object?> _row(String step, Probe<Object?> p, int avail,
+        {required int loadMs,
+        required int proveMs,
+        required int totalMs,
+        int? peakKb,
+        bool perStep = true,
+        int? witnessMs}) =>
+    {
+      'step': step,
+      'load_ms': loadMs,
+      if (witnessMs != null) 'witness_ms': witnessMs,
+      'prove_ms': proveMs,
+      'total_ms': totalMs,
+      'base_rss_kb': p.baseKb,
+      'peak_rss_kb': peakKb ?? p.peakKb,
+      'mem_available_kb_before': avail,
+      if (!(p.perStep && perStep)) 'rss_per_step': false,
+    };
+
 Future<_Iteration> _prepare(
     String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
-  final base = toInt(await currentRssKb());
-  final perStep = await resetPeakRss();
-  final sw = Stopwatch()..start();
-  var loadMs = 0;
-  if (cold) loadMs = toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
-  final r = await provePrepareLoaded(documentsPath: docs, outDir: out);
-  final totalMs = sw.elapsedMilliseconds;
-  return _Iteration([
-    {
-      'step': 'prepare',
-      'load_ms': loadMs,
-      'witness_ms': toInt(r.witnessMs),
-      'prove_ms': toInt(r.proveMs),
-      'total_ms': totalMs,
-      'base_rss_kb': base,
-      'peak_rss_kb': toInt(await peakRssKb()),
-      'mem_available_kb_before': avail,
-      if (!perStep) 'rss_per_step': false,
+  final p = await probe(() async {
+    final sw = Stopwatch()..start();
+    var loadMs = 0;
+    if (cold) {
+      loadMs = toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
     }
+    final r = await provePrepareLoaded(documentsPath: docs, outDir: out);
+    return (r, loadMs, sw.elapsedMilliseconds);
+  });
+  final (r, loadMs, totalMs) = p.out;
+  return _Iteration([
+    _row('prepare', p, avail,
+        loadMs: loadMs,
+        witnessMs: toInt(r.witnessMs),
+        proveMs: toInt(r.proveMs),
+        totalMs: totalMs)
   ], {
     'proof_bytes': toInt(r.proofBytes)
   });
@@ -216,24 +229,17 @@ Future<_Iteration> _prepare(
 Future<_Iteration> _show(
     String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
-  final base = toInt(await currentRssKb());
-  final perStep = await resetPeakRss();
-  final sw = Stopwatch()..start();
-  var loadMs = 0;
-  if (cold) loadMs = toInt(await loadShowKey(path: '$staging/$_showKey'));
-  final r = await proveShowLoaded(documentsPath: docs, outDir: out);
-  final totalMs = sw.elapsedMilliseconds;
+  final p = await probe(() async {
+    final sw = Stopwatch()..start();
+    var loadMs = 0;
+    if (cold) loadMs = toInt(await loadShowKey(path: '$staging/$_showKey'));
+    final r = await proveShowLoaded(documentsPath: docs, outDir: out);
+    return (r, loadMs, sw.elapsedMilliseconds);
+  });
+  final (r, loadMs, totalMs) = p.out;
   return _Iteration([
-    {
-      'step': 'show',
-      'load_ms': loadMs,
-      'prove_ms': toInt(r.proveMs),
-      'total_ms': totalMs,
-      'base_rss_kb': base,
-      'peak_rss_kb': toInt(await peakRssKb()),
-      'mem_available_kb_before': avail,
-      if (!perStep) 'rss_per_step': false,
-    }
+    _row('show', p, avail,
+        loadMs: loadMs, proveMs: toInt(r.proveMs), totalMs: totalMs)
   ], {
     'proof_bytes': toInt(r.proofBytes)
   });
@@ -245,44 +251,42 @@ Future<_Iteration> _show(
 Future<_Iteration> _present(
     String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
-  final base = toInt(await currentRssKb());
-  final perStep = await resetPeakRss();
-  final sw = Stopwatch()..start();
-  var loadMs = 0;
   var loadPeakKb = 0;
-  if (cold) {
-    loadMs += toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
-    loadMs += toInt(await loadShowKey(path: '$staging/$_showKey'));
-    loadMs += toInt(await loadPrepareReblindData(
-        instancePath: '$staging/$_prepareInstance',
-        witnessPath: '$staging/$_prepareWitness',
-        sharedBlindsPath: '$staging/$_sharedBlinds'));
-    loadPeakKb = toInt(await peakRssKb());
-  }
-  final r = await presentLoaded(documentsPath: docs, outDir: out);
-  final totalMs = sw.elapsedMilliseconds;
+  final p = await probe(() async {
+    final sw = Stopwatch()..start();
+    var loadMs = 0;
+    if (cold) {
+      loadMs += toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
+      loadMs += toInt(await loadShowKey(path: '$staging/$_showKey'));
+      loadMs += toInt(await loadPrepareReblindData(
+          instancePath: '$staging/$_prepareInstance',
+          witnessPath: '$staging/$_prepareWitness',
+          sharedBlindsPath: '$staging/$_sharedBlinds'));
+      loadPeakKb = toInt(await peakRssKb());
+    }
+    final r = await presentLoaded(documentsPath: docs, outDir: out);
+    return (r, loadMs, sw.elapsedMilliseconds);
+  });
+  final (r, loadMs, totalMs) = p.out;
 
-  Map<String, Object?> sub(String step, BigInt ms, BigInt peakKb) => {
-        'step': step,
-        'load_ms': 0,
-        'prove_ms': toInt(ms),
-        'total_ms': toInt(ms),
-        'base_rss_kb': base,
-        'peak_rss_kb': toInt(peakKb),
-        'mem_available_kb_before': avail,
-        if (!perStep || !r.rssPerStep) 'rss_per_step': false,
-      };
-  final peak =
-      toInt(r.peakRssKb) > loadPeakKb ? toInt(r.peakRssKb) : loadPeakKb;
+  Map<String, Object?> sub(String step, BigInt ms, BigInt peakKb) => _row(
+      step, p, avail,
+      loadMs: 0,
+      proveMs: toInt(ms),
+      totalMs: toInt(ms),
+      peakKb: toInt(peakKb),
+      perStep: r.rssPerStep);
+  final peak = max(toInt(r.peakRssKb), loadPeakKb);
   return _Iteration([
     sub('show_prove', r.showProveMs, r.peakRssShowProveKb),
     sub('prepare_reblind', r.prepareReblindMs, r.peakRssPrepareReblindKb),
     sub('show_reblind', r.showReblindMs, r.peakRssShowReblindKb),
-    {
-      ...sub('present_total', r.totalMs, BigInt.from(peak)),
-      'load_ms': loadMs,
-      'total_ms': totalMs,
-    },
+    _row('present_total', p, avail,
+        loadMs: loadMs,
+        proveMs: toInt(r.totalMs),
+        totalMs: totalMs,
+        peakKb: peak,
+        perStep: r.rssPerStep),
   ], {
     'proof_bytes': toInt(r.prepareProofBytes) + toInt(r.showProofBytes),
     'prepare_proof_bytes': toInt(r.prepareProofBytes),

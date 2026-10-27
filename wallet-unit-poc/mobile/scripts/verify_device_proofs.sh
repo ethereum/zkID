@@ -17,7 +17,5 @@ VK_DIR="${2:-$MOBILE_DIR/../ecdsa-spartan2/keys}"
 VK_DIR="$(cd "$VK_DIR" && pwd)"
 
 cd "$MOBILE_DIR"
-# Compiler warnings from the workspace are noise here; show the full output only if the build fails.
-cargo build --release --quiet --bin verify_proofs 2>/dev/null || cargo build --release --bin verify_proofs
-# cargo run sets the library path the witnesscalc dylib needs; the program reports on stdout.
-exec cargo run --release --quiet --bin verify_proofs -- "$PROOFS_DIR" "$VK_DIR" 2>/dev/null
+# cargo run sets the library path the witnesscalc dylib needs, which the built binary lacks.
+exec cargo run --release --quiet --bin verify_proofs -- "$PROOFS_DIR" "$VK_DIR"

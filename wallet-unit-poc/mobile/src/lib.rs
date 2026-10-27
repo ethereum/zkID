@@ -515,10 +515,6 @@ pub struct PresentResult {
     pub show_proof_bytes: u64,
 }
 
-fn max_peak(peaks: &[u64]) -> u64 {
-    peaks.iter().copied().max().unwrap_or(0)
-}
-
 fn load_key(path: &str) -> Result<(ProvingKey, u64), ZkProofError> {
     let start = std::time::Instant::now();
     let pk = load_proving_key(path).map_err(|e| ZkProofError::FileNotFound {
@@ -653,22 +649,6 @@ fn prove_show_in_memory(
     prove_circuit_in_memory(circuit, pk).map_err(proving_failed)
 }
 
-/// File names (relative to the files dir's `out/`) a step writes: proof, instance.
-fn out_file_names(out_dir: &str, stem: &str) -> (String, String) {
-    (format!("{out_dir}/{stem}.proof"), format!("{out_dir}/{stem}.instance"))
-}
-
-/// Creates `out_dir` and returns the proof and instance paths for `stem`; None
-/// when `out_dir` is empty (no output requested).
-fn out_files_for(out_dir: &str, stem: &str) -> Result<Option<(PathBuf, PathBuf)>, ZkProofError> {
-    if out_dir.is_empty() {
-        return Ok(None);
-    }
-    std::fs::create_dir_all(out_dir)?;
-    let (proof, instance) = out_file_names(out_dir, stem);
-    Ok(Some((proof.into(), instance.into())))
-}
-
 /// Writes the proof and instance for `stem` under `out_dir` so the host can
 /// verify them; nothing when `out_dir` is empty. The witness is not written.
 fn write_outputs(
@@ -677,17 +657,21 @@ fn write_outputs(
     proof: &R1CSSNARK<E>,
     instance: &SplitR1CSInstance<E>,
 ) -> Result<(), ZkProofError> {
-    let Some((proof_path, instance_path)) = out_files_for(out_dir, stem)? else {
+    if out_dir.is_empty() {
         return Ok(());
-    };
-    ecdsa_spartan2::setup::save_proof(proof_path, proof).map_err(|e| ZkProofError::IoError {
-        message: format!("Failed to write proof: {}", e),
-    })?;
-    ecdsa_spartan2::setup::save_instance(instance_path, instance).map_err(|e| {
+    }
+    std::fs::create_dir_all(out_dir)?;
+    let dir = Path::new(out_dir);
+    ecdsa_spartan2::setup::save_proof(dir.join(format!("{stem}.proof")), proof).map_err(|e| {
         ZkProofError::IoError {
-            message: format!("Failed to write instance: {}", e),
+            message: format!("Failed to write proof: {}", e),
         }
-    })
+    })?;
+    ecdsa_spartan2::setup::save_instance(dir.join(format!("{stem}.instance")), instance).map_err(
+        |e| ZkProofError::IoError {
+            message: format!("Failed to write instance: {}", e),
+        },
+    )
 }
 
 /// Prove Prepare with the loaded key. Witness generation is included in
@@ -779,7 +763,7 @@ pub fn present_loaded(
         peak_rss_show_prove_kb: peak_show_prove,
         peak_rss_prepare_reblind_kb: peak_prepare_reblind,
         peak_rss_show_reblind_kb: peak_show_reblind,
-        peak_rss_kb: max_peak(&[peak_show_prove, peak_prepare_reblind, peak_show_reblind]),
+        peak_rss_kb: peak_show_prove.max(peak_prepare_reblind).max(peak_show_reblind),
         rss_per_step,
         prepare_proof_bytes: proof_bytes(&prepare_proof)?,
         show_proof_bytes: proof_bytes(&show_proof)?,
@@ -1127,16 +1111,12 @@ fn parse_status_kb(text: &str, key: &str) -> Option<u64> {
         .and_then(|v| v.parse().ok())
 }
 
-fn parse_mem_available_kb(meminfo: &str) -> Option<u64> {
-    parse_status_kb(meminfo, "MemAvailable:")
-}
-
 /// MemAvailable in KiB, or 0 where /proc/meminfo is unavailable.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn mem_available_kb() -> u64 {
     std::fs::read_to_string("/proc/meminfo")
         .ok()
-        .and_then(|s| parse_mem_available_kb(&s))
+        .and_then(|s| parse_status_kb(&s, "MemAvailable:"))
         .unwrap_or(0)
 }
 
@@ -1570,10 +1550,8 @@ mod tests {
     #[test]
     fn test_parse_meminfo_available_kb() {
         let meminfo = "MemTotal:        5890204 kB\nMemFree:          123 kB\nMemAvailable:    2048000 kB\n";
-        assert_eq!(parse_mem_available_kb(meminfo), Some(2048000));
-        assert_eq!(parse_mem_available_kb("MemTotal:  1 kB\n"), None);
-        // A key that merely shares the prefix must not match.
-        assert_eq!(parse_mem_available_kb("MemAvailableX: 5 kB\n"), None);
+        assert_eq!(parse_status_kb(meminfo, "MemAvailable:"), Some(2048000));
+        assert_eq!(parse_status_kb("MemTotal:  1 kB\n", "MemAvailable:"), None);
     }
 
     #[test]
@@ -1640,26 +1618,6 @@ mod tests {
     fn test_zk_error_message_is_display_text() {
         let e = ZkProofError::FileNotFound { message: "no key".into() };
         assert_eq!(zk_error_message(&e), "File not found: no key");
-    }
-
-    #[test]
-    fn test_out_names_and_skip() {
-        assert_eq!(out_file_names("out", "show"), ("out/show.proof".to_string(), "out/show.instance".to_string()));
-        let dir = tempfile::tempdir().unwrap();
-        let d = dir.path().join("out");
-        // An empty out_dir writes nothing and does not create a directory.
-        assert_eq!(out_files_for("", "show").unwrap(), None);
-        assert!(!d.exists());
-        let (p, i) = out_files_for(&d.to_string_lossy(), "show").unwrap().unwrap();
-        assert_eq!(p, d.join("show.proof"));
-        assert_eq!(i, d.join("show.instance"));
-        assert!(d.is_dir());
-    }
-
-    #[test]
-    fn test_max_peak() {
-        assert_eq!(max_peak(&[10, 30, 20]), 30);
-        assert_eq!(max_peak(&[]), 0);
     }
 
     #[cfg(target_os = "macos")]

@@ -37,43 +37,39 @@ bool _log(String marker, Map<String, Object?> obj,
     logMarker(marker, obj,
         errorPrefix: 'OPENAC_', errorFields: {'config': config, 'iter': iter});
 
-int _i(BigInt v) => toInt(v);
-
 Map<String, Object?> _metrics(BenchmarkResults r) => {
-      'jwt_setup_ms': _i(r.jwtSetupMs),
-      'show_setup_ms': _i(r.showSetupMs),
-      'generate_blinds_ms': _i(r.generateBlindsMs),
-      'prove_jwt_ms': _i(r.proveJwtMs),
-      'reblind_jwt_ms': _i(r.reblindJwtMs),
-      'prove_show_ms': _i(r.proveShowMs),
-      'reblind_show_ms': _i(r.reblindShowMs),
-      'verify_jwt_ms': _i(r.verifyJwtMs),
-      'verify_show_ms': _i(r.verifyShowMs),
-      'peak_rss_jwt_setup_kb': _i(r.peakRssJwtSetupKb),
-      'peak_rss_show_setup_kb': _i(r.peakRssShowSetupKb),
-      'peak_rss_generate_blinds_kb': _i(r.peakRssGenerateBlindsKb),
-      'peak_rss_prove_jwt_kb': _i(r.peakRssProveJwtKb),
-      'peak_rss_reblind_jwt_kb': _i(r.peakRssReblindJwtKb),
-      'peak_rss_prove_show_kb': _i(r.peakRssProveShowKb),
-      'peak_rss_reblind_show_kb': _i(r.peakRssReblindShowKb),
-      'peak_rss_verify_jwt_kb': _i(r.peakRssVerifyJwtKb),
-      'peak_rss_verify_show_kb': _i(r.peakRssVerifyShowKb),
+      'jwt_setup_ms': toInt(r.jwtSetupMs),
+      'show_setup_ms': toInt(r.showSetupMs),
+      'generate_blinds_ms': toInt(r.generateBlindsMs),
+      'prove_jwt_ms': toInt(r.proveJwtMs),
+      'reblind_jwt_ms': toInt(r.reblindJwtMs),
+      'prove_show_ms': toInt(r.proveShowMs),
+      'reblind_show_ms': toInt(r.reblindShowMs),
+      'verify_jwt_ms': toInt(r.verifyJwtMs),
+      'verify_show_ms': toInt(r.verifyShowMs),
+      'peak_rss_jwt_setup_kb': toInt(r.peakRssJwtSetupKb),
+      'peak_rss_show_setup_kb': toInt(r.peakRssShowSetupKb),
+      'peak_rss_generate_blinds_kb': toInt(r.peakRssGenerateBlindsKb),
+      'peak_rss_prove_jwt_kb': toInt(r.peakRssProveJwtKb),
+      'peak_rss_reblind_jwt_kb': toInt(r.peakRssReblindJwtKb),
+      'peak_rss_prove_show_kb': toInt(r.peakRssProveShowKb),
+      'peak_rss_reblind_show_kb': toInt(r.peakRssReblindShowKb),
+      'peak_rss_verify_jwt_kb': toInt(r.peakRssVerifyJwtKb),
+      'peak_rss_verify_show_kb': toInt(r.peakRssVerifyShowKb),
       'rss_per_step': r.rssPerStep,
     };
 
 Map<String, Object?> _sizes(String config, BenchmarkResults r) => {
       'config': config,
-      'jwt_proving_key_bytes': _i(r.jwtProvingKeyBytes),
-      'jwt_verifying_key_bytes': _i(r.jwtVerifyingKeyBytes),
-      'show_proving_key_bytes': _i(r.showProvingKeyBytes),
-      'show_verifying_key_bytes': _i(r.showVerifyingKeyBytes),
-      'jwt_proof_bytes': _i(r.jwtProofBytes),
-      'show_proof_bytes': _i(r.showProofBytes),
-      'jwt_witness_bytes': _i(r.jwtWitnessBytes),
-      'show_witness_bytes': _i(r.showWitnessBytes),
+      'jwt_proving_key_bytes': toInt(r.jwtProvingKeyBytes),
+      'jwt_verifying_key_bytes': toInt(r.jwtVerifyingKeyBytes),
+      'show_proving_key_bytes': toInt(r.showProvingKeyBytes),
+      'show_verifying_key_bytes': toInt(r.showVerifyingKeyBytes),
+      'jwt_proof_bytes': toInt(r.jwtProofBytes),
+      'show_proof_bytes': toInt(r.showProofBytes),
+      'jwt_witness_bytes': toInt(r.jwtWitnessBytes),
+      'show_witness_bytes': toInt(r.showWitnessBytes),
     };
-
-Future<Probe<T>> _probe<T>(Future<T> Function() f) => probe(f);
 
 class _Config {
   final String name;
@@ -127,19 +123,19 @@ void main() {
         }
         first = false;
         try {
-          final pj = await _probe(() => proveJwt(documentsPath: docs));
-          final rj = await _probe(() => reblindJwt(documentsPath: docs));
-          final ps = await _probe(() => proveShow(documentsPath: docs));
-          final rs = await _probe(() => reblindShow(documentsPath: docs));
+          final pj = await probe(() => proveJwt(documentsPath: docs));
+          final rj = await probe(() => reblindJwt(documentsPath: docs));
+          final ps = await probe(() => proveShow(documentsPath: docs));
+          final rs = await probe(() => reblindShow(documentsPath: docs));
           var vjMs = 0;
-          final vj = await _probe(() async {
+          final vj = await probe(() async {
             final sw = Stopwatch()..start();
             final ok = await verifyJwt(documentsPath: docs);
             vjMs = sw.elapsedMilliseconds;
             return ok;
           });
           var vsMs = 0;
-          final vs = await _probe(() async {
+          final vs = await probe(() async {
             final sw = Stopwatch()..start();
             final ok = await verifyShow(documentsPath: docs);
             vsMs = sw.elapsedMilliseconds;
@@ -158,10 +154,10 @@ void main() {
               'OPENAC_PROD',
               {
                 'iter': iter,
-                'prove_jwt_ms': _i(pj.out.proveMs),
-                'reblind_jwt_ms': _i(rj.out.proveMs),
-                'prove_show_ms': _i(ps.out.proveMs),
-                'reblind_show_ms': _i(rs.out.proveMs),
+                'prove_jwt_ms': toInt(pj.out.proveMs),
+                'reblind_jwt_ms': toInt(rj.out.proveMs),
+                'prove_show_ms': toInt(ps.out.proveMs),
+                'reblind_show_ms': toInt(rs.out.proveMs),
                 // Wall time of the Dart call: includes key/proof load and FFI.
                 'verify_jwt_wall_ms': vjMs,
                 'verify_show_wall_ms': vsMs,
