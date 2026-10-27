@@ -22,10 +22,11 @@ import 'package:path_provider/path_provider.dart';
 
 import 'bench_common.dart';
 
-// Files the host pushes straight into the app-specific external files dir,
-// /sdcard/Android/data/<package>/files/ (readable by the app without permissions
-// on Android 10-16, writable by `adb push` as the shell user). Not a subdirectory:
-// one that adb creates is shell-owned mode 770, which the app cannot enter.
+// Files the host pushes to /sdcard/zkbench/<package>/ (the shell can write there
+// on every API level; the app reads it through MANAGE_EXTERNAL_STORAGE, which the
+// runner grants with appops after install).
+const _benchDir = '/sdcard/zkbench/com.openac.app';
+
 const _prepareKey = '2k_prepare_proving.key';
 const _showKey = '2k_show_proving.key';
 const _prepareInstance = '2k_prepare_instance.bin';
@@ -45,15 +46,11 @@ const _stepFiles = {
 };
 
 /// Where the host writes bench_config.json before `am instrument`.
-Future<String> benchConfigPath() async {
-  final dir = await getExternalStorageDirectory();
-  return '${dir!.path}/bench_config.json';
-}
+Future<String> benchConfigPath() async => '$_benchDir/bench_config.json';
 
-/// Proofs and instances of the last iteration land here, app-owned, for the
+/// Proofs and instances of the last iteration land here, for the
 /// host to pull and verify (scripts/verify_device_proofs.sh).
-Future<String> _outDir() async =>
-    '${(await getExternalStorageDirectory())!.path}/out';
+Future<String> _outDir() async => '$_benchDir/out';
 
 const _outStems = {
   'prepare': ['prepare'],
@@ -61,8 +58,7 @@ const _outStems = {
   'present': ['present_prepare', 'present_show'],
 };
 
-Future<String> _pushedDir() async =>
-    (await getExternalStorageDirectory())!.path;
+Future<String> _pushedDir() async => _benchDir;
 
 Future<void> _error(String step, int iter, Object e) async => logError(
     'OPENAC_',

@@ -145,14 +145,14 @@ proving keys pushed from the host instead of generated on the device.
 
 1. `scripts/build_bench_apks.sh` builds the app and androidTest APKs (arm64, profile).
 2. Install both with `adb install -r -t`.
-3. `adb shell mkdir -p /sdcard/Android/data/com.openac.app/files`, then push the files listed under
-   `push` into it. Push into that directory itself: a subdirectory created by adb is shell-owned
-   mode 770 and the app cannot open files in it. The first push into a missing directory can fail
-   with `secure_mkdirs failed: Operation not permitted`, so create it first.
+3. After install, `adb shell appops set com.openac.app MANAGE_EXTERNAL_STORAGE allow` (the profile
+   manifest declares it; on API 29 and lower `pm grant` the storage permissions instead). Then
+   `adb shell mkdir -p /sdcard/zkbench/com.openac.app` and push the files listed under `push`
+   into it. The shell can write there on every API level, unlike the app's external files dir.
 4. Write one run's `config` to `bench_config.json` in the same directory, then
    `adb shell am instrument -w -r com.openac.app.test/androidx.test.runner.AndroidJUnitRunner`.
 5. Parse logcat with `scripts/parse_ftl_bench.py` (`OPENAC_ITER` lines).
-6. `adb pull /sdcard/Android/data/com.openac.app/files/out`, then `scripts/verify_device_proofs.sh <dir>` verifies the proofs of the last iteration against the pinned verifying keys (host only; the Prepare vk is 432 MB). Files: `prepare`, `show`, `present_prepare`, `present_show`, each as `.proof` and `.instance`.
+6. `adb pull /sdcard/zkbench/com.openac.app/out`, then `scripts/verify_device_proofs.sh <dir>` verifies the proofs of the last iteration against the pinned verifying keys (host only; the Prepare vk is 432 MB). Files: `prepare`, `show`, `present_prepare`, `present_show`, each as `.proof` and `.instance`.
 
 Without a `bench_config.json` the same APKs run the Firebase Test Lab configs (setup on device).
 
