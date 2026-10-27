@@ -22,6 +22,14 @@ export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Con
 export NDK_VERSION="${NDK_VERSION:-27.0.12077973}"
 export BENCH_CONTRACT=1
 
+# The Flutter tooling rewrites these two tracked files during a build (analyzer
+# excludes, Kotlin migrator flags). Put them back on exit, like the asset restore
+# in build_ftl_apks.sh, so a build leaves the tree clean.
+TOUCHED=("$PROJECT_ROOT/flutter/analysis_options.yaml" "$PROJECT_ROOT/flutter/android/gradle.properties")
+BACKUP="$(mktemp -d)"
+for f in "${TOUCHED[@]}"; do cp "$f" "$BACKUP/$(basename "$f")"; done
+trap 'for f in "${TOUCHED[@]}"; do cp "$BACKUP/$(basename "$f")" "$f"; done; rm -rf "$BACKUP"' EXIT
+
 "$SCRIPT_DIR/build_ftl_apks.sh"
 
 FLUTTER_OUT="$PROJECT_ROOT/flutter/build/app/outputs"
