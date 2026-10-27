@@ -69,6 +69,12 @@ for var in BENCH_WARMUP BENCH_ITERS_A BENCH_ITERS_B BENCH_ITERS_P BENCH_COOLDOWN
         DEFINES+=("--dart-define=$var=${!var}")
     fi
 done
+# The Firebase configs run on-device keygen, which kills a 4 GB phone, so they are
+# opt-in at build time. build_bench_apks.sh sets BENCH_CONTRACT=1 and gets the
+# contract harness only.
+if [ "$BENCH_CONTRACT" != "1" ]; then
+    DEFINES+=("--dart-define=BENCH_LEGACY=true")
+fi
 
 # The committed assets can lag the circuit, and the APK must carry an r1cs and
 # inputs that match the witnesscalc C++ compiled into the same build. Stage them

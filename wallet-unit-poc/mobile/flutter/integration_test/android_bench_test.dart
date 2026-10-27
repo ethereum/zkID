@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -22,6 +21,10 @@ import 'package:openac/assets.dart';
 
 import 'bench_common.dart';
 import 'contract_bench.dart';
+
+// Set by build_ftl_apks.sh only. Without it this test runs the contract harness
+// and never falls back to the on-device-keygen configs below.
+const _legacy = bool.fromEnvironment('BENCH_LEGACY');
 
 const _warmup = int.fromEnvironment('BENCH_WARMUP', defaultValue: 1);
 const _itersA = int.fromEnvironment('BENCH_ITERS_A', defaultValue: 5);
@@ -85,12 +88,12 @@ void main() {
   testWidgets('openac android benchmark', (tester) async {
     await RustLib.init();
 
-    // A bench_config.json on the device selects the contract harness (keys
-    // pushed from the host, no setup); the Firebase Test Lab configs below
-    // only run without one.
-    if (await File(await benchConfigPath()).exists()) {
-      final ok = await runContractBench();
-      expect(ok, greaterThan(0), reason: 'no iteration succeeded');
+    // The contract harness (keys pushed from the host, no setup) unless the
+    // build opted into the Firebase Test Lab configs below.
+    if (!_legacy) {
+      final r = await runContractBench();
+      expect(r.errors, 0, reason: 'OPENAC_ERROR lines were printed');
+      expect(r.ok, greaterThan(0), reason: 'no iteration succeeded');
       return;
     }
 

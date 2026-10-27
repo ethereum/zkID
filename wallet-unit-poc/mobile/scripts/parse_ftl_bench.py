@@ -50,10 +50,12 @@ PROD_CSV_FIELDS = (
     + ["rss_per_step"]
 )
 ITER_CSV_FIELDS = [
-    "device", "soc_model", "mem_total_kb", "step", "iter", "phase", "load_ms", "witness_ms",
-    "prove_ms", "total_ms", "base_rss_kb", "peak_rss_kb", "mem_available_kb_before",
-    "rss_per_step",
+    "device", "soc_model", "mem_total_kb", "step", "iter", "phase", "process_cold", "load_ms",
+    "witness_ms", "prove_ms", "total_ms", "base_rss_kb", "peak_rss_kb",
+    "mem_available_kb_before", "rss_per_step",
 ]
+# ITER rows of a present run's parts; the iteration itself is the present_total row.
+PRESENT_SUBSTEPS = {"show_prove", "prepare_reblind", "show_reblind"}
 STAT_STEPS = [
     "prove_jwt_ms", "reblind_jwt_ms", "prove_show_ms", "reblind_show_ms",
     "verify_jwt_ms", "verify_show_ms", "jwt_setup_ms", "show_setup_ms",
@@ -180,7 +182,8 @@ def status_of(dev):
     counts = {c: sum(1 for b in dev["bench"] if b.get("config") == c) for c in ("A", "B")}
     reason = dev["kill_reason"] or "no OPENAC_DONE"
     if dev["iters"]:
-        return f"FAILED: {reason} ({len(dev['iters'])} iterations completed)"
+        done = sum(1 for r in dev["iters"] if r.get("step") not in PRESENT_SUBSTEPS)
+        return f"FAILED: {reason} ({done} iterations completed)"
     total = len(dev["prod"]) + len(dev["bench"])
     return (f"FAILED: {reason} ({total} iterations completed: "
             f"P={len(dev['prod'])}, A={counts['A']}, B={counts['B']})")
@@ -265,7 +268,7 @@ def mib(kb):
 
 
 def iter_section(dev):
-    out = ["### Article runs (cold = iteration 0 of the process, warm = the rest)", ""]
+    out = ["### Article runs (cold = iteration 0 of each step, warm = the rest; process_cold in the CSV marks the process's first)", ""]
     for s, sizes in dev["sizes"].items():
         if s in ("A", "B", "P") or "proof_bytes" not in sizes:
             continue

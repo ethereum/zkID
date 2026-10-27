@@ -30,12 +30,12 @@
     {
       "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_prepare_instance.bin",
       "dest": "/sdcard/zkbench/com.openac.app/2k_prepare_instance.bin",
-      "sha256": "468bfdaebe0ec8c9a0ad72e5f4ffcf613e29b62f0957bd0b6fd22d9205c6edea"
+      "sha256": "6397942a4be40bfb33d7050fbbdc110c1c8dded179497ebe5b65fd2e393183cf"
     },
     {
       "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_prepare_witness.bin",
       "dest": "/sdcard/zkbench/com.openac.app/2k_prepare_witness.bin",
-      "sha256": "a67739cd5c20ba4485cac3ee3598df553badfc1738906abfc552875eb279c4c3"
+      "sha256": "e0e8ee672f1cf29c69e8c5029978ea908d87c54173cd850e58a83e36536341a6"
     }
   ],
   "runs": [

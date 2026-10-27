@@ -560,20 +560,42 @@ fn drop_page_cache(path: &Path) {
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 fn drop_page_cache(_path: &Path) {}
 
+/// Empties `slot` before `load` runs, so a reload never holds two copies of a
+/// ~430 MB key. A failed load leaves the slot empty.
+fn reload<T>(
+    slot: &mut Option<Arc<T>>,
+    load: impl FnOnce() -> Result<T, ZkProofError>,
+) -> Result<(), ZkProofError> {
+    *slot = None;
+    *slot = Some(Arc::new(load()?));
+    Ok(())
+}
+
+/// Loads a proving key into the slot chosen by `slot_of`; returns load time in ms.
+fn load_key_into(
+    path: &str,
+    slot_of: impl FnOnce(&mut Loaded) -> &mut Option<Arc<ProvingKey>>,
+) -> Result<u64, ZkProofError> {
+    let mut ms = 0;
+    let mut loaded = LOADED.lock().unwrap();
+    reload(slot_of(&mut loaded), || {
+        let (pk, took) = load_key(path)?;
+        ms = took;
+        Ok(pk)
+    })?;
+    Ok(ms)
+}
+
 /// Load the Prepare (JWT) proving key from `path`; returns load time in ms.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn load_prepare_key(path: String) -> Result<u64, ZkProofError> {
-    let (pk, ms) = load_key(&path)?;
-    LOADED.lock().unwrap().prepare_pk = Some(Arc::new(pk));
-    Ok(ms)
+    load_key_into(&path, |l| &mut l.prepare_pk)
 }
 
 /// Load the Show proving key from `path`; returns load time in ms.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn load_show_key(path: String) -> Result<u64, ZkProofError> {
-    let (pk, ms) = load_key(&path)?;
-    LOADED.lock().unwrap().show_pk = Some(Arc::new(pk));
-    Ok(ms)
+    load_key_into(&path, |l| &mut l.show_pk)
 }
 
 /// Load the Prepare instance and witness and the shared blinds a presentation
@@ -587,17 +609,21 @@ pub fn load_prepare_reblind_data(
     let missing = |what: &str, e: Box<dyn std::error::Error>| ZkProofError::FileNotFound {
         message: format!("Failed to load {}: {}", what, e),
     };
-    let start = std::time::Instant::now();
-    let instance = load_instance(&instance_path).map_err(|e| missing("prepare instance", e))?;
-    let witness = load_witness(&witness_path).map_err(|e| missing("prepare witness", e))?;
-    let blinds =
-        load_shared_blinds::<E>(&shared_blinds_path).map_err(|e| missing("shared blinds", e))?;
-    let ms = start.elapsed().as_millis() as u64;
-    LOADED.lock().unwrap().prepare_reblind = Some(Arc::new(PrepareReblindData {
-        instance,
-        witness,
-        blinds,
-    }));
+    let mut ms = 0;
+    let mut loaded = LOADED.lock().unwrap();
+    reload(&mut loaded.prepare_reblind, || {
+        let start = std::time::Instant::now();
+        let instance = load_instance(&instance_path).map_err(|e| missing("prepare instance", e))?;
+        let witness = load_witness(&witness_path).map_err(|e| missing("prepare witness", e))?;
+        let blinds = load_shared_blinds::<E>(&shared_blinds_path)
+            .map_err(|e| missing("shared blinds", e))?;
+        ms = start.elapsed().as_millis() as u64;
+        Ok(PrepareReblindData {
+            instance,
+            witness,
+            blinds,
+        })
+    })?;
     Ok(ms)
 }
 
@@ -1914,6 +1940,14 @@ mod loaded_key_tests {
         .unwrap();
         verify_circuit_with_loaded_data(&rp, &vk_prepare);
     }
+}
+
+// Kept apart from `loaded_key_tests` so `--ignored loaded_key` cannot overwrite the pushed files.
+#[cfg(test)]
+mod snapshot_tools {
+    use super::*;
+    use std::fs;
+
     /// The desktop `benchmark` flow leaves the post-reblind instance and witness
     /// in keys/, and those cannot be reblinded again (the blind values the
     /// instance names are gone from the witness). This proves Prepare once with

@@ -843,6 +843,33 @@ class IterContractTest(FtlTestCase):
         self.run_main(self.root)
         self.assertIn("process-wide", self.read("bench_summary.md"))
 
+    def test_csv_has_process_cold_column(self):
+        lines = iter_fixture()
+        lines[3] = iter_line("prepare", 0, process_cold=True)
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        with open(os.path.join(self.root, "bench_iter.csv"), newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertIn("process_cold", rows[0])
+        self.assertEqual(rows[0]["process_cold"], "True")
+
+    def test_header_does_not_claim_process_wide_cold(self):
+        self.write_logcat("moto", iter_fixture())
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        self.assertNotIn("iteration 0 of the process", md)
+        self.assertIn("iteration 0 of each step", md)
+
+    def test_killed_present_counts_iterations_not_rows(self):
+        lines = [line("OPENAC_DEVICE", CONTRACT_DEVICE)]
+        for it in (0, 1):
+            for step in ("show_prove", "prepare_reblind", "show_reblind", "present_total"):
+                lines.append(iter_line(step, it))
+        lines.append("10-26 14:05:01.000   500   500 I lmkd    : Kill 'com.openac.app' (8123), uid 10123, oom_adj 0 to free 1234kB")
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        self.assertIn("2 iterations completed", self.read("bench_summary.md"))
+
     def test_legacy_logs_have_no_iter_section(self):
         self.write_logcat("akita", complete_fixture())
         self.run_main(self.root)

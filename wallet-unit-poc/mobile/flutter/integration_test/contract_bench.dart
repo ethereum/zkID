@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.dart'
     show
+        currentRssKb,
         deviceProfile,
         loadPrepareKey,
         loadPrepareReblindData,
@@ -74,10 +75,19 @@ class _Iteration {
 }
 
 /// Runs bench_config.json and prints the contract's marker lines. Returns the
-/// number of ITER lines printed.
-Future<int> runContractBench() async {
-  final cfg = jsonDecode(await File(await benchConfigPath()).readAsString())
-      as Map<String, Object?>;
+/// ITER lines printed and the errors; an unreadable config is an error, not a
+/// fallback to another harness.
+Future<({int ok, int errors})> runContractBench() async {
+  final Map<String, Object?> cfg;
+  try {
+    cfg = jsonDecode(await File(await benchConfigPath()).readAsString())
+        as Map<String, Object?>;
+  } catch (e) {
+    await _error('-', -1,
+        'cannot read ${await benchConfigPath()} (storage permission? run appops set MANAGE_EXTERNAL_STORAGE allow): $e');
+    printLine('OPENAC_DONE ${jsonEncode({'ok': 0, 'errors': 1})}');
+    return (ok: 0, errors: 1);
+  }
   final steps = (cfg['steps']! as List).cast<String>();
   final warmIters = cfg['warm_iters'] as int? ?? 5;
   final cooldownMs = cfg['cooldown_ms'] as int? ?? 10000;
@@ -111,8 +121,7 @@ Future<int> runContractBench() async {
     try {
       final sw = Stopwatch()..start();
       for (final f in files) {
-        await stageFile(
-            src: '$_benchDir/$f', dest: '${staging.path}/$f');
+        await stageFile(src: '$_benchDir/$f', dest: '${staging.path}/$f');
       }
       stageMs = sw.elapsedMilliseconds;
     } catch (e) {
@@ -136,10 +145,13 @@ Future<int> runContractBench() async {
       }
       try {
         final cold = iter == 0;
+        // Proof files are written once, by the last iteration, so no earlier
+        // iteration's time or peak RSS includes the writes.
+        final outDir = iter == warmIters ? out : '';
         final result = switch (step) {
-          'prepare' => await _prepare(docs, staging.path, out, cold),
-          'show' => await _show(docs, staging.path, out, cold),
-          _ => await _present(docs, staging.path, out, cold),
+          'prepare' => await _prepare(docs, staging.path, outDir, cold),
+          'show' => await _show(docs, staging.path, outDir, cold),
+          _ => await _present(docs, staging.path, outDir, cold),
         };
         if (cold) {
           _emit('SIZES', step, iter, {
@@ -180,7 +192,7 @@ Future<int> runContractBench() async {
   }
 
   printLine('OPENAC_DONE ${jsonEncode({'ok': ok, 'errors': errors})}');
-  return ok;
+  return (ok: ok, errors: errors);
 }
 
 Map<String, Object?> _row(String step, Probe<Object?> p, int avail,
@@ -188,6 +200,7 @@ Map<String, Object?> _row(String step, Probe<Object?> p, int avail,
         required int proveMs,
         required int totalMs,
         int? peakKb,
+        int? baseKb,
         bool perStep = true,
         int? witnessMs}) =>
     {
@@ -196,7 +209,7 @@ Map<String, Object?> _row(String step, Probe<Object?> p, int avail,
       if (witnessMs != null) 'witness_ms': witnessMs,
       'prove_ms': proveMs,
       'total_ms': totalMs,
-      'base_rss_kb': p.baseKb,
+      'base_rss_kb': baseKb ?? p.baseKb,
       'peak_rss_kb': peakKb ?? p.peakKb,
       'mem_available_kb_before': avail,
       if (!(p.perStep && perStep)) 'rss_per_step': false,
@@ -252,6 +265,7 @@ Future<_Iteration> _present(
     String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
   var loadPeakKb = 0;
+  var baseAfterLoadKb = 0;
   final p = await probe(() async {
     final sw = Stopwatch()..start();
     var loadMs = 0;
@@ -264,18 +278,21 @@ Future<_Iteration> _present(
           sharedBlindsPath: '$staging/$_sharedBlinds'));
       loadPeakKb = toInt(await peakRssKb());
     }
+    // The sub-steps start from here, with the keys resident.
+    baseAfterLoadKb = toInt(await currentRssKb());
     final r = await presentLoaded(documentsPath: docs, outDir: out);
     return (r, loadMs, sw.elapsedMilliseconds);
   });
   final (r, loadMs, totalMs) = p.out;
 
-  Map<String, Object?> sub(String step, BigInt ms, BigInt peakKb) => _row(
-      step, p, avail,
-      loadMs: 0,
-      proveMs: toInt(ms),
-      totalMs: toInt(ms),
-      peakKb: toInt(peakKb),
-      perStep: r.rssPerStep);
+  Map<String, Object?> sub(String step, BigInt ms, BigInt peakKb) =>
+      _row(step, p, avail,
+          loadMs: 0,
+          baseKb: baseAfterLoadKb,
+          proveMs: toInt(ms),
+          totalMs: toInt(ms),
+          peakKb: toInt(peakKb),
+          perStep: r.rssPerStep);
   final peak = max(toInt(r.peakRssKb), loadPeakKb);
   return _Iteration([
     sub('show_prove', r.showProveMs, r.peakRssShowProveKb),
@@ -289,7 +306,7 @@ Future<_Iteration> _present(
         perStep: r.rssPerStep),
   ], {
     'proof_bytes': toInt(r.prepareProofBytes) + toInt(r.showProofBytes),
-    'prepare_proof_bytes': toInt(r.prepareProofBytes),
-    'show_proof_bytes': toInt(r.showProofBytes),
+    'out_prepare_proof_bytes': toInt(r.prepareProofBytes),
+    'out_show_proof_bytes': toInt(r.showProofBytes),
   });
 }

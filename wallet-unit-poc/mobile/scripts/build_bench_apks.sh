@@ -16,5 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
 export NDK_VERSION="${NDK_VERSION:-27.0.12077973}"
 
-# One iteration, no cooldown: the Firebase configs are not used by this harness.
-exec "$SCRIPT_DIR/build_ftl_apks.sh" --smoke
+# BENCH_CONTRACT=1 leaves the Firebase Test Lab configs out of the build: without a
+# readable bench_config.json this APK reports an error instead of running keygen.
+export BENCH_CONTRACT=1
+exec "$SCRIPT_DIR/build_ftl_apks.sh"
