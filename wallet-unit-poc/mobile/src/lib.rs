@@ -1857,8 +1857,14 @@ mod loaded_key_tests {
 
         let ((p, _, _), _) = prove_prepare_in_memory(&docs_path, &pk_prepare).unwrap();
         verify_circuit_with_loaded_data(&p, &vk_prepare);
-        let (s, _, _) = prove_show_in_memory(&docs_path, &pk_show).unwrap();
+        let (s, show_instance, show_witness) =
+            prove_show_in_memory(&docs_path, &pk_show).unwrap();
         verify_circuit_with_loaded_data(&s, &vk_show);
+        // The two reblinds present_loaded performs, each verified.
+        let data = LOADED.lock().unwrap().prepare_reblind.clone().unwrap();
+        let (rs, _, _) =
+            reblind_in_memory(&pk_show, show_instance, show_witness, &data.blinds).unwrap();
+        verify_circuit_with_loaded_data(&rs, &vk_show);
 
         let r = prove_prepare_loaded(docs_path.clone()).unwrap();
         println!("prepare witness_ms={} prove_ms={} proof_bytes={}", r.witness_ms, r.prove_ms, r.proof_bytes);
