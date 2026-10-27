@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 317855772;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1419603338;
 
 // Section: executor
 
@@ -471,12 +471,10 @@ fn wire__openac_mobile_app__present_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
-            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok =
-                        openac_mobile_app::present_loaded(api_documents_path, api_out_dir)?;
+                    let output_ok = openac_mobile_app::present_loaded(api_documents_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -539,12 +537,10 @@ fn wire__openac_mobile_app__prove_prepare_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
-            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok =
-                        openac_mobile_app::prove_prepare_loaded(api_documents_path, api_out_dir)?;
+                    let output_ok = openac_mobile_app::prove_prepare_loaded(api_documents_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -607,12 +603,10 @@ fn wire__openac_mobile_app__prove_show_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
-            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok =
-                        openac_mobile_app::prove_show_loaded(api_documents_path, api_out_dir)?;
+                    let output_ok = openac_mobile_app::prove_show_loaded(api_documents_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -982,6 +976,39 @@ fn wire__openac_mobile_app__verify_show_impl(
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
                     let output_ok = openac_mobile_app::verify_show(api_documents_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__openac_mobile_app__write_last_outputs_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "write_last_outputs",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_out_dir = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ZkProofError>((move || {
+                    let output_ok = openac_mobile_app::write_last_outputs(api_out_dir)?;
                     Ok(output_ok)
                 })())
             }
@@ -1387,7 +1414,8 @@ fn pde_ffi_dispatcher_primary_impl(
         26 => wire__openac_mobile_app__verify_jwt_impl(port, ptr, rust_vec_len, data_len),
         27 => wire__openac_mobile_app__verify_presentation_impl(port, ptr, rust_vec_len, data_len),
         28 => wire__openac_mobile_app__verify_show_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__openac_mobile_app__zk_error_message_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__openac_mobile_app__write_last_outputs_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__openac_mobile_app__zk_error_message_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

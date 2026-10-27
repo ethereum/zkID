@@ -15,6 +15,7 @@ import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.da
         provePrepareLoaded,
         proveShowLoaded,
         stageFile,
+        writeLastOutputs,
         zkErrorMessage,
         ZkProofError;
 import 'package:openac/assets.dart';
@@ -101,6 +102,7 @@ Future<({int ok, int errors})> runContractBench() async {
         'model': profile['product_model'],
         'sdk': int.tryParse('${profile['android_sdk']}') ?? 0,
         'threads': profile['rayon_default_threads'],
+        'harness': 'contract',
       },
       errorPrefix: 'OPENAC_',
       errorFields: {'step': '-', 'iter': -1});
@@ -145,13 +147,10 @@ Future<({int ok, int errors})> runContractBench() async {
       }
       try {
         final cold = iter == 0;
-        // Proof files are written once, by the last iteration, so no earlier
-        // iteration's time or peak RSS includes the writes.
-        final outDir = iter == warmIters ? out : '';
         final result = switch (step) {
-          'prepare' => await _prepare(docs, staging.path, outDir, cold),
-          'show' => await _show(docs, staging.path, outDir, cold),
-          _ => await _present(docs, staging.path, outDir, cold),
+          'prepare' => await _prepare(docs, staging.path, cold),
+          'show' => await _show(docs, staging.path, cold),
+          _ => await _present(docs, staging.path, cold),
         };
         if (cold) {
           _emit('SIZES', step, iter, {
@@ -188,6 +187,15 @@ Future<({int ok, int errors})> runContractBench() async {
         break;
       }
     }
+    // The last successful iteration's proofs are written once, outside every timed
+    // region and RSS probe; after a failed iteration they are still the previous
+    // iteration's. Nothing is written if no iteration succeeded.
+    try {
+      await writeLastOutputs(outDir: out);
+    } catch (e) {
+      errors++;
+      await _error(step, -1, e);
+    }
     processCold = false;
   }
 
@@ -215,8 +223,7 @@ Map<String, Object?> _row(String step, Probe<Object?> p, int avail,
       if (!(p.perStep && perStep)) 'rss_per_step': false,
     };
 
-Future<_Iteration> _prepare(
-    String docs, String staging, String out, bool cold) async {
+Future<_Iteration> _prepare(String docs, String staging, bool cold) async {
   final avail = toInt(await memAvailableKb());
   final p = await probe(() async {
     final sw = Stopwatch()..start();
@@ -224,7 +231,7 @@ Future<_Iteration> _prepare(
     if (cold) {
       loadMs = toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
     }
-    final r = await provePrepareLoaded(documentsPath: docs, outDir: out);
+    final r = await provePrepareLoaded(documentsPath: docs);
     return (r, loadMs, sw.elapsedMilliseconds);
   });
   final (r, loadMs, totalMs) = p.out;
@@ -239,14 +246,13 @@ Future<_Iteration> _prepare(
   });
 }
 
-Future<_Iteration> _show(
-    String docs, String staging, String out, bool cold) async {
+Future<_Iteration> _show(String docs, String staging, bool cold) async {
   final avail = toInt(await memAvailableKb());
   final p = await probe(() async {
     final sw = Stopwatch()..start();
     var loadMs = 0;
     if (cold) loadMs = toInt(await loadShowKey(path: '$staging/$_showKey'));
-    final r = await proveShowLoaded(documentsPath: docs, outDir: out);
+    final r = await proveShowLoaded(documentsPath: docs);
     return (r, loadMs, sw.elapsedMilliseconds);
   });
   final (r, loadMs, totalMs) = p.out;
@@ -261,8 +267,7 @@ Future<_Iteration> _show(
 /// One presentation as the SDK's present() runs it: Show prove, then reblind
 /// of the Prepare and Show proofs. Cold loads both proving keys, the Prepare
 /// instance and witness, and the shared blinds inside the timed region.
-Future<_Iteration> _present(
-    String docs, String staging, String out, bool cold) async {
+Future<_Iteration> _present(String docs, String staging, bool cold) async {
   final avail = toInt(await memAvailableKb());
   var loadPeakKb = 0;
   var baseAfterLoadKb = 0;
@@ -280,7 +285,7 @@ Future<_Iteration> _present(
     }
     // The sub-steps start from here, with the keys resident.
     baseAfterLoadKb = toInt(await currentRssKb());
-    final r = await presentLoaded(documentsPath: docs, outDir: out);
+    final r = await presentLoaded(documentsPath: docs);
     return (r, loadMs, sw.elapsedMilliseconds);
   });
   final (r, loadMs, totalMs) = p.out;

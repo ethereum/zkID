@@ -33,9 +33,11 @@ set +e
 VERDICT="$(cargo run --release --quiet --bin verify_proofs -- "$PROOFS_DIR" "$VK_DIR" 2>"$LOG")"
 RC=$?
 set -e
-if [ -z "$VERDICT" ]; then
-    tail -n 20 "$LOG"
-else
+if [ -n "$VERDICT" ]; then
     echo "$VERDICT"
+fi
+# On failure the log explains it (a PASS line can still precede a crash).
+if [ -z "$VERDICT" ] || [ $RC -ne 0 ]; then
+    tail -n 20 "$LOG"
 fi
 exit $RC

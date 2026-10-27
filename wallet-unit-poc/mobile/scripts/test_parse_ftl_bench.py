@@ -870,6 +870,20 @@ class IterContractTest(FtlTestCase):
         self.run_main(self.root)
         self.assertIn("2 iterations completed", self.read("bench_summary.md"))
 
+    def test_out_keys_are_not_listed_as_artifacts(self):
+        lines = iter_fixture(done=False)
+        lines[2] = line("OPENAC_SIZES", {"step": "prepare", "proof_bytes": 112103,
+                                         "prepare_proving_bytes": 432000000,
+                                         "out_prepare_proof_bytes": 112103,
+                                         "out_files": ["out/prepare.proof"]})
+        lines.append(line("OPENAC_DONE", {"ok": 6, "errors": 0}))
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        sizes = next(l for l in md.splitlines() if l.startswith("Sizes (prepare)"))
+        self.assertIn("prepare proving 432.00 MB", sizes)
+        self.assertNotIn("out prepare", sizes)
+
     def test_legacy_logs_have_no_iter_section(self):
         self.write_logcat("akita", complete_fixture())
         self.run_main(self.root)

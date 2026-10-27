@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 317855772;
+  int get rustContentHash => 1419603338;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -115,21 +115,18 @@ abstract class RustLibApi extends BaseApi {
 
   Future<PresentResult> openacMobileAppPresentLoaded({
     required String documentsPath,
-    required String outDir,
   });
 
   Future<ProofResult> openacMobileAppProveJwt({required String documentsPath});
 
   Future<LoadedProofResult> openacMobileAppProvePrepareLoaded({
     required String documentsPath,
-    required String outDir,
   });
 
   Future<ProofResult> openacMobileAppProveShow({required String documentsPath});
 
   Future<LoadedProofResult> openacMobileAppProveShowLoaded({
     required String documentsPath,
-    required String outDir,
   });
 
   Future<ProofResult> openacMobileAppReblindJwt({
@@ -168,6 +165,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<bool> openacMobileAppVerifyShow({required String documentsPath});
+
+  Future<BigInt> openacMobileAppWriteLastOutputs({required String outDir});
 
   Future<String> openacMobileAppZkErrorMessage({required ZkProofError e});
 
@@ -552,14 +551,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<PresentResult> openacMobileAppPresentLoaded({
     required String documentsPath,
-    required String outDir,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(documentsPath, serializer);
-          sse_encode_String(outDir, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -573,7 +570,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
         ),
         constMeta: kOpenacMobileAppPresentLoadedConstMeta,
-        argValues: [documentsPath, outDir],
+        argValues: [documentsPath],
         apiImpl: this,
       ),
     );
@@ -582,7 +579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kOpenacMobileAppPresentLoadedConstMeta =>
       const TaskConstMeta(
         debugName: "present_loaded",
-        argNames: ["documentsPath", "outDir"],
+        argNames: ["documentsPath"],
       );
 
   @override
@@ -617,14 +614,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<LoadedProofResult> openacMobileAppProvePrepareLoaded({
     required String documentsPath,
-    required String outDir,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(documentsPath, serializer);
-          sse_encode_String(outDir, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -638,7 +633,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
         ),
         constMeta: kOpenacMobileAppProvePrepareLoadedConstMeta,
-        argValues: [documentsPath, outDir],
+        argValues: [documentsPath],
         apiImpl: this,
       ),
     );
@@ -647,7 +642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kOpenacMobileAppProvePrepareLoadedConstMeta =>
       const TaskConstMeta(
         debugName: "prove_prepare_loaded",
-        argNames: ["documentsPath", "outDir"],
+        argNames: ["documentsPath"],
       );
 
   @override
@@ -684,14 +679,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<LoadedProofResult> openacMobileAppProveShowLoaded({
     required String documentsPath,
-    required String outDir,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(documentsPath, serializer);
-          sse_encode_String(outDir, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -705,7 +698,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
         ),
         constMeta: kOpenacMobileAppProveShowLoadedConstMeta,
-        argValues: [documentsPath, outDir],
+        argValues: [documentsPath],
         apiImpl: this,
       ),
     );
@@ -714,7 +707,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kOpenacMobileAppProveShowLoadedConstMeta =>
       const TaskConstMeta(
         debugName: "prove_show_loaded",
-        argNames: ["documentsPath", "outDir"],
+        argNames: ["documentsPath"],
       );
 
   @override
@@ -1074,6 +1067,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<BigInt> openacMobileAppWriteLastOutputs({required String outDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(outDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError,
+        ),
+        constMeta: kOpenacMobileAppWriteLastOutputsConstMeta,
+        argValues: [outDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kOpenacMobileAppWriteLastOutputsConstMeta =>
+      const TaskConstMeta(
+        debugName: "write_last_outputs",
+        argNames: ["outDir"],
+      );
+
+  @override
   Future<String> openacMobileAppZkErrorMessage({required ZkProofError e}) {
     return handler.executeNormal(
       NormalTask(
@@ -1086,7 +1111,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },

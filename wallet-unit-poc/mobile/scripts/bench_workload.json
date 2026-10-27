@@ -1,8 +1,8 @@
 {
   "workload": "openac",
   "apks": [
-    "../flutter/build/app/outputs/flutter-apk/app-profile.apk",
-    "../flutter/build/app/outputs/apk/androidTest/profile/app-profile-androidTest.apk"
+    "../build/bench-apks/app-profile.apk",
+    "../build/bench-apks/app-profile-androidTest.apk"
   ],
   "package": "com.openac.app",
   "instrumentation": "com.openac.app.test/androidx.test.runner.AndroidJUnitRunner",

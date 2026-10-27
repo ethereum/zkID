@@ -273,7 +273,8 @@ def iter_section(dev):
         if s in ("A", "B", "P") or "proof_bytes" not in sizes:
             continue
         parts = [f"{k[:-6].replace('_', ' ')} {v / 1e6:.2f} MB"
-                 for k, v in sizes.items() if k.endswith("_bytes") and k != "proof_bytes"]
+                 for k, v in sizes.items() if k.endswith("_bytes") and k != "proof_bytes"
+                 and not k.startswith("out_")]
         out.append(f"Sizes ({s}): proof {sizes['proof_bytes'] / 1e3:.1f} KB"
                    + "".join(f", {x}" for x in parts))
     if out[-1] != "":

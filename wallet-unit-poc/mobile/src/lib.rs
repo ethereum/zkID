@@ -675,66 +675,105 @@ fn prove_show_in_memory(
     prove_circuit_in_memory(circuit, pk).map_err(proving_failed)
 }
 
-/// Writes the proof and instance for `stem` under `out_dir` so the host can
-/// verify them; nothing when `out_dir` is empty. The witness is not written.
-fn write_outputs(
-    out_dir: &str,
-    stem: &str,
+/// The last successful proof and instance per step stem. Proving only keeps
+/// them here; `write_last_outputs` writes them once after the iterations, so no
+/// timed region or RSS probe includes file writes.
+struct OutputStore<P, I> {
+    entries: Vec<(String, P, I)>,
+}
+
+impl<P, I> Default for OutputStore<P, I> {
+    fn default() -> Self {
+        Self { entries: Vec::new() }
+    }
+}
+
+impl<P, I> OutputStore<P, I> {
+    fn put(&mut self, stem: &str, proof: P, instance: I) {
+        self.entries.retain(|(s, _, _)| s != stem);
+        self.entries.push((stem.to_string(), proof, instance));
+    }
+
+    /// Writes `<stem>.proof` and `<stem>.instance` for every entry, then clears
+    /// them; returns the entries written. Creates `dir` only when there is one.
+    fn write_all(
+        &mut self,
+        dir: &Path,
+        encode: impl Fn(&P, &I) -> Result<(Vec<u8>, Vec<u8>), ZkProofError>,
+    ) -> Result<usize, ZkProofError> {
+        if self.entries.is_empty() {
+            return Ok(0);
+        }
+        std::fs::create_dir_all(dir)?;
+        let n = self.entries.len();
+        for (stem, proof, instance) in self.entries.drain(..) {
+            let (proof_bytes, instance_bytes) = encode(&proof, &instance)?;
+            std::fs::write(dir.join(format!("{stem}.proof")), proof_bytes)?;
+            std::fs::write(dir.join(format!("{stem}.instance")), instance_bytes)?;
+        }
+        Ok(n)
+    }
+}
+
+static LAST_OUTPUTS: Mutex<OutputStore<R1CSSNARK<E>, SplitR1CSInstance<E>>> =
+    Mutex::new(OutputStore { entries: Vec::new() });
+
+fn bincode_pair(
     proof: &R1CSSNARK<E>,
     instance: &SplitR1CSInstance<E>,
-) -> Result<(), ZkProofError> {
-    if out_dir.is_empty() {
-        return Ok(());
-    }
-    std::fs::create_dir_all(out_dir)?;
-    let dir = Path::new(out_dir);
-    ecdsa_spartan2::setup::save_proof(dir.join(format!("{stem}.proof")), proof).map_err(|e| {
-        ZkProofError::IoError {
-            message: format!("Failed to write proof: {}", e),
-        }
-    })?;
-    ecdsa_spartan2::setup::save_instance(dir.join(format!("{stem}.instance")), instance).map_err(
-        |e| ZkProofError::IoError {
-            message: format!("Failed to write instance: {}", e),
-        },
-    )
+) -> Result<(Vec<u8>, Vec<u8>), ZkProofError> {
+    let encode = |e: bincode::Error| ZkProofError::IoError {
+        message: format!("Failed to encode output: {}", e),
+    };
+    Ok((
+        bincode::serialize(proof).map_err(encode)?,
+        bincode::serialize(instance).map_err(encode)?,
+    ))
+}
+
+/// Writes the last successful proof and instance of each step run since the last
+/// call to `out_dir` (the host verifies them), then forgets them. Writes nothing
+/// when no iteration succeeded. The witness is not written.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn write_last_outputs(out_dir: String) -> Result<u64, ZkProofError> {
+    let n = LAST_OUTPUTS
+        .lock()
+        .unwrap()
+        .write_all(Path::new(&out_dir), bincode_pair)?;
+    Ok(n as u64)
 }
 
 /// Prove Prepare with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn prove_prepare_loaded(
-    documents_path: String,
-    out_dir: String,
-) -> Result<LoadedProofResult, ZkProofError> {
+pub fn prove_prepare_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
     let pk = require(LOADED.lock().unwrap().prepare_pk.as_ref(), "prepare key")?;
     let start = std::time::Instant::now();
     let ((proof, instance, _), witness_ms) = prove_prepare_in_memory(&documents_path, &pk)?;
     let prove_ms = start.elapsed().as_millis() as u64;
-    write_outputs(&out_dir, "prepare", &proof, &instance)?;
+    let size = proof_bytes(&proof)?;
+    LAST_OUTPUTS.lock().unwrap().put("prepare", proof, instance);
     Ok(LoadedProofResult {
         witness_ms,
         prove_ms,
-        proof_bytes: proof_bytes(&proof)?,
+        proof_bytes: size,
     })
 }
 
 /// Prove Show with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn prove_show_loaded(
-    documents_path: String,
-    out_dir: String,
-) -> Result<LoadedProofResult, ZkProofError> {
+pub fn prove_show_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
     let pk = require(LOADED.lock().unwrap().show_pk.as_ref(), "show key")?;
     let start = std::time::Instant::now();
     let (proof, instance, _) = prove_show_in_memory(&documents_path, &pk)?;
     let prove_ms = start.elapsed().as_millis() as u64;
-    write_outputs(&out_dir, "show", &proof, &instance)?;
+    let size = proof_bytes(&proof)?;
+    LAST_OUTPUTS.lock().unwrap().put("show", proof, instance);
     Ok(LoadedProofResult {
         witness_ms: 0,
         prove_ms,
-        proof_bytes: proof_bytes(&proof)?,
+        proof_bytes: size,
     })
 }
 
@@ -743,10 +782,7 @@ pub fn prove_show_loaded(
 /// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
 /// copy is cloned (outside the reblind timer) to keep it reusable.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn present_loaded(
-    documents_path: String,
-    out_dir: String,
-) -> Result<PresentResult, ZkProofError> {
+pub fn present_loaded(documents_path: String) -> Result<PresentResult, ZkProofError> {
     let (prepare_pk, show_pk, data) = {
         let loaded = LOADED.lock().unwrap();
         (
@@ -778,8 +814,13 @@ pub fn present_loaded(
     });
     let (show_proof, show_instance, _) = reblinded.map_err(proving_failed)?;
     let total_ms = total.elapsed().as_millis() as u64;
-    write_outputs(&out_dir, "present_prepare", &prepare_proof, &prepare_instance)?;
-    write_outputs(&out_dir, "present_show", &show_proof, &show_instance)?;
+    let (prepare_proof_bytes, show_proof_bytes) =
+        (proof_bytes(&prepare_proof)?, proof_bytes(&show_proof)?);
+    {
+        let mut last = LAST_OUTPUTS.lock().unwrap();
+        last.put("present_prepare", prepare_proof, prepare_instance);
+        last.put("present_show", show_proof, show_instance);
+    }
 
     Ok(PresentResult {
         show_prove_ms,
@@ -791,8 +832,8 @@ pub fn present_loaded(
         peak_rss_show_reblind_kb: peak_show_reblind,
         peak_rss_kb: peak_show_prove.max(peak_prepare_reblind).max(peak_show_reblind),
         rss_per_step,
-        prepare_proof_bytes: proof_bytes(&prepare_proof)?,
-        show_proof_bytes: proof_bytes(&show_proof)?,
+        prepare_proof_bytes,
+        show_proof_bytes,
     })
 }
 
@@ -1599,15 +1640,15 @@ mod tests {
         let _guard = LOADED_LOCK.lock().unwrap();
         clear_loaded_for_test();
         assert!(matches!(
-            prove_prepare_loaded("/docs".to_string(), String::new()),
+            prove_prepare_loaded("/docs".to_string()),
             Err(ZkProofError::SetupRequired { .. })
         ));
         assert!(matches!(
-            prove_show_loaded("/docs".to_string(), String::new()),
+            prove_show_loaded("/docs".to_string()),
             Err(ZkProofError::SetupRequired { .. })
         ));
         assert!(matches!(
-            present_loaded("/docs".to_string(), String::new()),
+            present_loaded("/docs".to_string()),
             Err(ZkProofError::SetupRequired { .. })
         ));
     }
@@ -1632,6 +1673,35 @@ mod tests {
         std::fs::write(&src, b"new").unwrap();
         stage_file(src.to_string_lossy().into(), dest.to_string_lossy().into()).unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), b"new");
+    }
+
+    fn identity_encode(p: &Vec<u8>, i: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), ZkProofError> {
+        Ok((p.clone(), i.clone()))
+    }
+
+    #[test]
+    fn test_output_store_keeps_last_per_stem_and_writes_once() {
+        let mut store = OutputStore::<Vec<u8>, Vec<u8>>::default();
+        store.put("show", vec![1], vec![2]);
+        store.put("show", vec![3], vec![4]);
+        store.put("prepare", vec![5], vec![6]);
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out");
+        assert_eq!(store.write_all(&out, identity_encode).unwrap(), 2);
+        assert_eq!(std::fs::read(out.join("show.proof")).unwrap(), vec![3]);
+        assert_eq!(std::fs::read(out.join("show.instance")).unwrap(), vec![4]);
+        assert_eq!(std::fs::read(out.join("prepare.proof")).unwrap(), vec![5]);
+        // Written entries are cleared: a second write has nothing to do.
+        assert_eq!(store.write_all(&out, identity_encode).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_output_store_empty_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out");
+        let mut store = OutputStore::<Vec<u8>, Vec<u8>>::default();
+        assert_eq!(store.write_all(&out, identity_encode).unwrap(), 0);
+        assert!(!out.exists());
     }
 
     #[test]
@@ -1915,14 +1985,14 @@ mod loaded_key_tests {
             reblind_in_memory(&pk_show, show_instance, show_witness, &data.blinds).unwrap();
         verify_circuit_with_loaded_data(&rs, &vk_show);
 
-        let r = prove_prepare_loaded(docs_path.clone(), String::new()).unwrap();
+        let r = prove_prepare_loaded(docs_path.clone()).unwrap();
         println!("prepare witness_ms={} prove_ms={} proof_bytes={}", r.witness_ms, r.prove_ms, r.proof_bytes);
-        let r = prove_show_loaded(docs_path.clone(), String::new()).unwrap();
+        let r = prove_show_loaded(docs_path.clone()).unwrap();
         println!("show prove_ms={} proof_bytes={}", r.prove_ms, r.proof_bytes);
 
         // Two presentations: the second proves the loaded copy survives.
         for _ in 0..2 {
-            let r = present_loaded(docs_path.clone(), String::new()).unwrap();
+            let r = present_loaded(docs_path.clone()).unwrap();
             println!(
                 "present show_prove={} prepare_reblind={} show_reblind={} total={} peak={}",
                 r.show_prove_ms, r.prepare_reblind_ms, r.show_reblind_ms, r.total_ms, r.peak_rss_kb

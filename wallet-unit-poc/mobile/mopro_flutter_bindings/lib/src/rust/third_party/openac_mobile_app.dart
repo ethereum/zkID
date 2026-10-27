@@ -7,8 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Loaded`, `PrepareReblindData`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Loaded`, `OutputStore`, `PrepareReblindData`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`, `from`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`
 
 Future<void> initApp() => RustLib.instance.api.openacMobileAppInitApp();
 
@@ -107,37 +108,34 @@ Future<BigInt> loadPrepareReblindData({
   sharedBlindsPath: sharedBlindsPath,
 );
 
+/// Writes the last successful proof and instance of each step run since the last
+/// call to `out_dir` (the host verifies them), then forgets them. Writes nothing
+/// when no iteration succeeded. The witness is not written.
+Future<BigInt> writeLastOutputs({required String outDir}) =>
+    RustLib.instance.api.openacMobileAppWriteLastOutputs(outDir: outDir);
+
 /// Prove Prepare with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
-Future<LoadedProofResult> provePrepareLoaded({
-  required String documentsPath,
-  required String outDir,
-}) => RustLib.instance.api.openacMobileAppProvePrepareLoaded(
-  documentsPath: documentsPath,
-  outDir: outDir,
-);
+Future<LoadedProofResult> provePrepareLoaded({required String documentsPath}) =>
+    RustLib.instance.api.openacMobileAppProvePrepareLoaded(
+      documentsPath: documentsPath,
+    );
 
 /// Prove Show with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
-Future<LoadedProofResult> proveShowLoaded({
-  required String documentsPath,
-  required String outDir,
-}) => RustLib.instance.api.openacMobileAppProveShowLoaded(
-  documentsPath: documentsPath,
-  outDir: outDir,
-);
+Future<LoadedProofResult> proveShowLoaded({required String documentsPath}) =>
+    RustLib.instance.api.openacMobileAppProveShowLoaded(
+      documentsPath: documentsPath,
+    );
 
 /// One presentation with the loaded keys and Prepare data, mirroring the SDK's
 /// `present()`: Show witness and prove, then reblind both proofs with the shared
 /// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
 /// copy is cloned (outside the reblind timer) to keep it reusable.
-Future<PresentResult> presentLoaded({
-  required String documentsPath,
-  required String outDir,
-}) => RustLib.instance.api.openacMobileAppPresentLoaded(
-  documentsPath: documentsPath,
-  outDir: outDir,
-);
+Future<PresentResult> presentLoaded({required String documentsPath}) => RustLib
+    .instance
+    .api
+    .openacMobileAppPresentLoaded(documentsPath: documentsPath);
 
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
