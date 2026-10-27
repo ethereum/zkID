@@ -728,5 +728,131 @@ class LabelCollisionTest(FtlTestCase):
         self.assertEqual(len(set(labels)), 3)
 
 
+CONTRACT_DEVICE = {
+    "model": "Moto G Power", "manufacturer": "motorola", "soc_model": "MT6835",
+    "soc_manufacturer": "Mediatek", "sdk": 34, "mem_total_kb": 4 * 1024 * 1024,
+    "mem_available_kb": 2 * 1024 * 1024, "cpu_max_freq_khz": [2200000] * 2 + [2000000] * 6,
+    "big_cores": [0, 1], "threads": 8,
+}
+
+
+def iter_line(step, it, **over):
+    row = {"step": step, "iter": it, "phase": "cold" if it == 0 else "warm",
+           "load_ms": 900 if it == 0 else 0, "prove_ms": 2000 + 100 * it,
+           "total_ms": (2900 if it == 0 else 2000 + 100 * it), "base_rss_kb": 300 * 1024,
+           "peak_rss_kb": (1500 + 10 * it) * 1024, "mem_available_kb_before": 2000 * 1024}
+    row.update(over)
+    return line("OPENAC_ITER", row)
+
+
+def iter_fixture(step="prepare", warm=5, done=True):
+    lines = ["10-26 14:03:00.000   100   100 D noise : unrelated",
+             line("OPENAC_DEVICE", CONTRACT_DEVICE),
+             line("OPENAC_SIZES", {"step": step, "proof_bytes": 112103,
+                                   f"{step}_proving_key_bytes": 432000000})]
+    lines += [iter_line(step, i) for i in range(warm + 1)]
+    if done:
+        lines.append(line("OPENAC_DONE", {"ok": warm + 1, "errors": 0}))
+    return lines
+
+
+class IterContractTest(FtlTestCase):
+    def test_parse_collects_iters_sizes_and_done(self):
+        res = p.parse_logcat("\n".join(iter_fixture()))
+        self.assertEqual(len(res["iters"]), 6)
+        self.assertEqual(res["iters"][0]["phase"], "cold")
+        self.assertEqual(res["done"], {"ok": 6, "errors": 0})
+        self.assertEqual(res["sizes"]["prepare"]["proof_bytes"], 112103)
+        self.assertEqual(res["malformed"], 0)
+
+    def test_summary_cold_and_warm_rows(self):
+        self.write_logcat("moto", iter_fixture())
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        self.assertIn("Moto G Power", md)
+        self.assertIn("Status: complete", md)
+        # cold: load 900, prove 2000, total 2900; warm median of 2100..2500 is 2300
+        row = next(l for l in md.splitlines() if l.startswith("| prepare | cold"))
+        self.assertIn("| 900 |", row)
+        self.assertIn("| 2900 |", row)
+        warm = next(l for l in md.splitlines() if l.startswith("| prepare | warm"))
+        self.assertIn("| 5 |", warm)
+        self.assertIn("2300.0", warm)
+        self.assertIn("2100", warm)
+        self.assertIn("2500", warm)
+
+    def test_peak_rss_and_available_memory_columns(self):
+        self.write_logcat("moto", iter_fixture())
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        cold = next(l for l in md.splitlines() if l.startswith("| prepare | cold"))
+        self.assertIn("1500.0", cold)
+        self.assertIn("2000.0", cold)
+        warm = next(l for l in md.splitlines() if l.startswith("| prepare | warm"))
+        self.assertIn("1550.0", warm)
+
+    def test_csv_has_one_row_per_iter(self):
+        self.write_logcat("moto", iter_fixture())
+        self.run_main(self.root)
+        with open(os.path.join(self.root, "bench_iter.csv"), newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(rows[0]["device"], "Moto G Power")
+        self.assertEqual(rows[0]["phase"], "cold")
+        self.assertEqual(rows[0]["load_ms"], "900")
+        self.assertEqual(rows[5]["iter"], "5")
+        self.assertEqual(list(rows[0])[:5], ["device", "soc_model", "mem_total_kb", "step", "iter"])
+
+    def test_present_substeps_are_separate_rows(self):
+        lines = [line("OPENAC_DEVICE", CONTRACT_DEVICE)]
+        for step in ("show_prove", "prepare_reblind", "show_reblind", "present_total"):
+            lines += [iter_line(step, 0), iter_line(step, 1)]
+        lines.append(line("OPENAC_DONE", {"ok": 8, "errors": 0}))
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        for step in ("show_prove", "prepare_reblind", "show_reblind", "present_total"):
+            self.assertIn(f"| {step} | cold", md)
+            self.assertIn(f"| {step} | warm", md)
+
+    def test_killed_run_reports_iteration_count(self):
+        lines = iter_fixture(done=False)[:5]
+        lines.append("10-26 14:05:01.000   500   500 I lmkd    : Kill 'com.openac.app' (8123), uid 10123, oom_adj 0 to free 1234kB")
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        self.assertIn("FAILED: ", md)
+        self.assertIn("lmkd", md)
+        self.assertIn("2 iterations completed", md)
+
+    def test_error_with_step_is_shown(self):
+        lines = iter_fixture(warm=1, done=False)
+        lines.append(line("OPENAC_ERROR", {"step": "show", "iter": 2, "error": "load failed: ENOENT"}))
+        lines.append(line("OPENAC_DONE", {"ok": 2, "errors": 1}))
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        md = self.read("bench_summary.md")
+        self.assertIn("complete (1 errors)", md)
+        self.assertIn("load failed: ENOENT", md)
+
+    def test_rss_per_step_false_is_flagged(self):
+        lines = iter_fixture(warm=1, done=False)
+        lines[-1] = iter_line("prepare", 1, rss_per_step=False)
+        lines.append(line("OPENAC_DONE", {"ok": 2, "errors": 0}))
+        self.write_logcat("moto", lines)
+        self.run_main(self.root)
+        self.assertIn("process-wide", self.read("bench_summary.md"))
+
+    def test_legacy_logs_have_no_iter_section(self):
+        self.write_logcat("akita", complete_fixture())
+        self.run_main(self.root)
+        self.assertNotIn("Article runs", self.read("bench_summary.md"))
+
+    def test_iter_marker_not_confused_with_other_kinds(self):
+        res = p.parse_logcat(iter_line("show", 0))
+        self.assertEqual(len(res["iters"]), 1)
+        self.assertEqual(res["bench"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

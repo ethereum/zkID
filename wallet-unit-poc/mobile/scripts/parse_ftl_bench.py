@@ -3,7 +3,7 @@
 
 usage: parse_ftl_bench.py <results_dir | logcat_file> [...] [--out-dir DIR]
 
-Writes bench_iterations.csv and bench_summary.md and prints the summary.
+Writes bench_iterations.csv, bench_prod.csv, bench_iter.csv and bench_summary.md and prints the summary.
 """
 import argparse
 import csv
@@ -14,7 +14,7 @@ import statistics
 import sys
 
 PACKAGE = "com.openac.app"
-MARKER_RE = re.compile(r"OPENAC_(DEVICE|SIZES|BENCH|PROD|ERROR|DONE) (.*)$")
+MARKER_RE = re.compile(r"OPENAC_(DEVICE|SIZES|BENCH|PROD|ITER|ERROR|DONE) (.*)$")
 KILL_RES = [
     re.compile(r"(lowmemorykiller|lmkd).*kill.*" + re.escape(PACKAGE), re.I),
     re.compile(r"Process " + re.escape(PACKAGE) + r" \(pid \d+\) has died"),
@@ -49,6 +49,11 @@ PROD_CSV_FIELDS = (
     + [f"{kind}_rss_{s}_kb" for s in PROD_RSS_STEPS for kind in ("base", "peak")]
     + ["rss_per_step"]
 )
+ITER_CSV_FIELDS = [
+    "device", "soc_model", "mem_total_kb", "step", "iter", "phase", "load_ms", "witness_ms",
+    "prove_ms", "total_ms", "base_rss_kb", "peak_rss_kb", "mem_available_kb_before",
+    "rss_per_step",
+]
 STAT_STEPS = [
     "prove_jwt_ms", "reblind_jwt_ms", "prove_show_ms", "reblind_show_ms",
     "verify_jwt_ms", "verify_show_ms", "jwt_setup_ms", "show_setup_ms",
@@ -85,7 +90,7 @@ def find_kill_reason(line, app_pids=()):
 
 
 def parse_logcat(text):
-    res = {"device": None, "sizes": {}, "bench": [], "prod": [], "errors": [], "done": None,
+    res = {"device": None, "sizes": {}, "bench": [], "prod": [], "iters": [], "errors": [], "done": None,
            "malformed": 0, "kill_reason": None}
     app_pids = set()
     kill_lines = []
@@ -106,7 +111,7 @@ def parse_logcat(text):
             if kind == "DEVICE":
                 res["device"] = data
             elif kind == "SIZES":
-                res["sizes"][data.get("config")] = data
+                res["sizes"][data.get("config") or data.get("step")] = data
             elif kind == "BENCH":
                 res["bench"].append(data)
             elif kind == "PROD":
@@ -115,6 +120,8 @@ def parse_logcat(text):
                     if old in data and new not in data:
                         data[new] = data.pop(old)
                 res["prod"].append(data)
+            elif kind == "ITER":
+                res["iters"].append(data)
             elif kind == "ERROR":
                 res["errors"].append(data)
             else:
@@ -156,7 +163,8 @@ def load_devices(paths):
     for path, fallback in find_logs(paths):
         with open(path, errors="replace") as f:
             res = parse_logcat(f.read())
-        label = (res["device"] or {}).get("product_model") or fallback
+        device = res["device"] or {}
+        label = device.get("product_model") or device.get("model") or fallback
         if label in seen:
             label = f"{label} ({fallback})"
         seen.add(label)
@@ -171,6 +179,8 @@ def status_of(dev):
         return "complete" if not errs else f"complete ({errs} errors)"
     counts = {c: sum(1 for b in dev["bench"] if b.get("config") == c) for c in ("A", "B")}
     reason = dev["kill_reason"] or "no OPENAC_DONE"
+    if dev["iters"]:
+        return f"FAILED: {reason} ({len(dev['iters'])} iterations completed)"
     total = len(dev["prod"]) + len(dev["bench"])
     return (f"FAILED: {reason} ({total} iterations completed: "
             f"P={len(dev['prod'])}, A={counts['A']}, B={counts['B']})")
@@ -241,6 +251,59 @@ def prod_section(dev):
     return out
 
 
+def iter_groups(dev):
+    """(step, cold rows, warm rows) in order of first appearance."""
+    steps = {}
+    for r in dev["iters"]:
+        steps.setdefault(r.get("step"), []).append(r)
+    return [(s, [r for r in rows if r.get("phase") == "cold"],
+             [r for r in rows if r.get("phase") != "cold"]) for s, rows in steps.items()]
+
+
+def mib(kb):
+    return None if kb is None else kb / 1024
+
+
+def iter_section(dev):
+    out = ["### Article runs (cold = iteration 0 of the process, warm = the rest)", ""]
+    for s, sizes in dev["sizes"].items():
+        if s in ("A", "B", "P") or "proof_bytes" not in sizes:
+            continue
+        parts = [f"{k[:-6].replace('_', ' ')} {v / 1e6:.2f} MB"
+                 for k, v in sizes.items() if k.endswith("_bytes") and k != "proof_bytes"]
+        out.append(f"Sizes ({s}): proof {sizes['proof_bytes'] / 1e3:.1f} KB"
+                   + "".join(f", {x}" for x in parts))
+    if out[-1] != "":
+        out.append("")
+    for e in dev["errors"]:
+        if e.get("step") is not None:
+            out.append(f"Error in {e['step']} iter {e.get('iter')}: {e.get('error')}")
+    if out[-1] != "":
+        out.append("")
+    out += ["| step | phase | n | load ms | prove ms | prove min\u2013max | total ms | base RSS MiB "
+            "| peak RSS MiB | MemAvailable before MiB |",
+            "|---|---|---|---|---|---|---|---|---|---|"]
+    for step, cold, warm in iter_groups(dev):
+        for r in cold:
+            out.append(
+                f"| {step} | cold | 1 | {r.get('load_ms', '-')} | {r.get('prove_ms', '-')} | - "
+                f"| {r.get('total_ms', '-')} | {fmt(mib(r.get('base_rss_kb')))} "
+                f"| {fmt(mib(r.get('peak_rss_kb')))} | {fmt(mib(r.get('mem_available_kb_before')))} |")
+        if warm:
+            med = lambda k: median_of(warm, k)
+            peaks = [r["peak_rss_kb"] for r in warm if r.get("peak_rss_kb") is not None]
+            out.append(
+                f"| {step} | warm | {len(warm)} | {fmt(med('load_ms'))} | {fmt(med('prove_ms'))} "
+                f"| {span(warm, 'prove_ms')} | {fmt(med('total_ms'))} "
+                f"| {fmt(mib(med('base_rss_kb')))} | {fmt(mib(max(peaks)) if peaks else None)} "
+                f"| {fmt(mib(med('mem_available_kb_before')))} |")
+    out += ["", "Warm rows: median of each column, except peak RSS (max).", ""]
+    if any(r.get("rss_per_step") is False for r in dev["iters"]):
+        out += ["Peak RSS is process-wide for iterations with rss_per_step=false "
+                "(the high-water mark could not be reset).", ""]
+    return out
+
+
 def span(rows, key):
     vals = [r[key] for r in rows if r.get(key) is not None]
     if not vals:
@@ -288,6 +351,8 @@ def device_section(dev):
             parts = [f"{n} {sizes[k] / 1e6:.1f} MB" for n, k in KEY_SIZES if k in sizes]
             parts += [f"{n} {sizes[k] / 1e3:.1f} KB" for n, k in PROOF_SIZES if k in sizes]
             out += [f"Sizes (config {config}): " + ", ".join(parts), ""]
+    if dev["iters"]:
+        out += iter_section(dev)
     if dev["prod"] or any(e.get("config") == "P" for e in dev["errors"]):
         out += prod_section(dev)
     for config in ("A", "B"):
@@ -358,6 +423,17 @@ def write_prod_csv(devices, path):
                             "mem_total_kb": d.get("mem_total_kb", ""), **r})
 
 
+def write_iter_csv(devices, path):
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=ITER_CSV_FIELDS, extrasaction="ignore", restval="")
+        w.writeheader()
+        for dev in devices:
+            d = dev["device"] or {}
+            for r in dev["iters"]:
+                w.writerow({"device": dev["label"], "soc_model": d.get("soc_model", ""),
+                            "mem_total_kb": d.get("mem_total_kb", ""), **r})
+
+
 def write_csv(devices, path):
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore", restval="")
@@ -387,6 +463,7 @@ def main(argv=None):
         return 1
     write_csv(devices, os.path.join(out_dir, "bench_iterations.csv"))
     write_prod_csv(devices, os.path.join(out_dir, "bench_prod.csv"))
+    write_iter_csv(devices, os.path.join(out_dir, "bench_iter.csv"))
     md = summary_md(devices)
     with open(os.path.join(out_dir, "bench_summary.md"), "w") as f:
         f.write(md)

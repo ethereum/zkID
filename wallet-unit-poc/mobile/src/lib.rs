@@ -1,5 +1,6 @@
 use ecdsa_spartan2::{
-    load_instance, load_proof, load_shared_blinds, load_witness,
+    generate_prepare_witness, load_instance, load_proof, load_proving_key, load_shared_blinds,
+    load_witness, prove_circuit_in_memory, reblind_in_memory,
     paths::keys::{
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
         PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
@@ -16,7 +17,12 @@ use ecdsa_spartan2::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use spartan2::{
+    r1cs::{R1CSWitness, SplitR1CSInstance},
+    traits::{snark::R1CSSNARKTrait, Engine},
+    zk_spartan::R1CSSNARK,
+};
 
 // Initializes the shared UniFFI scaffolding and defines the `MoproError` enum.
 mopro_ffi::app!();
@@ -126,6 +132,12 @@ impl std::fmt::Display for ZkProofError {
 }
 
 impl std::error::Error for ZkProofError {}
+
+/// Text of an error that crossed the Flutter bridge, where it arrives as an
+/// opaque handle whose `toString` says nothing.
+pub fn zk_error_message(e: &ZkProofError) -> String {
+    e.to_string()
+}
 
 impl From<std::io::Error> for ZkProofError {
     fn from(e: std::io::Error) -> Self {
@@ -431,6 +443,296 @@ pub fn verify_presentation(documents_path: String) -> Result<bool, ZkProofError>
         config.artifact_path(SHOW_PROOF),
         config.key_path(SHOW_VERIFYING_KEY),
     ))
+}
+
+// ============================================================================
+// Loaded-key Operations
+// ============================================================================
+//
+// Production apps ship proving keys instead of running setup on the device. These
+// functions load a key once into a process-wide slot and prove with it, all in
+// memory: nothing under the documents path is written or overwritten.
+
+type ProvingKey = <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey;
+
+/// What a presentation reblinds on the Prepare side: the Prepare proof's
+/// instance and witness plus the blinds shared with Show.
+struct PrepareReblindData {
+    instance: SplitR1CSInstance<E>,
+    witness: R1CSWitness<E>,
+    blinds: Vec<<E as Engine>::Scalar>,
+}
+
+struct Loaded {
+    prepare_pk: Option<Arc<ProvingKey>>,
+    show_pk: Option<Arc<ProvingKey>>,
+    prepare_reblind: Option<Arc<PrepareReblindData>>,
+}
+
+static LOADED: Mutex<Loaded> = Mutex::new(Loaded {
+    prepare_pk: None,
+    show_pk: None,
+    prepare_reblind: None,
+});
+
+/// Tests share the process-wide slots; hold this while touching them.
+#[cfg(test)]
+static LOADED_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+fn clear_loaded_for_test() {
+    let mut loaded = LOADED.lock().unwrap();
+    loaded.prepare_pk = None;
+    loaded.show_pk = None;
+    loaded.prepare_reblind = None;
+}
+
+/// Timing of one loaded-key proof. `witness_ms` is the Prepare witness
+/// generation, which is part of `prove_ms`; Show's witness is generated inside
+/// the prover and cannot be timed apart, so it reports 0.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct LoadedProofResult {
+    pub witness_ms: u64,
+    pub prove_ms: u64,
+    pub proof_bytes: u64,
+}
+
+/// Timing and peak RSS of one presentation: Show prove, then reblind of the
+/// Prepare and Show proofs. Each peak is read after a reset at the start of its
+/// sub-step; `peak_rss_kb` is the maximum over the whole presentation.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct PresentResult {
+    pub show_prove_ms: u64,
+    pub prepare_reblind_ms: u64,
+    pub show_reblind_ms: u64,
+    pub total_ms: u64,
+    pub peak_rss_show_prove_kb: u64,
+    pub peak_rss_prepare_reblind_kb: u64,
+    pub peak_rss_show_reblind_kb: u64,
+    pub peak_rss_kb: u64,
+    pub rss_per_step: bool,
+    pub prepare_proof_bytes: u64,
+    pub show_proof_bytes: u64,
+}
+
+fn max_peak(peaks: &[u64]) -> u64 {
+    peaks.iter().copied().max().unwrap_or(0)
+}
+
+fn load_key(path: &str) -> Result<(ProvingKey, u64), ZkProofError> {
+    let start = std::time::Instant::now();
+    let pk = load_proving_key(path).map_err(|e| ZkProofError::FileNotFound {
+        message: format!("Failed to load proving key '{}': {}", path, e),
+    })?;
+    Ok((pk, start.elapsed().as_millis() as u64))
+}
+
+/// Copies `src` to `dest` (creating parent directories), flushes it, and drops
+/// both files from the page cache so the next load reads from storage rather
+/// than RAM. Returns the bytes copied. Pushed files live on emulated external
+/// storage; apps ship keys on internal storage, so benchmarks stage them there.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn stage_file(src: String, dest: String) -> Result<u64, ZkProofError> {
+    let dest_path = Path::new(&dest);
+    if let Some(parent) = dest_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut input = std::fs::File::open(&src).map_err(|e| ZkProofError::FileNotFound {
+        message: format!("Failed to open '{}': {}", src, e),
+    })?;
+    let mut output = std::fs::File::create(dest_path).map_err(|e| ZkProofError::IoError {
+        message: format!("Failed to create '{}': {}", dest, e),
+    })?;
+    let bytes = std::io::copy(&mut input, &mut output)?;
+    output.sync_all()?;
+    drop_page_cache(Path::new(&src));
+    drop_page_cache(dest_path);
+    Ok(bytes)
+}
+
+/// Best effort: advice the kernel may ignore, and an unreadable file only means
+/// the next load is warmer than intended.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn drop_page_cache(path: &Path) {
+    use std::os::fd::AsRawFd;
+    if let Ok(f) = std::fs::File::open(path) {
+        // SAFETY: the fd is valid for the call; offset 0 and length 0 mean the whole file.
+        unsafe { libc::posix_fadvise(f.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) };
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn drop_page_cache(_path: &Path) {}
+
+/// Load the Prepare (JWT) proving key from `path`; returns load time in ms.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_prepare_key(path: String) -> Result<u64, ZkProofError> {
+    let (pk, ms) = load_key(&path)?;
+    LOADED.lock().unwrap().prepare_pk = Some(Arc::new(pk));
+    Ok(ms)
+}
+
+/// Load the Show proving key from `path`; returns load time in ms.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_show_key(path: String) -> Result<u64, ZkProofError> {
+    let (pk, ms) = load_key(&path)?;
+    LOADED.lock().unwrap().show_pk = Some(Arc::new(pk));
+    Ok(ms)
+}
+
+/// Load the Prepare instance and witness and the shared blinds a presentation
+/// reblinds; returns load time in ms.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_prepare_reblind_data(
+    instance_path: String,
+    witness_path: String,
+    shared_blinds_path: String,
+) -> Result<u64, ZkProofError> {
+    let missing = |what: &str, e: Box<dyn std::error::Error>| ZkProofError::FileNotFound {
+        message: format!("Failed to load {}: {}", what, e),
+    };
+    let start = std::time::Instant::now();
+    let instance = load_instance(&instance_path).map_err(|e| missing("prepare instance", e))?;
+    let witness = load_witness(&witness_path).map_err(|e| missing("prepare witness", e))?;
+    let blinds =
+        load_shared_blinds::<E>(&shared_blinds_path).map_err(|e| missing("shared blinds", e))?;
+    let ms = start.elapsed().as_millis() as u64;
+    LOADED.lock().unwrap().prepare_reblind = Some(Arc::new(PrepareReblindData {
+        instance,
+        witness,
+        blinds,
+    }));
+    Ok(ms)
+}
+
+fn proof_bytes(proof: &R1CSSNARK<E>) -> Result<u64, ZkProofError> {
+    bincode::serialized_size(proof).map_err(|e| ZkProofError::IoError {
+        message: format!("Failed to size proof: {}", e),
+    })
+}
+
+fn require<T: Clone>(slot: Option<&T>, what: &str) -> Result<T, ZkProofError> {
+    slot.cloned().ok_or_else(|| ZkProofError::SetupRequired {
+        message: format!("{} not loaded", what),
+    })
+}
+
+fn input_path(documents_path: &str, circuit: &str) -> PathBuf {
+    PathBuf::from(documents_path).join(format!("{}_input.json", circuit))
+}
+
+fn proving_failed(e: impl std::fmt::Display) -> ZkProofError {
+    ZkProofError::ProofGenerationFailed {
+        message: e.to_string(),
+    }
+}
+
+type InMemoryProof = (R1CSSNARK<E>, SplitR1CSInstance<E>, R1CSWitness<E>);
+
+/// Returns the proof plus the Prepare witness-generation time in ms.
+fn prove_prepare_in_memory(
+    documents_path: &str,
+    pk: &ProvingKey,
+) -> Result<(InMemoryProof, u64), ZkProofError> {
+    let config = make_config(documents_path);
+    let input = input_path(documents_path, JWT_CIRCUIT_NAME);
+    let t = std::time::Instant::now();
+    let witness = generate_prepare_witness(&config, Some(&input)).map_err(proving_failed)?;
+    let witness_ms = t.elapsed().as_millis() as u64;
+    let circuit = PrepareCircuit::with_witness_for_size(witness, config.circuit_size);
+    let proved = prove_circuit_in_memory(circuit, pk).map_err(proving_failed)?;
+    Ok((proved, witness_ms))
+}
+
+fn prove_show_in_memory(
+    documents_path: &str,
+    pk: &ProvingKey,
+) -> Result<InMemoryProof, ZkProofError> {
+    let config = make_config(documents_path);
+    let circuit = ShowCircuit::new(config, Some(input_path(documents_path, SHOW_CIRCUIT_NAME)));
+    prove_circuit_in_memory(circuit, pk).map_err(proving_failed)
+}
+
+/// Prove Prepare with the loaded key. Witness generation is included in
+/// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn prove_prepare_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
+    let pk = require(LOADED.lock().unwrap().prepare_pk.as_ref(), "prepare key")?;
+    let start = std::time::Instant::now();
+    let ((proof, _, _), witness_ms) = prove_prepare_in_memory(&documents_path, &pk)?;
+    let prove_ms = start.elapsed().as_millis() as u64;
+    Ok(LoadedProofResult {
+        witness_ms,
+        prove_ms,
+        proof_bytes: proof_bytes(&proof)?,
+    })
+}
+
+/// Prove Show with the loaded key. Witness generation is included in
+/// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn prove_show_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
+    let pk = require(LOADED.lock().unwrap().show_pk.as_ref(), "show key")?;
+    let start = std::time::Instant::now();
+    let (proof, _, _) = prove_show_in_memory(&documents_path, &pk)?;
+    let prove_ms = start.elapsed().as_millis() as u64;
+    Ok(LoadedProofResult {
+        witness_ms: 0,
+        prove_ms,
+        proof_bytes: proof_bytes(&proof)?,
+    })
+}
+
+/// One presentation with the loaded keys and Prepare data, mirroring the SDK's
+/// `present()`: Show witness and prove, then reblind both proofs with the shared
+/// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
+/// copy is cloned (outside the reblind timer) to keep it reusable.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn present_loaded(documents_path: String) -> Result<PresentResult, ZkProofError> {
+    let (prepare_pk, show_pk, data) = {
+        let loaded = LOADED.lock().unwrap();
+        (
+            require(loaded.prepare_pk.as_ref(), "prepare key")?,
+            require(loaded.show_pk.as_ref(), "show key")?,
+            require(loaded.prepare_reblind.as_ref(), "prepare reblind data")?,
+        )
+    };
+    let mut rss_per_step = true;
+    let total = std::time::Instant::now();
+
+    let (proved, show_prove_ms, peak_show_prove) = measure(&mut rss_per_step, || {
+        prove_show_in_memory(&documents_path, &show_pk)
+    });
+    let (_, show_instance, show_witness) = proved?;
+
+    if !reset_peak_rss() {
+        rss_per_step = false;
+    }
+    let (instance, witness) = (data.instance.clone(), data.witness.clone());
+    let start = std::time::Instant::now();
+    let (prepare_proof, _, _) =
+        reblind_in_memory(&prepare_pk, instance, witness, &data.blinds).map_err(proving_failed)?;
+    let prepare_reblind_ms = start.elapsed().as_millis() as u64;
+    let peak_prepare_reblind = read_peak_rss_kb();
+
+    let (reblinded, show_reblind_ms, peak_show_reblind) = measure(&mut rss_per_step, || {
+        reblind_in_memory(&show_pk, show_instance, show_witness, &data.blinds)
+    });
+    let (show_proof, _, _) = reblinded.map_err(proving_failed)?;
+
+    Ok(PresentResult {
+        show_prove_ms,
+        prepare_reblind_ms,
+        show_reblind_ms,
+        total_ms: total.elapsed().as_millis() as u64,
+        peak_rss_show_prove_kb: peak_show_prove,
+        peak_rss_prepare_reblind_kb: peak_prepare_reblind,
+        peak_rss_show_reblind_kb: peak_show_reblind,
+        peak_rss_kb: max_peak(&[peak_show_prove, peak_prepare_reblind, peak_show_reblind]),
+        rss_per_step,
+        prepare_proof_bytes: proof_bytes(&prepare_proof)?,
+        show_proof_bytes: proof_bytes(&show_proof)?,
+    })
 }
 
 // ============================================================================
@@ -774,6 +1076,19 @@ fn parse_status_kb(text: &str, key: &str) -> Option<u64> {
         .and_then(|v| v.parse().ok())
 }
 
+fn parse_mem_available_kb(meminfo: &str) -> Option<u64> {
+    parse_status_kb(meminfo, "MemAvailable:")
+}
+
+/// MemAvailable in KiB, or 0 where /proc/meminfo is unavailable.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn mem_available_kb() -> u64 {
+    std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| parse_mem_available_kb(&s))
+        .unwrap_or(0)
+}
+
 #[cfg(any(target_os = "linux", target_os = "android", test))]
 fn parse_vmhwm_kb(status: &str) -> Option<u64> {
     parse_status_kb(status, "VmHWM:")
@@ -985,6 +1300,7 @@ pub fn device_profile() -> String {
         "manufacturer": android_prop("ro.product.manufacturer"),
         "android_sdk": android_prop("ro.build.version.sdk"),
         "mem_total_kb": mem_total_kb,
+        "mem_available_kb": mem_available_kb(),
         "cpu_max_freq_khz": freqs,
         "big_cores": classify_big_cores(&freqs),
         "rayon_default_threads": rayon::current_num_threads(),
@@ -1200,6 +1516,87 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_parse_meminfo_available_kb() {
+        let meminfo = "MemTotal:        5890204 kB\nMemFree:          123 kB\nMemAvailable:    2048000 kB\n";
+        assert_eq!(parse_mem_available_kb(meminfo), Some(2048000));
+        assert_eq!(parse_mem_available_kb("MemTotal:  1 kB\n"), None);
+        // A key that merely shares the prefix must not match.
+        assert_eq!(parse_mem_available_kb("MemAvailableX: 5 kB\n"), None);
+    }
+
+    #[test]
+    fn test_device_profile_has_mem_available() {
+        let v: serde_json::Value = serde_json::from_str(&device_profile()).expect("valid JSON");
+        assert!(v["mem_available_kb"].is_u64());
+    }
+
+    #[test]
+    fn test_load_key_missing_file_is_file_not_found() {
+        let r = load_prepare_key("/nonexistent/prepare.key".to_string());
+        assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
+        let r = load_show_key("/nonexistent/show.key".to_string());
+        assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn test_prove_without_loaded_key_requires_setup() {
+        let _guard = LOADED_LOCK.lock().unwrap();
+        clear_loaded_for_test();
+        assert!(matches!(
+            prove_prepare_loaded("/docs".to_string()),
+            Err(ZkProofError::SetupRequired { .. })
+        ));
+        assert!(matches!(
+            prove_show_loaded("/docs".to_string()),
+            Err(ZkProofError::SetupRequired { .. })
+        ));
+        assert!(matches!(
+            present_loaded("/docs".to_string()),
+            Err(ZkProofError::SetupRequired { .. })
+        ));
+    }
+
+    #[test]
+    fn test_stage_file_copies_and_creates_parents() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.bin");
+        std::fs::write(&src, vec![7u8; 4096]).unwrap();
+        let dest = dir.path().join("a/b/dest.bin");
+        let n = stage_file(src.to_string_lossy().into(), dest.to_string_lossy().into()).unwrap();
+        assert_eq!(n, 4096);
+        assert_eq!(std::fs::read(&dest).unwrap(), vec![7u8; 4096]);
+    }
+
+    #[test]
+    fn test_stage_file_overwrites_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.bin");
+        let dest = dir.path().join("dest.bin");
+        std::fs::write(&dest, vec![1u8; 9000]).unwrap();
+        std::fs::write(&src, b"new").unwrap();
+        stage_file(src.to_string_lossy().into(), dest.to_string_lossy().into()).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new");
+    }
+
+    #[test]
+    fn test_stage_file_missing_source() {
+        let r = stage_file("/nonexistent/src.bin".into(), "/tmp/never.bin".into());
+        assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
+    }
+
+    #[test]
+    fn test_zk_error_message_is_display_text() {
+        let e = ZkProofError::FileNotFound { message: "no key".into() };
+        assert_eq!(zk_error_message(&e), "File not found: no key");
+    }
+
+    #[test]
+    fn test_max_peak() {
+        assert_eq!(max_peak(&[10, 30, 20]), 30);
+        assert_eq!(max_peak(&[]), 0);
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn test_rss_helpers_on_macos() {
@@ -1409,5 +1806,102 @@ mod e2e_tests {
             "jwt_witness_bytes must be > 0"
         );
         assert!(b.show_witness_bytes > 0, "show_witness_bytes must be > 0");
+    }
+}
+
+// ============================================================================
+// Loaded-key E2E (needs the pushed device files)
+// ============================================================================
+
+#[cfg(test)]
+mod loaded_key_tests {
+    use super::*;
+    use ecdsa_spartan2::{load_verifying_key, verify_circuit_with_loaded_data};
+    use std::fs;
+
+    /// Proves and reblinds with exactly the files the device gets, and checks
+    /// every proof against the original verifying keys. No r1cs is present.
+    ///   OPENAC_DEVICE_DIR  the pushed file set (2k_*.key, 2k_shared_blinds.bin, ...)
+    ///   OPENAC_VK_DIR      holds 2k_prepare_verifying.key and 2k_show_verifying.key
+    #[test]
+    #[ignore = "Needs OPENAC_DEVICE_DIR and OPENAC_VK_DIR; run with: cargo test --release -- --ignored loaded_key"]
+    fn loaded_key_prove_reblind_verify_without_r1cs() {
+        let _guard = LOADED_LOCK.lock().unwrap();
+        clear_loaded_for_test();
+        let dev = PathBuf::from(std::env::var("OPENAC_DEVICE_DIR").expect("OPENAC_DEVICE_DIR"));
+        let vks = PathBuf::from(std::env::var("OPENAC_VK_DIR").expect("OPENAC_VK_DIR"));
+        let f = |name: &str| dev.join(name).to_string_lossy().into_owned();
+
+        let circom = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../circom/inputs");
+        let docs = tempfile::tempdir().expect("temp dir");
+        fs::copy(circom.join("jwt/2k/default.json"), docs.path().join("jwt_input.json")).unwrap();
+        fs::copy(circom.join("show/2k/default.json"), docs.path().join("show_input.json")).unwrap();
+        let docs_path = docs.path().to_string_lossy().into_owned();
+
+        println!("load prepare {} ms", load_prepare_key(f("2k_prepare_proving.key")).unwrap());
+        println!("load show {} ms", load_show_key(f("2k_show_proving.key")).unwrap());
+        println!(
+            "load reblind data {} ms",
+            load_prepare_reblind_data(
+                f("2k_prepare_instance.bin"),
+                f("2k_prepare_witness.bin"),
+                f("2k_shared_blinds.bin"),
+            )
+            .unwrap()
+        );
+
+        let pk_prepare = LOADED.lock().unwrap().prepare_pk.clone().unwrap();
+        let pk_show = LOADED.lock().unwrap().show_pk.clone().unwrap();
+        let vk_prepare = load_verifying_key(vks.join("2k_prepare_verifying.key")).unwrap();
+        let vk_show = load_verifying_key(vks.join("2k_show_verifying.key")).unwrap();
+
+        let ((p, _, _), _) = prove_prepare_in_memory(&docs_path, &pk_prepare).unwrap();
+        verify_circuit_with_loaded_data(&p, &vk_prepare);
+        let (s, _, _) = prove_show_in_memory(&docs_path, &pk_show).unwrap();
+        verify_circuit_with_loaded_data(&s, &vk_show);
+
+        let r = prove_prepare_loaded(docs_path.clone()).unwrap();
+        println!("prepare witness_ms={} prove_ms={} proof_bytes={}", r.witness_ms, r.prove_ms, r.proof_bytes);
+        let r = prove_show_loaded(docs_path.clone()).unwrap();
+        println!("show prove_ms={} proof_bytes={}", r.prove_ms, r.proof_bytes);
+
+        // Two presentations: the second proves the loaded copy survives.
+        for _ in 0..2 {
+            let r = present_loaded(docs_path.clone()).unwrap();
+            println!(
+                "present show_prove={} prepare_reblind={} show_reblind={} total={} peak={}",
+                r.show_prove_ms, r.prepare_reblind_ms, r.show_reblind_ms, r.total_ms, r.peak_rss_kb
+            );
+        }
+
+        // Reblind the snapshot's own Prepare data and verify it.
+        let data = LOADED.lock().unwrap().prepare_reblind.clone().unwrap();
+        let (rp, _, _) = reblind_in_memory(
+            &pk_prepare,
+            data.instance.clone(),
+            data.witness.clone(),
+            &data.blinds,
+        )
+        .unwrap();
+        verify_circuit_with_loaded_data(&rp, &vk_prepare);
+    }
+    /// The desktop `benchmark` flow leaves the post-reblind instance and witness
+    /// in keys/, and those cannot be reblinded again (the blind values the
+    /// instance names are gone from the witness). This proves Prepare once with
+    /// the real key and writes the fresh, reblindable pair into OPENAC_DEVICE_DIR.
+    #[test]
+    #[ignore = "Writes into OPENAC_DEVICE_DIR; run with: cargo test --release -- --ignored write_reblindable"]
+    fn write_reblindable_prepare_data() {
+        let _guard = LOADED_LOCK.lock().unwrap();
+        clear_loaded_for_test();
+        let dev = PathBuf::from(std::env::var("OPENAC_DEVICE_DIR").expect("OPENAC_DEVICE_DIR"));
+        let circom = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../circom/inputs");
+        let docs = tempfile::tempdir().expect("temp dir");
+        fs::copy(circom.join("jwt/2k/default.json"), docs.path().join("jwt_input.json")).unwrap();
+        let pk = load_proving_key(dev.join("2k_prepare_proving.key")).unwrap();
+        let ((_, instance, witness), _) =
+            prove_prepare_in_memory(&docs.path().to_string_lossy(), &pk).unwrap();
+        ecdsa_spartan2::setup::save_instance(dev.join("2k_prepare_instance.bin"), &instance).unwrap();
+        ecdsa_spartan2::setup::save_witness(dev.join("2k_prepare_witness.bin"), &witness).unwrap();
     }
 }

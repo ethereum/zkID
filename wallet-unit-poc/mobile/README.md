@@ -137,6 +137,33 @@ The Show circuit has constant performance regardless of JWT payload size.
 |-----------|--------------|
 | <img src="/wallet-unit-poc/mobile/assets/openac-iphone-17.jpg" width="300"> | <img src="/wallet-unit-poc/mobile/assets/openac-pixel-10-pro.jpg" width="300"> |
 
+## Host-driven Android benchmark
+
+`scripts/bench_workload.json` drives the benchmark from a host runner: Prepare, Show and a full
+presentation (`present`: Show prove plus Prepare and Show reblind), each in a fresh process, with
+proving keys pushed from the host instead of generated on the device.
+
+1. `scripts/build_bench_apks.sh` builds the app and androidTest APKs (arm64, profile).
+2. Install both with `adb install -r -t`.
+3. `adb shell mkdir -p /sdcard/Android/data/com.openac.app/files`, then push the files listed under
+   `push` into it. Push into that directory itself: a subdirectory created by adb is shell-owned
+   mode 770 and the app cannot open files in it. The first push into a missing directory can fail
+   with `secure_mkdirs failed: Operation not permitted`, so create it first.
+4. Write one run's `config` to `bench_config.json` in the same directory, then
+   `adb shell am instrument -w -r com.openac.app.test/androidx.test.runner.AndroidJUnitRunner`.
+5. Parse logcat with `scripts/parse_ftl_bench.py` (`OPENAC_ITER` lines).
+
+Without a `bench_config.json` the same APKs run the Firebase Test Lab configs (setup on device).
+
+The harness copies the needed files to internal storage and drops them from the page cache before
+iteration 0, so the cold key load reads from storage. The device needs no r1cs: witnesses come from
+the compiled-in witnesscalc. Prepare's `prove_ms` includes `witness_ms`; Show's witness cannot be
+timed apart. `low_memory_mode` is not implemented.
+
+`2k_prepare_instance.bin` and `2k_prepare_witness.bin` must come from a Prepare proof that has not
+been reblinded; the desktop `benchmark` flow leaves reblinded copies in `keys/`, which a second
+reblind rejects.
+
 ## Note
 
 ### Excluded x86_64 iOS simulator in `mopro_flutter_bindings/ios/mopro_flutter_bindings.podspec`

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -6,15 +7,12 @@ import 'package:mopro_flutter_bindings/src/rust/frb_generated.dart';
 import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.dart'
     show
         BenchmarkResults,
-        currentRssKb,
         deviceProfile,
         generateSharedBlinds,
-        peakRssKb,
         proveJwt,
         proveShow,
         reblindJwt,
         reblindShow,
-        resetPeakRss,
         runCompleteBenchmarkWith,
         setupJwtKeys,
         setupShowKeys,
@@ -22,54 +20,24 @@ import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.da
         verifyShow;
 import 'package:openac/assets.dart';
 
+import 'bench_common.dart';
+import 'contract_bench.dart';
+
 const _warmup = int.fromEnvironment('BENCH_WARMUP', defaultValue: 1);
 const _itersA = int.fromEnvironment('BENCH_ITERS_A', defaultValue: 5);
 const _itersB = int.fromEnvironment('BENCH_ITERS_B', defaultValue: 3);
 const _itersP = int.fromEnvironment('BENCH_ITERS_P', defaultValue: 3);
 const _cooldownS = int.fromEnvironment('BENCH_COOLDOWN_S', defaultValue: 20);
 
-// logcat truncates lines near 1 KiB; the Test Lab parser reads one JSON per line.
-const _maxLineBytes = 900;
+void _logError(String config, int iter, Object error) =>
+    logError('OPENAC_', {'config': config, 'iter': iter}, error);
 
-// Error text is cut by UTF-8 bytes, then shrunk until the whole line fits.
-const _maxErrorBytes = 300;
-
-void _print(String line) {
-  // ignore: avoid_print
-  print(line);
-}
-
-void _logError(String config, int iter, Object error) {
-  var bytes = utf8.encode(error.toString());
-  if (bytes.length > _maxErrorBytes) bytes = bytes.sublist(0, _maxErrorBytes);
-  while (true) {
-    final line = 'OPENAC_ERROR ${jsonEncode({
-          'config': config,
-          'iter': iter,
-          'error': utf8.decode(bytes, allowMalformed: true),
-        })}';
-    if (utf8.encode(line).length < _maxLineBytes || bytes.isEmpty) {
-      _print(line);
-      return;
-    }
-    bytes = bytes.sublist(0, bytes.length * 4 ~/ 5);
-  }
-}
-
-/// Prints one marker line. A line too long for logcat is replaced by an
-/// OPENAC_ERROR and reported as false; this never throws.
 bool _log(String marker, Map<String, Object?> obj,
-    {String config = '-', int iter = -1}) {
-  final line = '$marker ${jsonEncode(obj)}';
-  if (utf8.encode(line).length >= _maxLineBytes) {
-    _logError(config, iter, '$marker line exceeds $_maxLineBytes bytes');
-    return false;
-  }
-  _print(line);
-  return true;
-}
+        {String config = '-', int iter = -1}) =>
+    logMarker(marker, obj,
+        errorPrefix: 'OPENAC_', errorFields: {'config': config, 'iter': iter});
 
-int _i(BigInt v) => v.toInt();
+int _i(BigInt v) => toInt(v);
 
 Map<String, Object?> _metrics(BenchmarkResults r) => {
       'jwt_setup_ms': _i(r.jwtSetupMs),
@@ -105,21 +73,7 @@ Map<String, Object?> _sizes(String config, BenchmarkResults r) => {
       'show_witness_bytes': _i(r.showWitnessBytes),
     };
 
-class _Probe<T> {
-  final T out;
-  final int baseKb;
-  final int peakKb;
-  final bool perStep;
-  _Probe(this.out, this.baseKb, this.peakKb, this.perStep);
-}
-
-/// Runs [f] with the kernel peak-RSS mark reset, so the peak covers only [f].
-Future<_Probe<T>> _probe<T>(Future<T> Function() f) async {
-  final base = _i(await currentRssKb());
-  final perStep = await resetPeakRss();
-  final out = await f();
-  return _Probe(out, base, _i(await peakRssKb()), perStep);
-}
+Future<Probe<T>> _probe<T>(Future<T> Function() f) => probe(f);
 
 class _Config {
   final String name;
@@ -134,6 +88,16 @@ void main() {
 
   testWidgets('openac android benchmark', (tester) async {
     await RustLib.init();
+
+    // A bench_config.json on the device selects the contract harness (keys
+    // pushed from the host, no setup); the Firebase Test Lab configs below
+    // only run without one.
+    if (await File(await benchConfigPath()).exists()) {
+      final ok = await runContractBench();
+      expect(ok, greaterThan(0), reason: 'no iteration succeeded');
+      return;
+    }
+
     final docs = await prepareAssets();
 
     _log('OPENAC_DEVICE',

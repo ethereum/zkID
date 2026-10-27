@@ -33,6 +33,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ZkProofError
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    dynamic raw,
+  );
+
+  @protected
+  ZkProofError
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     dynamic raw,
   );
@@ -48,6 +54,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  LoadedProofResult dco_decode_loaded_proof_result(dynamic raw);
+
+  @protected
+  PresentResult dco_decode_present_result(dynamic raw);
 
   @protected
   ProofResult dco_decode_proof_result(dynamic raw);
@@ -75,6 +87,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ZkProofError
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ZkProofError
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     SseDeserializer deserializer,
   );
@@ -90,6 +108,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  LoadedProofResult sse_decode_loaded_proof_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PresentResult sse_decode_present_result(SseDeserializer deserializer);
 
   @protected
   ProofResult sse_decode_proof_result(SseDeserializer deserializer);
@@ -121,6 +147,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    ZkProofError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     ZkProofError self,
     SseSerializer serializer,
@@ -143,6 +176,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint8List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_loaded_proof_result(
+    LoadedProofResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_present_result(PresentResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_proof_result(ProofResult self, SseSerializer serializer);

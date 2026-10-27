@@ -7,9 +7,15 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Loaded`, `PrepareReblindData`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`, `from`
 
 Future<void> initApp() => RustLib.instance.api.openacMobileAppInitApp();
+
+/// Text of an error that crossed the Flutter bridge, where it arrives as an
+/// opaque handle whose `toString` says nothing.
+Future<String> zkErrorMessage({required ZkProofError e}) =>
+    RustLib.instance.api.openacMobileAppZkErrorMessage(e: e);
 
 /// Setup JWT circuit keys
 /// Generates proving and verifying keys for the JWT circuit
@@ -74,6 +80,56 @@ Future<bool> verifyPresentation({required String documentsPath}) => RustLib
     .api
     .openacMobileAppVerifyPresentation(documentsPath: documentsPath);
 
+/// Copies `src` to `dest` (creating parent directories), flushes it, and drops
+/// both files from the page cache so the next load reads from storage rather
+/// than RAM. Returns the bytes copied. Pushed files live on emulated external
+/// storage; apps ship keys on internal storage, so benchmarks stage them there.
+Future<BigInt> stageFile({required String src, required String dest}) =>
+    RustLib.instance.api.openacMobileAppStageFile(src: src, dest: dest);
+
+/// Load the Prepare (JWT) proving key from `path`; returns load time in ms.
+Future<BigInt> loadPrepareKey({required String path}) =>
+    RustLib.instance.api.openacMobileAppLoadPrepareKey(path: path);
+
+/// Load the Show proving key from `path`; returns load time in ms.
+Future<BigInt> loadShowKey({required String path}) =>
+    RustLib.instance.api.openacMobileAppLoadShowKey(path: path);
+
+/// Load the Prepare instance and witness and the shared blinds a presentation
+/// reblinds; returns load time in ms.
+Future<BigInt> loadPrepareReblindData({
+  required String instancePath,
+  required String witnessPath,
+  required String sharedBlindsPath,
+}) => RustLib.instance.api.openacMobileAppLoadPrepareReblindData(
+  instancePath: instancePath,
+  witnessPath: witnessPath,
+  sharedBlindsPath: sharedBlindsPath,
+);
+
+/// Prove Prepare with the loaded key. Witness generation is included in
+/// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
+Future<LoadedProofResult> provePrepareLoaded({required String documentsPath}) =>
+    RustLib.instance.api.openacMobileAppProvePrepareLoaded(
+      documentsPath: documentsPath,
+    );
+
+/// Prove Show with the loaded key. Witness generation is included in
+/// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
+Future<LoadedProofResult> proveShowLoaded({required String documentsPath}) =>
+    RustLib.instance.api.openacMobileAppProveShowLoaded(
+      documentsPath: documentsPath,
+    );
+
+/// One presentation with the loaded keys and Prepare data, mirroring the SDK's
+/// `present()`: Show witness and prove, then reblind both proofs with the shared
+/// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
+/// copy is cloned (outside the reblind timer) to keep it reusable.
+Future<PresentResult> presentLoaded({required String documentsPath}) => RustLib
+    .instance
+    .api
+    .openacMobileAppPresentLoaded(documentsPath: documentsPath);
+
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
 /// Returns comprehensive timing, peak memory and size metrics
@@ -106,6 +162,10 @@ Future<String> getCommWShared({
   documentsPath: documentsPath,
   circuitType: circuitType,
 );
+
+/// MemAvailable in KiB, or 0 where /proc/meminfo is unavailable.
+Future<BigInt> memAvailableKb() =>
+    RustLib.instance.api.openacMobileAppMemAvailableKb();
 
 /// Resets the kernel's VmHWM to the current RSS. Returns false when unsupported
 /// or denied.
@@ -282,6 +342,96 @@ class BenchmarkResults {
           showProofBytes == other.showProofBytes &&
           jwtWitnessBytes == other.jwtWitnessBytes &&
           showWitnessBytes == other.showWitnessBytes;
+}
+
+/// Timing of one loaded-key proof. `witness_ms` is the Prepare witness
+/// generation, which is part of `prove_ms`; Show's witness is generated inside
+/// the prover and cannot be timed apart, so it reports 0.
+class LoadedProofResult {
+  final BigInt witnessMs;
+  final BigInt proveMs;
+  final BigInt proofBytes;
+
+  const LoadedProofResult({
+    required this.witnessMs,
+    required this.proveMs,
+    required this.proofBytes,
+  });
+
+  @override
+  int get hashCode =>
+      witnessMs.hashCode ^ proveMs.hashCode ^ proofBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LoadedProofResult &&
+          runtimeType == other.runtimeType &&
+          witnessMs == other.witnessMs &&
+          proveMs == other.proveMs &&
+          proofBytes == other.proofBytes;
+}
+
+/// Timing and peak RSS of one presentation: Show prove, then reblind of the
+/// Prepare and Show proofs. Each peak is read after a reset at the start of its
+/// sub-step; `peak_rss_kb` is the maximum over the whole presentation.
+class PresentResult {
+  final BigInt showProveMs;
+  final BigInt prepareReblindMs;
+  final BigInt showReblindMs;
+  final BigInt totalMs;
+  final BigInt peakRssShowProveKb;
+  final BigInt peakRssPrepareReblindKb;
+  final BigInt peakRssShowReblindKb;
+  final BigInt peakRssKb;
+  final bool rssPerStep;
+  final BigInt prepareProofBytes;
+  final BigInt showProofBytes;
+
+  const PresentResult({
+    required this.showProveMs,
+    required this.prepareReblindMs,
+    required this.showReblindMs,
+    required this.totalMs,
+    required this.peakRssShowProveKb,
+    required this.peakRssPrepareReblindKb,
+    required this.peakRssShowReblindKb,
+    required this.peakRssKb,
+    required this.rssPerStep,
+    required this.prepareProofBytes,
+    required this.showProofBytes,
+  });
+
+  @override
+  int get hashCode =>
+      showProveMs.hashCode ^
+      prepareReblindMs.hashCode ^
+      showReblindMs.hashCode ^
+      totalMs.hashCode ^
+      peakRssShowProveKb.hashCode ^
+      peakRssPrepareReblindKb.hashCode ^
+      peakRssShowReblindKb.hashCode ^
+      peakRssKb.hashCode ^
+      rssPerStep.hashCode ^
+      prepareProofBytes.hashCode ^
+      showProofBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PresentResult &&
+          runtimeType == other.runtimeType &&
+          showProveMs == other.showProveMs &&
+          prepareReblindMs == other.prepareReblindMs &&
+          showReblindMs == other.showReblindMs &&
+          totalMs == other.totalMs &&
+          peakRssShowProveKb == other.peakRssShowProveKb &&
+          peakRssPrepareReblindKb == other.peakRssPrepareReblindKb &&
+          peakRssShowReblindKb == other.peakRssShowReblindKb &&
+          peakRssKb == other.peakRssKb &&
+          rssPerStep == other.rssPerStep &&
+          prepareProofBytes == other.prepareProofBytes &&
+          showProofBytes == other.showProofBytes;
 }
 
 /// Result of a proving operation with timing and proof metadata

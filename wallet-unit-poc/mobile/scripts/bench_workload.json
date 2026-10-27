@@ -1,0 +1,76 @@
+{
+  "workload": "openac",
+  "apks": [
+    "../flutter/build/app/outputs/flutter-apk/app-profile.apk",
+    "../flutter/build/app/outputs/apk/androidTest/profile/app-profile-androidTest.apk"
+  ],
+  "package": "com.openac.app",
+  "instrumentation": "com.openac.app.test/androidx.test.runner.AndroidJUnitRunner",
+  "marker_prefix": "OPENAC_",
+  "logcat_tags": [
+    "flutter"
+  ],
+  "config_path": "/sdcard/Android/data/com.openac.app/files/bench_config.json",
+  "push": [
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_prepare_proving.key",
+      "dest": "/sdcard/Android/data/com.openac.app/files/2k_prepare_proving.key",
+      "sha256": "853657d2e701215a65c5d97ab3cf5640e9aa8379ac6d106b7c82dc9b9d078e79"
+    },
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_show_proving.key",
+      "dest": "/sdcard/Android/data/com.openac.app/files/2k_show_proving.key",
+      "sha256": "809f24ca6ee003b684e2282b77f5a47279528edee7654a3801770a2ffca67831"
+    },
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_shared_blinds.bin",
+      "dest": "/sdcard/Android/data/com.openac.app/files/2k_shared_blinds.bin",
+      "sha256": "c6bc3a4104964b34523d6f301a23159a67170008f3d30ad8c334c072b74d73f9"
+    },
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_prepare_instance.bin",
+      "dest": "/sdcard/Android/data/com.openac.app/files/2k_prepare_instance.bin",
+      "sha256": "468bfdaebe0ec8c9a0ad72e5f4ffcf613e29b62f0957bd0b6fd22d9205c6edea"
+    },
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/2k_prepare_witness.bin",
+      "dest": "/sdcard/Android/data/com.openac.app/files/2k_prepare_witness.bin",
+      "sha256": "a67739cd5c20ba4485cac3ee3598df553badfc1738906abfc552875eb279c4c3"
+    }
+  ],
+  "runs": [
+    {
+      "name": "openac-show",
+      "config": {
+        "steps": [
+          "show"
+        ],
+        "warm_iters": 5,
+        "cooldown_ms": 10000
+      },
+      "timeout_s": 600
+    },
+    {
+      "name": "openac-prepare",
+      "config": {
+        "steps": [
+          "prepare"
+        ],
+        "warm_iters": 5,
+        "cooldown_ms": 10000
+      },
+      "timeout_s": 1800
+    },
+    {
+      "name": "openac-present",
+      "config": {
+        "steps": [
+          "present"
+        ],
+        "warm_iters": 5,
+        "cooldown_ms": 10000
+      },
+      "timeout_s": 1800
+    }
+  ]
+}

@@ -49,27 +49,38 @@ Future<void> _copyAssetsToDocuments() async {
       }
     }
 
-    // Always overwrite input JSON files so stale cached versions from a
-    // previous app install never cause witness synthesis mismatches.
-    // jwt_input.json is used by prove_jwt; show_input.json by prove_show;
-    // run_complete_benchmark derives both paths from documentsPath automatically.
-    final inputAssets = {
-      'assets/circom/jwt_input.json': [
-        '${circomDir.path}/jwt_input.json',
-      ],
-      'assets/circom/show_input.json': [
-        '${circomDir.path}/show_input.json',
-      ],
-    };
-    for (final entry in inputAssets.entries) {
-      final data = await rootBundle.load(entry.key);
-      final bytes = data.buffer.asUint8List();
-      for (final dest in entry.value) {
-        await File(dest).writeAsBytes(bytes);
-        debugPrint('Wrote ${entry.key} → $dest');
-      }
-    }
+    await _writeInputAssets(circomDir);
   } catch (e) {
     debugPrint('Error copying assets: $e');
   }
+}
+
+/// Always overwrite input JSON files so stale cached versions from a previous
+/// app install never cause witness synthesis mismatches.
+Future<void> _writeInputAssets(Directory circomDir) async {
+  const inputAssets = ['jwt_input.json', 'show_input.json'];
+  for (final name in inputAssets) {
+    final data = await rootBundle.load('assets/circom/$name');
+    final dest = '${circomDir.path}/$name';
+    await File(dest).writeAsBytes(data.buffer.asUint8List());
+    debugPrint('Wrote assets/circom/$name → $dest');
+  }
+}
+
+/// Writes only the input JSONs, for runs that prove with pushed keys. Witness
+/// generation is compiled into the library and needs no r1cs; the file is not
+/// decompressed here, and a copy left by an earlier [prepareAssets] in the same
+/// install is deleted, because proving would otherwise load it (~350 MB each).
+Future<String> prepareInputsOnly() async {
+  final circomDir = Directory(await getDocumentsPath());
+  await circomDir.create(recursive: true);
+  for (final r1cs in [
+    '${circomDir.path}/build/jwt/jwt_js/jwt.r1cs',
+    '${circomDir.path}/build/show/show_js/show.r1cs',
+  ]) {
+    final f = File(r1cs);
+    if (await f.exists()) await f.delete();
+  }
+  await _writeInputAssets(circomDir);
+  return circomDir.path;
 }
