@@ -152,6 +152,7 @@ proving keys pushed from the host instead of generated on the device.
 4. Write one run's `config` to `bench_config.json` in the same directory, then
    `adb shell am instrument -w -r com.openac.app.test/androidx.test.runner.AndroidJUnitRunner`.
 5. Parse logcat with `scripts/parse_ftl_bench.py` (`OPENAC_ITER` lines).
+6. `adb pull /sdcard/Android/data/com.openac.app/files/out`, then `scripts/verify_device_proofs.sh <dir>` verifies the proofs of the last iteration against the pinned verifying keys (host only; the Prepare vk is 432 MB). Files: `prepare`, `show`, `present_prepare`, `present_show`, each as `.proof` and `.instance`.
 
 Without a `bench_config.json` the same APKs run the Firebase Test Lab configs (setup on device).
 

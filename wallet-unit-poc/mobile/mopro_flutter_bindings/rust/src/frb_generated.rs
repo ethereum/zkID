@@ -471,10 +471,12 @@ fn wire__openac_mobile_app__present_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
+            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok = openac_mobile_app::present_loaded(api_documents_path)?;
+                    let output_ok =
+                        openac_mobile_app::present_loaded(api_documents_path, api_out_dir)?;
                     Ok(output_ok)
                 })())
             }
@@ -537,10 +539,12 @@ fn wire__openac_mobile_app__prove_prepare_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
+            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok = openac_mobile_app::prove_prepare_loaded(api_documents_path)?;
+                    let output_ok =
+                        openac_mobile_app::prove_prepare_loaded(api_documents_path, api_out_dir)?;
                     Ok(output_ok)
                 })())
             }
@@ -603,10 +607,12 @@ fn wire__openac_mobile_app__prove_show_loaded_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_documents_path = <String>::sse_decode(&mut deserializer);
+            let api_out_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ZkProofError>((move || {
-                    let output_ok = openac_mobile_app::prove_show_loaded(api_documents_path)?;
+                    let output_ok =
+                        openac_mobile_app::prove_show_loaded(api_documents_path, api_out_dir)?;
                     Ok(output_ok)
                 })())
             }

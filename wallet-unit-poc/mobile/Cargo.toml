@@ -21,6 +21,11 @@ name = "android"
 path = "src/bin/android.rs"
 required-features = ["uniffi"]
 
+# Host-side check of proofs pulled from a device; see scripts/verify_device_proofs.sh.
+[[bin]]
+name = "verify_proofs"
+path = "src/bin/verify_proofs.rs"
+
 [[bin]]
 name = "web"
 path = "src/bin/web.rs"

@@ -653,14 +653,55 @@ fn prove_show_in_memory(
     prove_circuit_in_memory(circuit, pk).map_err(proving_failed)
 }
 
+/// File names (relative to the files dir's `out/`) a step writes: proof, instance.
+fn out_file_names(out_dir: &str, stem: &str) -> (String, String) {
+    (format!("{out_dir}/{stem}.proof"), format!("{out_dir}/{stem}.instance"))
+}
+
+/// Creates `out_dir` and returns the proof and instance paths for `stem`; None
+/// when `out_dir` is empty (no output requested).
+fn out_files_for(out_dir: &str, stem: &str) -> Result<Option<(PathBuf, PathBuf)>, ZkProofError> {
+    if out_dir.is_empty() {
+        return Ok(None);
+    }
+    std::fs::create_dir_all(out_dir)?;
+    let (proof, instance) = out_file_names(out_dir, stem);
+    Ok(Some((proof.into(), instance.into())))
+}
+
+/// Writes the proof and instance for `stem` under `out_dir` so the host can
+/// verify them; nothing when `out_dir` is empty. The witness is not written.
+fn write_outputs(
+    out_dir: &str,
+    stem: &str,
+    proof: &R1CSSNARK<E>,
+    instance: &SplitR1CSInstance<E>,
+) -> Result<(), ZkProofError> {
+    let Some((proof_path, instance_path)) = out_files_for(out_dir, stem)? else {
+        return Ok(());
+    };
+    ecdsa_spartan2::setup::save_proof(proof_path, proof).map_err(|e| ZkProofError::IoError {
+        message: format!("Failed to write proof: {}", e),
+    })?;
+    ecdsa_spartan2::setup::save_instance(instance_path, instance).map_err(|e| {
+        ZkProofError::IoError {
+            message: format!("Failed to write instance: {}", e),
+        }
+    })
+}
+
 /// Prove Prepare with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn prove_prepare_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
+pub fn prove_prepare_loaded(
+    documents_path: String,
+    out_dir: String,
+) -> Result<LoadedProofResult, ZkProofError> {
     let pk = require(LOADED.lock().unwrap().prepare_pk.as_ref(), "prepare key")?;
     let start = std::time::Instant::now();
-    let ((proof, _, _), witness_ms) = prove_prepare_in_memory(&documents_path, &pk)?;
+    let ((proof, instance, _), witness_ms) = prove_prepare_in_memory(&documents_path, &pk)?;
     let prove_ms = start.elapsed().as_millis() as u64;
+    write_outputs(&out_dir, "prepare", &proof, &instance)?;
     Ok(LoadedProofResult {
         witness_ms,
         prove_ms,
@@ -671,11 +712,15 @@ pub fn prove_prepare_loaded(documents_path: String) -> Result<LoadedProofResult,
 /// Prove Show with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn prove_show_loaded(documents_path: String) -> Result<LoadedProofResult, ZkProofError> {
+pub fn prove_show_loaded(
+    documents_path: String,
+    out_dir: String,
+) -> Result<LoadedProofResult, ZkProofError> {
     let pk = require(LOADED.lock().unwrap().show_pk.as_ref(), "show key")?;
     let start = std::time::Instant::now();
-    let (proof, _, _) = prove_show_in_memory(&documents_path, &pk)?;
+    let (proof, instance, _) = prove_show_in_memory(&documents_path, &pk)?;
     let prove_ms = start.elapsed().as_millis() as u64;
+    write_outputs(&out_dir, "show", &proof, &instance)?;
     Ok(LoadedProofResult {
         witness_ms: 0,
         prove_ms,
@@ -688,7 +733,10 @@ pub fn prove_show_loaded(documents_path: String) -> Result<LoadedProofResult, Zk
 /// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
 /// copy is cloned (outside the reblind timer) to keep it reusable.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn present_loaded(documents_path: String) -> Result<PresentResult, ZkProofError> {
+pub fn present_loaded(
+    documents_path: String,
+    out_dir: String,
+) -> Result<PresentResult, ZkProofError> {
     let (prepare_pk, show_pk, data) = {
         let loaded = LOADED.lock().unwrap();
         (
@@ -710,7 +758,7 @@ pub fn present_loaded(documents_path: String) -> Result<PresentResult, ZkProofEr
     }
     let (instance, witness) = (data.instance.clone(), data.witness.clone());
     let start = std::time::Instant::now();
-    let (prepare_proof, _, _) =
+    let (prepare_proof, prepare_instance, _) =
         reblind_in_memory(&prepare_pk, instance, witness, &data.blinds).map_err(proving_failed)?;
     let prepare_reblind_ms = start.elapsed().as_millis() as u64;
     let peak_prepare_reblind = read_peak_rss_kb();
@@ -718,13 +766,16 @@ pub fn present_loaded(documents_path: String) -> Result<PresentResult, ZkProofEr
     let (reblinded, show_reblind_ms, peak_show_reblind) = measure(&mut rss_per_step, || {
         reblind_in_memory(&show_pk, show_instance, show_witness, &data.blinds)
     });
-    let (show_proof, _, _) = reblinded.map_err(proving_failed)?;
+    let (show_proof, show_instance, _) = reblinded.map_err(proving_failed)?;
+    let total_ms = total.elapsed().as_millis() as u64;
+    write_outputs(&out_dir, "present_prepare", &prepare_proof, &prepare_instance)?;
+    write_outputs(&out_dir, "present_show", &show_proof, &show_instance)?;
 
     Ok(PresentResult {
         show_prove_ms,
         prepare_reblind_ms,
         show_reblind_ms,
-        total_ms: total.elapsed().as_millis() as u64,
+        total_ms,
         peak_rss_show_prove_kb: peak_show_prove,
         peak_rss_prepare_reblind_kb: peak_prepare_reblind,
         peak_rss_show_reblind_kb: peak_show_reblind,
@@ -1544,15 +1595,15 @@ mod tests {
         let _guard = LOADED_LOCK.lock().unwrap();
         clear_loaded_for_test();
         assert!(matches!(
-            prove_prepare_loaded("/docs".to_string()),
+            prove_prepare_loaded("/docs".to_string(), String::new()),
             Err(ZkProofError::SetupRequired { .. })
         ));
         assert!(matches!(
-            prove_show_loaded("/docs".to_string()),
+            prove_show_loaded("/docs".to_string(), String::new()),
             Err(ZkProofError::SetupRequired { .. })
         ));
         assert!(matches!(
-            present_loaded("/docs".to_string()),
+            present_loaded("/docs".to_string(), String::new()),
             Err(ZkProofError::SetupRequired { .. })
         ));
     }
@@ -1589,6 +1640,20 @@ mod tests {
     fn test_zk_error_message_is_display_text() {
         let e = ZkProofError::FileNotFound { message: "no key".into() };
         assert_eq!(zk_error_message(&e), "File not found: no key");
+    }
+
+    #[test]
+    fn test_out_names_and_skip() {
+        assert_eq!(out_file_names("out", "show"), ("out/show.proof".to_string(), "out/show.instance".to_string()));
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().join("out");
+        // An empty out_dir writes nothing and does not create a directory.
+        assert_eq!(out_files_for("", "show").unwrap(), None);
+        assert!(!d.exists());
+        let (p, i) = out_files_for(&d.to_string_lossy(), "show").unwrap().unwrap();
+        assert_eq!(p, d.join("show.proof"));
+        assert_eq!(i, d.join("show.instance"));
+        assert!(d.is_dir());
     }
 
     #[test]
@@ -1866,14 +1931,14 @@ mod loaded_key_tests {
             reblind_in_memory(&pk_show, show_instance, show_witness, &data.blinds).unwrap();
         verify_circuit_with_loaded_data(&rs, &vk_show);
 
-        let r = prove_prepare_loaded(docs_path.clone()).unwrap();
+        let r = prove_prepare_loaded(docs_path.clone(), String::new()).unwrap();
         println!("prepare witness_ms={} prove_ms={} proof_bytes={}", r.witness_ms, r.prove_ms, r.proof_bytes);
-        let r = prove_show_loaded(docs_path.clone()).unwrap();
+        let r = prove_show_loaded(docs_path.clone(), String::new()).unwrap();
         println!("show prove_ms={} proof_bytes={}", r.prove_ms, r.proof_bytes);
 
         // Two presentations: the second proves the loaded copy survives.
         for _ in 0..2 {
-            let r = present_loaded(docs_path.clone()).unwrap();
+            let r = present_loaded(docs_path.clone(), String::new()).unwrap();
             println!(
                 "present show_prove={} prepare_reblind={} show_reblind={} total={} peak={}",
                 r.show_prove_ms, r.prepare_reblind_ms, r.show_reblind_ms, r.total_ms, r.peak_rss_kb

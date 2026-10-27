@@ -109,26 +109,35 @@ Future<BigInt> loadPrepareReblindData({
 
 /// Prove Prepare with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `jwt_input.json` under `documents_path`; no r1cs is read.
-Future<LoadedProofResult> provePrepareLoaded({required String documentsPath}) =>
-    RustLib.instance.api.openacMobileAppProvePrepareLoaded(
-      documentsPath: documentsPath,
-    );
+Future<LoadedProofResult> provePrepareLoaded({
+  required String documentsPath,
+  required String outDir,
+}) => RustLib.instance.api.openacMobileAppProvePrepareLoaded(
+  documentsPath: documentsPath,
+  outDir: outDir,
+);
 
 /// Prove Show with the loaded key. Witness generation is included in
 /// `prove_ms`. Reads `show_input.json` under `documents_path`; no r1cs is read.
-Future<LoadedProofResult> proveShowLoaded({required String documentsPath}) =>
-    RustLib.instance.api.openacMobileAppProveShowLoaded(
-      documentsPath: documentsPath,
-    );
+Future<LoadedProofResult> proveShowLoaded({
+  required String documentsPath,
+  required String outDir,
+}) => RustLib.instance.api.openacMobileAppProveShowLoaded(
+  documentsPath: documentsPath,
+  outDir: outDir,
+);
 
 /// One presentation with the loaded keys and Prepare data, mirroring the SDK's
 /// `present()`: Show witness and prove, then reblind both proofs with the shared
 /// blinds. Reblinding consumes its instance and witness, so the loaded Prepare
 /// copy is cloned (outside the reblind timer) to keep it reusable.
-Future<PresentResult> presentLoaded({required String documentsPath}) => RustLib
-    .instance
-    .api
-    .openacMobileAppPresentLoaded(documentsPath: documentsPath);
+Future<PresentResult> presentLoaded({
+  required String documentsPath,
+  required String outDir,
+}) => RustLib.instance.api.openacMobileAppPresentLoaded(
+  documentsPath: documentsPath,
+  outDir: outDir,
+);
 
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits

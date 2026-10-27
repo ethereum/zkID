@@ -50,6 +50,17 @@ Future<String> benchConfigPath() async {
   return '${dir!.path}/bench_config.json';
 }
 
+/// Proofs and instances of the last iteration land here, app-owned, for the
+/// host to pull and verify (scripts/verify_device_proofs.sh).
+Future<String> _outDir() async =>
+    '${(await getExternalStorageDirectory())!.path}/out';
+
+const _outStems = {
+  'prepare': ['prepare'],
+  'show': ['show'],
+  'present': ['present_prepare', 'present_show'],
+};
+
 Future<String> _pushedDir() async =>
     (await getExternalStorageDirectory())!.path;
 
@@ -117,6 +128,15 @@ Future<int> runContractBench() async {
       continue;
     }
 
+    // A failed run must not leave a previous run's proofs to be pulled and verified.
+    final out = await _outDir();
+    for (final stem in _outStems[step]!) {
+      for (final ext in ['proof', 'instance']) {
+        final f = File('$out/$stem.$ext');
+        if (await f.exists()) await f.delete();
+      }
+    }
+
     for (var iter = 0; iter <= warmIters; iter++) {
       if (iter > 0 || !processCold) {
         await Future<void>.delayed(Duration(milliseconds: cooldownMs));
@@ -124,9 +144,9 @@ Future<int> runContractBench() async {
       try {
         final cold = iter == 0;
         final result = switch (step) {
-          'prepare' => await _prepare(docs, staging.path, cold),
-          'show' => await _show(docs, staging.path, cold),
-          _ => await _present(docs, staging.path, cold),
+          'prepare' => await _prepare(docs, staging.path, out, cold),
+          'show' => await _show(docs, staging.path, out, cold),
+          _ => await _present(docs, staging.path, out, cold),
         };
         if (cold) {
           _emit('SIZES', step, iter, {
@@ -136,6 +156,10 @@ Future<int> runContractBench() async {
               '${f.replaceAll(RegExp(r'^2k_|\.(key|bin)$'), '')}_bytes':
                   await File('${staging.path}/$f').length(),
             'stage_ms': stageMs,
+            'out_files': [
+              for (final stem in _outStems[step]!)
+                for (final ext in ['proof', 'instance']) 'out/$stem.$ext'
+            ],
           });
         }
         for (final row in result.rows) {
@@ -166,14 +190,15 @@ Future<int> runContractBench() async {
   return ok;
 }
 
-Future<_Iteration> _prepare(String docs, String staging, bool cold) async {
+Future<_Iteration> _prepare(
+    String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
   final base = toInt(await currentRssKb());
   final perStep = await resetPeakRss();
   final sw = Stopwatch()..start();
   var loadMs = 0;
   if (cold) loadMs = toInt(await loadPrepareKey(path: '$staging/$_prepareKey'));
-  final r = await provePrepareLoaded(documentsPath: docs);
+  final r = await provePrepareLoaded(documentsPath: docs, outDir: out);
   final totalMs = sw.elapsedMilliseconds;
   return _Iteration([
     {
@@ -192,14 +217,15 @@ Future<_Iteration> _prepare(String docs, String staging, bool cold) async {
   });
 }
 
-Future<_Iteration> _show(String docs, String staging, bool cold) async {
+Future<_Iteration> _show(
+    String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
   final base = toInt(await currentRssKb());
   final perStep = await resetPeakRss();
   final sw = Stopwatch()..start();
   var loadMs = 0;
   if (cold) loadMs = toInt(await loadShowKey(path: '$staging/$_showKey'));
-  final r = await proveShowLoaded(documentsPath: docs);
+  final r = await proveShowLoaded(documentsPath: docs, outDir: out);
   final totalMs = sw.elapsedMilliseconds;
   return _Iteration([
     {
@@ -220,7 +246,8 @@ Future<_Iteration> _show(String docs, String staging, bool cold) async {
 /// One presentation as the SDK's present() runs it: Show prove, then reblind
 /// of the Prepare and Show proofs. Cold loads both proving keys, the Prepare
 /// instance and witness, and the shared blinds inside the timed region.
-Future<_Iteration> _present(String docs, String staging, bool cold) async {
+Future<_Iteration> _present(
+    String docs, String staging, String out, bool cold) async {
   final avail = toInt(await memAvailableKb());
   final base = toInt(await currentRssKb());
   final perStep = await resetPeakRss();
@@ -236,7 +263,7 @@ Future<_Iteration> _present(String docs, String staging, bool cold) async {
         sharedBlindsPath: '$staging/$_sharedBlinds'));
     loadPeakKb = toInt(await peakRssKb());
   }
-  final r = await presentLoaded(documentsPath: docs);
+  final r = await presentLoaded(documentsPath: docs, outDir: out);
   final totalMs = sw.elapsedMilliseconds;
 
   Map<String, Object?> sub(String step, BigInt ms, BigInt peakKb) => {
