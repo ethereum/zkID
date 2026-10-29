@@ -1,5 +1,6 @@
 pub mod mdoc_circuit;
 pub mod prepare_circuit;
+pub mod sha256_circuit;
 pub mod show_circuit;
 
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, LinearCombination, SynthesisError};

@@ -7,6 +7,9 @@
 //!   cargo run --release -- show verify --size 1k
 //!   cargo run --release -- benchmark --size 2k
 //!   cargo run --release -- benchmark-all
+//!   cargo run --release -- setup-sha256
+//!   cargo run --release -- prove-sha256 [--out DIR]
+//!   cargo run --release -- verify-sha256 [--proof PATH]
 //!
 //! Typical post-keygen flow:
 //! 0. `prepare setup --size Xk` and `show setup --size Xk` — generate keys (one-time, slow).
@@ -24,13 +27,17 @@ use ecdsa_spartan2::{
         MDOC_INSTANCE, MDOC_PROOF, MDOC_PROVING_KEY, MDOC_VERIFYING_KEY, MDOC_WITNESS,
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
         PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
+        SHA256_PROOF, SHA256_PROVING_KEY, SHA256_VERIFYING_KEY,
         SHOW_VERIFYING_KEY, SHOW_WITNESS,
     },
-    prove_circuit, prove_circuit_with_pk, reblind, reblind_with_loaded_data, run_circuit,
+    prove_circuit, prove_circuit_in_memory, prove_circuit_with_pk, reblind, reblind_with_loaded_data,
+    run_circuit,
     save_keys, setup_circuit_keys, setup_circuit_keys_no_save, verify_circuit,
-    verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
+    verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, Sha256Circuit, ShowCircuit,
     E,
 };
+use ecdsa_spartan2::circuits::sha256_circuit::{sha256_digest_bits, sha256_fixed_message};
+use ecdsa_spartan2::setup::save_proof;
 use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
@@ -777,6 +784,24 @@ fn main() {
     let args: Vec<String> = args().collect();
     let command_args: &[String] = if args.len() > 1 { &args[1..] } else { &[] };
 
+    if let Some(name @ ("setup-sha256" | "prove-sha256" | "verify-sha256")) =
+        command_args.first().map(String::as_str)
+    {
+        let rest = &command_args[1..];
+        let result = match name {
+            "setup-sha256" if rest.is_empty() => Ok(setup_sha256()),
+            "setup-sha256" => Err(format!("{name} takes no arguments")),
+            "prove-sha256" => sha256_path_flag(rest, "--out").map(prove_sha256),
+            _ => sha256_path_flag(rest, "--proof").map(verify_sha256),
+        };
+        if let Err(err) = result {
+            eprintln!("Error: {err}");
+            print_usage();
+            process::exit(1);
+        }
+        return;
+    }
+
     let command = match parse_command(command_args) {
         Ok(cmd) => cmd,
         Err(err) => {
@@ -791,6 +816,53 @@ fn main() {
         CircuitKind::Show => execute_show(command.action, command.options),
         CircuitKind::Mdoc => execute_mdoc(command.action, command.options),
     }
+}
+
+/// SHA-256 over the fixed 2 KB message, for the primitives benchmark. Files live
+/// in this crate's `keys/` whatever the cwd (the host verifier reads them there),
+/// without a size prefix because the circuit has one size.
+fn sha256_keys_dir() -> PathBuf {
+    PathConfig::new(env!("CARGO_MANIFEST_DIR"), false).keys_dir()
+}
+
+fn setup_sha256() {
+    let keys_dir = sha256_keys_dir();
+    setup_circuit_keys(
+        Sha256Circuit::fixed(),
+        keys_dir.join(SHA256_PROVING_KEY),
+        keys_dir.join(SHA256_VERIFYING_KEY),
+    );
+}
+
+/// `[flag PATH]` and nothing else.
+fn sha256_path_flag(args: &[String], flag: &str) -> Result<Option<PathBuf>, String> {
+    match args {
+        [] => Ok(None),
+        [f, path] if f == flag => Ok(Some(PathBuf::from(path))),
+        _ => Err(format!("expected no arguments or `{flag} PATH`, got: {}", args.join(" "))),
+    }
+}
+
+/// What the timed process does: load the proving key, prove in memory, write the
+/// proof (`sha256_2048_proof.bin` in `out_dir`, default the keys dir). No
+/// verifying key, no witness or instance file; `verify-sha256` checks the proof.
+fn prove_sha256(out_dir: Option<PathBuf>) {
+    let keys_dir = sha256_keys_dir();
+    let pk = load_proving_key(keys_dir.join(SHA256_PROVING_KEY)).expect("load proving key failed");
+    let (proof, _, _) = prove_circuit_in_memory(Sha256Circuit::fixed(), &pk).expect("prove failed");
+    save_proof(out_dir.unwrap_or(keys_dir).join(SHA256_PROOF), &proof).expect("save proof failed");
+}
+
+/// Verifies the proof against the pinned verifying key and checks the public
+/// values are the digest of the fixed message. Panics on failure.
+fn verify_sha256(proof_path: Option<PathBuf>) {
+    let keys_dir = sha256_keys_dir();
+    let proof = load_proof(proof_path.unwrap_or_else(|| keys_dir.join(SHA256_PROOF)))
+        .expect("load proof failed");
+    let vk = load_verifying_key(keys_dir.join(SHA256_VERIFYING_KEY)).expect("load verifying key failed");
+    let public_values = verify_circuit_with_loaded_data(&proof, &vk);
+    assert_eq!(public_values, sha256_digest_bits(&sha256_fixed_message()));
+    println!("PASS sha256 proof");
 }
 
 fn execute_prepare(action: CircuitAction, options: CommandOptions) {
@@ -1212,12 +1284,18 @@ fn print_usage() {
   ecdsa-spartan2 <prepare|show> [run|setup|prove|verify|reblind|benchmark] [options]
   ecdsa-spartan2 benchmark      [options]
   ecdsa-spartan2 benchmark-all
+  ecdsa-spartan2 setup-sha256
+  ecdsa-spartan2 prove-sha256 [--out DIR]
+  ecdsa-spartan2 verify-sha256 [--proof PATH]
 
 Commands:
   benchmark         Full pipeline (setup+prove+reblind+verify) for one size
   benchmark-all     Prove+reblind+verify across ALL compiled sizes, print comparison table
   prepare <action>  Run action on Prepare circuit
   show    <action>  Run action on Show circuit
+  setup-sha256      Generate keys/sha256_2048_proving.key and _verifying.key (SHA-256 of a fixed 2 KB message)
+  prove-sha256      Prove it in memory and write sha256_2048_proof.bin to DIR (default keys/)
+  verify-sha256     Verify a proof (default keys/sha256_2048_proof.bin) and its digest
 
 Actions:
   run               Run circuit (setup, prove, verify)
@@ -1248,6 +1326,11 @@ Typical workflow:
 
   # 5. Full single-size benchmark (includes setup timing)
   cargo run --release -- benchmark --size 2k
+
+  # 6. SHA-256 primitive (no options; files go to this crate's keys/)
+  cargo run --release -- setup-sha256
+  cargo run --release -- prove-sha256 [--out DIR]
+  cargo run --release -- verify-sha256 [--proof PATH]
 
 Legacy commands: prove_prepare, prove_show, setup_prepare, setup_show,
 verify_prepare, verify_show, reblind_prepare, reblind_show, generate_shared_blinds"

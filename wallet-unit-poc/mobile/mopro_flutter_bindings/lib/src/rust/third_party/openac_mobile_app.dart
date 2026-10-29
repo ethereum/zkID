@@ -96,6 +96,10 @@ Future<BigInt> loadPrepareKey({required String path}) =>
 Future<BigInt> loadShowKey({required String path}) =>
     RustLib.instance.api.openacMobileAppLoadShowKey(path: path);
 
+/// Load the SHA-256 (2 KB message) proving key from `path`; returns load time in ms.
+Future<BigInt> loadSha256Key({required String path}) =>
+    RustLib.instance.api.openacMobileAppLoadSha256Key(path: path);
+
 /// Load the Prepare instance and witness and the shared blinds a presentation
 /// reblinds; returns load time in ms.
 Future<BigInt> loadPrepareReblindData({
@@ -127,6 +131,11 @@ Future<LoadedProofResult> proveShowLoaded({required String documentsPath}) =>
     RustLib.instance.api.openacMobileAppProveShowLoaded(
       documentsPath: documentsPath,
     );
+
+/// Prove SHA-256 over the fixed 2 KB message with the loaded key. The circuit
+/// has no input file and no separate witness step, so `witness_ms` is 0.
+Future<LoadedProofResult> proveSha256Loaded() =>
+    RustLib.instance.api.openacMobileAppProveSha256Loaded();
 
 /// One presentation with the loaded keys and Prepare data, mirroring the SDK's
 /// `present()`: Show witness and prove, then reblind both proofs with the shared

@@ -8,6 +8,11 @@ set -e
 #   adb pull /sdcard/zkbench/com.openac.app/out ./out
 #   verify_device_proofs.sh ./out
 # vk_dir defaults to ecdsa-spartan2/keys (2k_prepare_verifying.key, 2k_show_verifying.key).
+# The primitives workload (bench_workload_primitives.json) also needs
+# sha256_2048_verifying.key there; make it with
+#   (cd ecdsa-spartan2 && cargo run --release -- setup-sha256)
+# which writes it to ecdsa-spartan2/keys whatever the cwd. A new setup makes a new
+# proving key too, so re-pin and re-push that one.
 # The last output lines are PASS or FAIL per check; exits non-zero on any failure.
 # Cargo's own output goes to a log, which is printed only if the build or run fails
 # without producing a verdict.

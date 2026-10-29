@@ -4,14 +4,21 @@
 //! and prints PASS or FAIL per check. `prepare.proof` and `show.proof` are checked
 //! on their own; `present_prepare.proof` and `present_show.proof` are checked as a
 //! pair, which also requires them to commit to the same shared witness (as
-//! `verify_presentation` does). Exits non-zero on any failure or when no proof is
+//! `verify_presentation` does). `sha256.proof` must also expose the digest of
+//! the benchmark's fixed 2 KB message. Exits non-zero on any failure or when no proof is
 //! found. Prepare vks are ~430 MB, so this runs on the host, never the phone.
-use ecdsa_spartan2::{load_proof, load_verifying_key, prover::verify_linked, E};
+use ecdsa_spartan2::{
+    circuits::sha256_circuit::{sha256_digest_bits, sha256_fixed_message},
+    load_proof, load_verifying_key,
+    prover::verify_linked,
+    E,
+};
 use spartan2::{traits::snark::R1CSSNARKTrait, zk_spartan::R1CSSNARK};
 use std::path::{Path, PathBuf};
 
 const PREPARE_VK: &str = "2k_prepare_verifying.key";
 const SHOW_VK: &str = "2k_show_verifying.key";
+const SHA256_VK: &str = "sha256_2048_verifying.key";
 
 #[derive(Debug, PartialEq)]
 enum Check {
@@ -31,6 +38,9 @@ fn plan(stems: &[String]) -> Vec<Check> {
     if has("show") {
         checks.push(Check::Single { stem: "show", vk: SHOW_VK });
     }
+    if has("sha256") {
+        checks.push(Check::Single { stem: "sha256", vk: SHA256_VK });
+    }
     match (has("present_prepare"), has("present_show")) {
         (true, true) => checks.push(Check::Linked),
         (true, false) => checks.push(Check::Failed("present_prepare.proof has no present_show.proof".into())),
@@ -38,7 +48,7 @@ fn plan(stems: &[String]) -> Vec<Check> {
         (false, false) => {}
     }
     for s in stems {
-        if !["prepare", "show", "present_prepare", "present_show"].contains(&s.as_str()) {
+        if !["prepare", "show", "sha256", "present_prepare", "present_show"].contains(&s.as_str()) {
             checks.push(Check::Failed(format!("{s}.proof: unknown proof name")));
         }
     }
@@ -52,11 +62,17 @@ struct Keys {
     dir: PathBuf,
     prepare: Option<Vk>,
     show: Option<Vk>,
+    sha256: Option<Vk>,
 }
 
 impl Keys {
     fn get(&mut self, name: &str) -> Result<&Vk, String> {
-        let slot = if name == PREPARE_VK { &mut self.prepare } else { &mut self.show };
+        let slot = match name {
+            PREPARE_VK => &mut self.prepare,
+            SHOW_VK => &mut self.show,
+            SHA256_VK => &mut self.sha256,
+            _ => return Err(format!("unknown verifying key {name}")),
+        };
         if slot.is_none() {
             *slot = Some(load_verifying_key(self.dir.join(name)).map_err(|e| format!("load vk {name}: {e}"))?);
         }
@@ -73,7 +89,11 @@ fn run_check(check: &Check, dir: &Path, keys: &mut Keys) -> (String, Result<(), 
         Check::Single { stem, vk } => {
             let result = load(dir, stem).and_then(|proof| {
                 let vk = keys.get(vk)?;
-                proof.verify(vk).map(|_| ()).map_err(|e| format!("verify: {e:?}"))
+                let public_values = proof.verify(vk).map_err(|e| format!("verify: {e:?}"))?;
+                if *stem == "sha256" && public_values != sha256_digest_bits(&sha256_fixed_message()) {
+                    return Err("public values are not the SHA-256 of the fixed message".into());
+                }
+                Ok(())
             });
             (format!("{stem}.proof"), result)
         }
@@ -113,7 +133,7 @@ fn run() -> bool {
         eprintln!("no .proof files in {}", dir.display());
         return false;
     }
-    let mut keys = Keys { dir: vks, prepare: None, show: None };
+    let mut keys = Keys { dir: vks, prepare: None, show: None, sha256: None };
     let mut all_ok = true;
     for check in plan(&stems) {
         let (label, result) = run_check(&check, &dir, &mut keys);
@@ -160,6 +180,20 @@ mod tests {
                 Check::Single { stem: "show", vk: SHOW_VK }
             ]
         );
+    }
+
+    #[test]
+    fn sha256_uses_its_own_vk() {
+        assert_eq!(
+            plan(&stems(&["sha256"])),
+            vec![Check::Single { stem: "sha256", vk: SHA256_VK }]
+        );
+    }
+
+    #[test]
+    fn unknown_vk_name_is_an_error() {
+        let mut keys = Keys { dir: PathBuf::from("/nonexistent"), prepare: None, show: None, sha256: None };
+        assert!(keys.get("mystery.key").err().unwrap().contains("unknown verifying key"));
     }
 
     #[test]

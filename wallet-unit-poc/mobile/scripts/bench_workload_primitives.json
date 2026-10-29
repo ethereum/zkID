@@ -1,0 +1,38 @@
+{
+  "workload": "openac-primitives",
+  "apks": [
+    "../build/bench-apks/app-profile.apk",
+    "../build/bench-apks/app-profile-androidTest.apk"
+  ],
+  "package": "com.openac.app",
+  "instrumentation": "com.openac.app.test/androidx.test.runner.AndroidJUnitRunner",
+  "marker_prefix": "OPENAC_",
+  "logcat_tags": [
+    "flutter"
+  ],
+  "config_path": "/sdcard/zkbench/com.openac.app/bench_config.json",
+  "push": [
+    {
+      "src": "/Users/moventsai/Projects/tech-foundation/articles/wrap-up-coordination-network/bench/scratch/openac-device/sha256_2048_proving.key",
+      "dest": "/sdcard/zkbench/com.openac.app/sha256_2048_proving.key",
+      "sha256": "53880245eec91e59da5dc69a0d63c6d0e41a6a381a705aec4feecbf737f55938"
+    }
+  ],
+  "runs": [
+    {
+      "name": "openac-sha256",
+      "config": {
+        "steps": [
+          "sha256"
+        ],
+        "warm_iters": 5,
+        "cooldown_ms": 10000
+      },
+      "timeout_s": 1800
+    }
+  ],
+  "verify": [
+    "verify_device_proofs.sh",
+    "{out_dir}"
+  ]
+}

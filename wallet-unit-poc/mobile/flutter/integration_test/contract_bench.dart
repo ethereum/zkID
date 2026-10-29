@@ -8,11 +8,13 @@ import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.da
         deviceProfile,
         loadPrepareKey,
         loadPrepareReblindData,
+        loadSha256Key,
         loadShowKey,
         memAvailableKb,
         peakRssKb,
         presentLoaded,
         provePrepareLoaded,
+        proveSha256Loaded,
         proveShowLoaded,
         stageFile,
         writeLastOutputs,
@@ -30,6 +32,7 @@ const _benchDir = '/sdcard/zkbench/com.openac.app';
 
 const _prepareKey = '2k_prepare_proving.key';
 const _showKey = '2k_show_proving.key';
+const _sha256Key = 'sha256_2048_proving.key';
 const _prepareInstance = '2k_prepare_instance.bin';
 const _prepareWitness = '2k_prepare_witness.bin';
 const _sharedBlinds = '2k_shared_blinds.bin';
@@ -37,6 +40,7 @@ const _sharedBlinds = '2k_shared_blinds.bin';
 const _stepFiles = {
   'prepare': [_prepareKey],
   'show': [_showKey],
+  'sha256': [_sha256Key],
   'present': [
     _prepareKey,
     _showKey,
@@ -56,6 +60,7 @@ const _outDir = '$_benchDir/out';
 const _outStems = {
   'prepare': ['prepare'],
   'show': ['show'],
+  'sha256': ['sha256'],
   'present': ['present_prepare', 'present_show'],
 };
 
@@ -150,6 +155,7 @@ Future<({int ok, int errors})> runContractBench() async {
         final result = switch (step) {
           'prepare' => await _prepare(docs, staging.path, cold),
           'show' => await _show(docs, staging.path, cold),
+          'sha256' => await _sha256(staging.path, cold),
           _ => await _present(docs, staging.path, cold),
         };
         if (cold) {
@@ -157,7 +163,7 @@ Future<({int ok, int errors})> runContractBench() async {
             'step': step,
             ...result.sizes,
             for (final f in files)
-              '${f.replaceAll(RegExp(r'^2k_|\.(key|bin)$'), '')}_bytes':
+              '${f.replaceAll(RegExp(r'^2k_|_2048(?=_)|\.(key|bin)$'), '')}_bytes':
                   await File('${staging.path}/$f').length(),
             'stage_ms': stageMs,
             'out_files': [
@@ -258,6 +264,28 @@ Future<_Iteration> _show(String docs, String staging, bool cold) async {
   final (r, loadMs, totalMs) = p.out;
   return _Iteration([
     _row('show', p, avail,
+        loadMs: loadMs, proveMs: toInt(r.proveMs), totalMs: totalMs)
+  ], {
+    'proof_bytes': toInt(r.proofBytes)
+  });
+}
+
+/// SHA-256 over the fixed 2 KB message (the primitives workload): no input
+/// file, and the witness is built inside the prover, so it has no `witness_ms`.
+Future<_Iteration> _sha256(String staging, bool cold) async {
+  final avail = toInt(await memAvailableKb());
+  final p = await probe(() async {
+    final sw = Stopwatch()..start();
+    var loadMs = 0;
+    if (cold) {
+      loadMs = toInt(await loadSha256Key(path: '$staging/$_sha256Key'));
+    }
+    final r = await proveSha256Loaded();
+    return (r, loadMs, sw.elapsedMilliseconds);
+  });
+  final (r, loadMs, totalMs) = p.out;
+  return _Iteration([
+    _row('sha256', p, avail,
         loadMs: loadMs, proveMs: toInt(r.proveMs), totalMs: totalMs)
   ], {
     'proof_bytes': toInt(r.proofBytes)

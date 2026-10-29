@@ -22,7 +22,8 @@ pub mod utils;
 // Re-export commonly used types and functions
 pub use circuit_size::CircuitSize;
 pub use circuits::{
-    mdoc_circuit::MdocCircuit, prepare_circuit::PrepareCircuit, show_circuit::ShowCircuit,
+    mdoc_circuit::MdocCircuit, prepare_circuit::PrepareCircuit, sha256_circuit::Sha256Circuit,
+    show_circuit::ShowCircuit,
 };
 pub use paths::PathConfig;
 pub use prover::{

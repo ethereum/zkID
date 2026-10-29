@@ -13,7 +13,7 @@ use ecdsa_spartan2::{
     },
     save_keys,
     setup::{setup_circuit_keys, setup_circuit_keys_no_save},
-    CircuitSize, PathConfig, PrepareCircuit, ShowCircuit, E,
+    CircuitSize, PathConfig, PrepareCircuit, Sha256Circuit, ShowCircuit, E,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -466,12 +466,14 @@ struct PrepareReblindData {
 struct Loaded {
     prepare_pk: Option<Arc<ProvingKey>>,
     show_pk: Option<Arc<ProvingKey>>,
+    sha256_pk: Option<Arc<ProvingKey>>,
     prepare_reblind: Option<Arc<PrepareReblindData>>,
 }
 
 static LOADED: Mutex<Loaded> = Mutex::new(Loaded {
     prepare_pk: None,
     show_pk: None,
+    sha256_pk: None,
     prepare_reblind: None,
 });
 
@@ -484,6 +486,7 @@ fn clear_loaded_for_test() {
     let mut loaded = LOADED.lock().unwrap();
     loaded.prepare_pk = None;
     loaded.show_pk = None;
+    loaded.sha256_pk = None;
     loaded.prepare_reblind = None;
 }
 
@@ -596,6 +599,12 @@ pub fn load_prepare_key(path: String) -> Result<u64, ZkProofError> {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn load_show_key(path: String) -> Result<u64, ZkProofError> {
     load_key_into(&path, |l| &mut l.show_pk)
+}
+
+/// Load the SHA-256 (2 KB message) proving key from `path`; returns load time in ms.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_sha256_key(path: String) -> Result<u64, ZkProofError> {
+    load_key_into(&path, |l| &mut l.sha256_pk)
 }
 
 /// Load the Prepare instance and witness and the shared blinds a presentation
@@ -770,6 +779,24 @@ pub fn prove_show_loaded(documents_path: String) -> Result<LoadedProofResult, Zk
     let prove_ms = start.elapsed().as_millis() as u64;
     let size = proof_bytes(&proof)?;
     LAST_OUTPUTS.lock().unwrap().put("show", proof, instance);
+    Ok(LoadedProofResult {
+        witness_ms: 0,
+        prove_ms,
+        proof_bytes: size,
+    })
+}
+
+/// Prove SHA-256 over the fixed 2 KB message with the loaded key. The circuit
+/// has no input file and no separate witness step, so `witness_ms` is 0.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn prove_sha256_loaded() -> Result<LoadedProofResult, ZkProofError> {
+    let pk = require(LOADED.lock().unwrap().sha256_pk.as_ref(), "sha256 key")?;
+    let start = std::time::Instant::now();
+    let (proof, instance, _) =
+        prove_circuit_in_memory(Sha256Circuit::fixed(), &pk).map_err(proving_failed)?;
+    let prove_ms = start.elapsed().as_millis() as u64;
+    let size = proof_bytes(&proof)?;
+    LAST_OUTPUTS.lock().unwrap().put("sha256", proof, instance);
     Ok(LoadedProofResult {
         witness_ms: 0,
         prove_ms,
@@ -1633,6 +1660,8 @@ mod tests {
         assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
         let r = load_show_key("/nonexistent/show.key".to_string());
         assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
+        let r = load_sha256_key("/nonexistent/sha256.key".to_string());
+        assert!(matches!(r, Err(ZkProofError::FileNotFound { .. })));
     }
 
     #[test]
@@ -1649,6 +1678,10 @@ mod tests {
         ));
         assert!(matches!(
             present_loaded("/docs".to_string()),
+            Err(ZkProofError::SetupRequired { .. })
+        ));
+        assert!(matches!(
+            prove_sha256_loaded(),
             Err(ZkProofError::SetupRequired { .. })
         ));
     }

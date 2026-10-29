@@ -124,10 +124,9 @@ impl PathConfig {
     /// In development the size label is prepended: `keys/1k_prepare_proving.key`.
     pub fn key_path(&self, name: &str) -> PathBuf {
         if self.is_mobile {
-            self.base_dir.join("keys").join(name)
+            self.keys_dir().join(name)
         } else {
-            self.base_dir
-                .join("keys")
+            self.keys_dir()
                 .join(format!("{}_{}", self.circuit_size.as_str(), name))
         }
     }
@@ -137,12 +136,16 @@ impl PathConfig {
     /// Same size-prefixing rules as `key_path`.
     pub fn artifact_path(&self, name: &str) -> PathBuf {
         if self.is_mobile {
-            self.base_dir.join("keys").join(name)
+            self.keys_dir().join(name)
         } else {
-            self.base_dir
-                .join("keys")
+            self.keys_dir()
                 .join(format!("{}_{}", self.circuit_size.as_str(), name))
         }
+    }
+
+    /// Directory holding keys and artifacts.
+    pub fn keys_dir(&self) -> PathBuf {
+        self.base_dir.join("keys")
     }
 
     /// Resolve the shared blinds file path.
@@ -181,6 +184,9 @@ pub mod keys {
     pub const MDOC_PROOF: &str = "mdoc_proof.bin";
     pub const MDOC_WITNESS: &str = "mdoc_witness.bin";
     pub const MDOC_INSTANCE: &str = "mdoc_instance.bin";
+    pub const SHA256_PROVING_KEY: &str = "sha256_2048_proving.key";
+    pub const SHA256_VERIFYING_KEY: &str = "sha256_2048_verifying.key";
+    pub const SHA256_PROOF: &str = "sha256_2048_proof.bin";
 }
 
 #[cfg(test)]
