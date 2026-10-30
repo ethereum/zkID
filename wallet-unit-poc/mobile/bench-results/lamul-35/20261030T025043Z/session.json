@@ -1,0 +1,287 @@
+{
+ "schema": 1,
+ "device_id": "lamul-35",
+ "tier": "budget",
+ "serial": "localhost:56806",
+ "tier_forced": false,
+ "provenance": {
+  "commit": "ef9c501c2861dac55a11ba953fb8d32bbde6c26e",
+  "predictions_sha256": "347e9117b1b53c70da83f6130622d5a1eb71c698220937f7efbae867b7100c71",
+  "predictions_primitives_sha256": "180c9b298513dd348bec99b14b28db09bee2d5840c4af422a3c81e80851c8fea",
+  "frozen": true
+ },
+ "probe": {
+  "props": {
+   "ro.product.model": "moto g05",
+   "ro.product.manufacturer": "motorola",
+   "ro.soc.model": "MT6769V/CB",
+   "ro.soc.manufacturer": "Mediatek",
+   "ro.build.version.release": "15",
+   "ro.build.version.sdk": "35",
+   "ro.build.fingerprint": "motorola/lamul_ge/lamul:15/VVTA35.51-18-6/1e9f09:user/release-keys"
+  },
+  "meminfo": {
+   "MemTotal": 3798008,
+   "MemFree": 189788,
+   "MemAvailable": 1930076,
+   "Buffers": 3308,
+   "Cached": 1947784,
+   "SwapCached": 10976,
+   "Active": 1621008,
+   "Inactive": 1080700,
+   "Unevictable": 4384,
+   "Mlocked": 4384,
+   "SwapTotal": 3418200,
+   "SwapFree": 3021912,
+   "Dirty": 5236,
+   "Writeback": 0,
+   "AnonPages": 751084,
+   "Mapped": 860728,
+   "Shmem": 24632,
+   "KReclaimable": 124760,
+   "Slab": 296148,
+   "SReclaimable": 70852,
+   "SUnreclaim": 225296,
+   "KernelStack": 45296,
+   "ShadowCallStack": 11364,
+   "PageTables": 82896,
+   "SecPageTables": 0,
+   "NFS_Unstable": 0,
+   "Bounce": 0,
+   "WritebackTmp": 0,
+   "CommitLimit": 5317204,
+   "Committed_AS": 139054520,
+   "VmallocTotal": 257687552,
+   "VmallocUsed": 161008,
+   "VmallocChunk": 0,
+   "Percpu": 10400,
+   "AnonHugePages": 0,
+   "ShmemHugePages": 0,
+   "ShmemPmdMapped": 0,
+   "FileHugePages": 0,
+   "FilePmdMapped": 0,
+   "CmaTotal": 557056,
+   "CmaFree": 16440
+  },
+  "thermal_status": 0,
+  "thermal_status_readable": true,
+  "thermal_dump": "IsStatusOverride: false\nThermalEventListeners:\n\tcallbacks: 5\n\tkilled: false\n\tbroadcasts count: -1\nThermalStatusListeners:\n\tcallbacks: 3\n\tkilled: false\n\tbroadcasts count: -1\nThermal Status: 0\nCached temperatures:\n\tTemperature{mValue=41.7, mType=0, mName=CPU, mStatus=0}\n\tTemperature{mValue=41.7, mType=1, mName=GPU, mStatus=0}\n\tTemperature{mValue=41.7, mType=9, mName=NPU, mStatus=0}\n\tTemperature{mValue=41.7, mType=13, mName=SOC, mStatus=0}\n\tTemperature{mValue=41.7, mType=10, mName=TPU, mStatus=0}\n\tTemperature{mValue=26.0, mType=3, mName=SKIN, mStatus=0}\n\tTemperature{mValue=20.0, mType=2, mName=BATTERY, mStatus=0}\n\tTemperature{mValue=23.0, mType=5, mName=POWER_AMPLIFIER, mStatus=0}\nHAL Ready: true\nHAL connection:\n\tThermalHAL AIDL 2  connected: yes\nCurrent temperatures from HAL:\n\tTemperature{mValue=33.5, mType=0, mName=CPU, mStatus=0}\n\tTemperature{mValue=33.5, mType=1, mName=GPU, mStatus=0}\n\tTemperature{mValue=19.0, mType=2, mName=BATTERY, mStatus=0}\n\tTemperature{mValue=22.0, mType=3, mName=SKIN, mStatus=0}\n\tTemperature{mValue=21.0, mType=5, mName=POWER_AMPLIFIER, mStatus=0}\n\tTemperature{mValue=33.5, mType=9, mName=NPU, mStatus=0}\n\tTemperature{mValue=33.5, mType=10, mName=TPU, mStatus=0}\n\tTemperature{mValue=33.5, mType=13, mName=SOC, mStatus=0}\nCurrent cooling devices from HAL:\nTemperature static thresholds from HAL:\n\tTemperatureThreshold{mType=0, mName=CPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=1, mName=GPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=2, mName=BATTERY, mHotThrottlingThresholds=[NaN, NaN, NaN, 50.0, 55.0, 59.0, 60.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=3, mName=SKIN, mHotThrottlingThresholds=[NaN, 43.0, 45.0, 50.0, 70.0, 80.0, 90.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=5, mName=POWER_AMPLIFIER, mHotThrottlingThresholds=[NaN, NaN, NaN, 68.0, 90.0, 100.0, 110.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=9, mName=NPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=10, mName=TPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\n\tTemperatureThreshold{mType=13, mName=SOC, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}\nTemperature headroom thresholds:\n[NaN, 0.76666665, 0.8333333, NaN, 1.6666666, 2.0, 2.3333333]\n",
+  "clock_offset_ns": -5260227400,
+  "clock_precision_s": 1e-09
+ },
+ "workloads": [
+  {
+   "workload": "openac-primitives",
+   "marker_prefix": "OPENAC_",
+   "package": "com.openac.app",
+   "apks": [
+    {
+     "file": "app-profile.apk",
+     "sha256": "b5f676989d50d5ab3612c7a3ed45830aa990406d494339a58d11c7d3200898e4"
+    },
+    {
+     "file": "app-profile-androidTest.apk",
+     "sha256": "0fe4d7b66f1e181655faf12e5309ec4cfb6661dcc46d75b1350932cb08648247"
+    }
+   ],
+   "pushes": [
+    {
+     "dest": "/sdcard/zkbench/com.openac.app/sha256_2048_proving.key",
+     "pinned": "53880245eec91e59da5dc69a0d63c6d0e41a6a381a705aec4feecbf737f55938",
+     "device_sha256": "53880245eec91e59da5dc69a0d63c6d0e41a6a381a705aec4feecbf737f55938",
+     "already_on_device": false
+    }
+   ],
+   "runs": [
+    {
+     "name": "openac-sha256",
+     "attempt": 1,
+     "outcome": "ok",
+     "evidence": [],
+     "thermal_before": 0,
+     "thermal_after": 0,
+     "thermal_gated": false,
+     "thermal_wait_s": 32.79,
+     "thermal_source": "status",
+     "max_zone_c_before": null,
+     "mem_available_kb_before": 1862512,
+     "config": {
+      "steps": [
+       "sha256"
+      ],
+      "warm_iters": 5,
+      "cooldown_ms": 10000
+     },
+     "raw_log": "raw/openac-sha256-1.log",
+     "logcat_buffer_set": true,
+     "logcat_buffer_error": null,
+     "out_dir": "raw/openac-sha256-1-out",
+     "outputs": [
+      {
+       "name": "sha256.instance",
+       "size": 42215,
+       "sha256": "0a7e0a6c62909f8ed7f3af31294cf6b3c8b039c34e4b7e41e7b290dfa3c5367c"
+      },
+      {
+       "name": "sha256.proof",
+       "size": 85807,
+       "sha256": "dfd0dfd6e38fc2c6cbfbc068335fa85b468b312bf51177b0a1ced6459ecdd5b1"
+      }
+     ],
+     "verified": true,
+     "verify_tail": "PASS sha256.proof",
+     "verify_error": null,
+     "pull_failed": false,
+     "timed_out": false,
+     "start_host_ns": 1793329014480010000,
+     "samples": [
+      {
+       "t_host_ns": 1793329014480240000,
+       "thermal": 0,
+       "mem_available_kb": 1901716,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1275000,
+        1325000,
+        1100000,
+        999000,
+        1275000,
+        1325000,
+        2000000,
+        2000000
+       ]
+      },
+      {
+       "t_host_ns": 1793329025135208000,
+       "thermal": 0,
+       "mem_available_kb": 1700376,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        2000000,
+        2000000
+       ]
+      },
+      {
+       "t_host_ns": 1793329035734510000,
+       "thermal": 0,
+       "mem_available_kb": 1580036,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        1700000,
+        2000000,
+        2000000
+       ]
+      },
+      {
+       "t_host_ns": 1793329046435804000,
+       "thermal": 0,
+       "mem_available_kb": 1714920,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1100000,
+        1100000,
+        999000,
+        1275000,
+        1175000,
+        1325000,
+        1295000,
+        1950000
+       ]
+      },
+      {
+       "t_host_ns": 1793329057055946000,
+       "thermal": 0,
+       "mem_available_kb": 1714948,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1175000,
+        950000,
+        1100000,
+        1275000,
+        1175000,
+        1050000,
+        1176000,
+        1800000
+       ]
+      },
+      {
+       "t_host_ns": 1793329067674784000,
+       "thermal": 0,
+       "mem_available_kb": 1718680,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1450000,
+        1275000,
+        850000,
+        1175000,
+        1175000,
+        1450000,
+        1354000,
+        1710000
+       ]
+      },
+      {
+       "t_host_ns": 1793329078271000000,
+       "thermal": 0,
+       "mem_available_kb": 1189068,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1700000,
+        1700000,
+        1275000,
+        1275000,
+        1700000,
+        1700000,
+        2000000,
+        2000000
+       ]
+      },
+      {
+       "t_host_ns": 1793329089012043000,
+       "thermal": 0,
+       "mem_available_kb": 1709624,
+       "max_zone_c": null,
+       "cpu_khz": [
+        1325000,
+        1500000,
+        1325000,
+        1100000,
+        1625000,
+        999000,
+        2000000,
+        2000000
+       ]
+      },
+      {
+       "t_host_ns": 1793329095027696000,
+       "thermal": 0,
+       "mem_available_kb": 1981612,
+       "max_zone_c": null,
+       "cpu_khz": [
+        774000,
+        1175000,
+        1375000,
+        1700000,
+        1625000,
+        950000,
+        2000000,
+        2000000
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

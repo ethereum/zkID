@@ -143,6 +143,8 @@ The Show circuit has constant performance regardless of JWT payload size.
 presentation (`present`: Show prove plus Prepare and Show reblind), each in a fresh process, with
 proving keys pushed from the host instead of generated on the device.
 
+Results from ten phones, run on 28 and 30 October 2026, are in [`bench-results/`](bench-results/README.md).
+
 1. `scripts/build_bench_apks.sh` builds the app and androidTest APKs (arm64, profile).
 2. Install both with `adb install -r -t`.
 3. After install, `adb shell appops set com.openac.app MANAGE_EXTERNAL_STORAGE allow` (the profile

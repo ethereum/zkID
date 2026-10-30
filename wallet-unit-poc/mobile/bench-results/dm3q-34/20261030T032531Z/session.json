@@ -1,0 +1,266 @@
+{
+ "schema": 1,
+ "device_id": "dm3q-34",
+ "tier": "flagship",
+ "serial": "localhost:61312",
+ "tier_forced": false,
+ "provenance": {
+  "commit": "ef9c501c2861dac55a11ba953fb8d32bbde6c26e",
+  "predictions_sha256": "347e9117b1b53c70da83f6130622d5a1eb71c698220937f7efbae867b7100c71",
+  "predictions_primitives_sha256": "180c9b298513dd348bec99b14b28db09bee2d5840c4af422a3c81e80851c8fea",
+  "frozen": true
+ },
+ "probe": {
+  "props": {
+   "ro.product.model": "SM-S918B",
+   "ro.product.manufacturer": "samsung",
+   "ro.soc.model": "SM8550",
+   "ro.soc.manufacturer": "QTI",
+   "ro.build.version.release": "14",
+   "ro.build.version.sdk": "34",
+   "ro.build.fingerprint": "samsung/dm3qxxx/dm3q:14/UP1A.231005.007/S918BXXS3BWL3:user/release-keys"
+  },
+  "meminfo": {
+   "MemTotal": 11294224,
+   "MemFree": 4393704,
+   "MemAvailable": 7136960,
+   "Buffers": 6832,
+   "Cached": 3063848,
+   "SwapCached": 53032,
+   "Active": 3093132,
+   "Inactive": 1425868,
+   "Unevictable": 125304,
+   "Mlocked": 10428,
+   "RbinTotal": 512000,
+   "RbinAlloced": 7168,
+   "RbinPool": 0,
+   "RbinFree": 64760,
+   "RbinCached": 440072,
+   "SwapTotal": 8388604,
+   "SwapFree": 7855356,
+   "Dirty": 44,
+   "Writeback": 0,
+   "AnonPages": 1685332,
+   "Mapped": 1274000,
+   "Shmem": 19396,
+   "KReclaimable": 391084,
+   "Slab": 559964,
+   "SReclaimable": 187896,
+   "SUnreclaim": 372068,
+   "KernelStack": 72824,
+   "ShadowCallStack": 18236,
+   "PageTables": 114652,
+   "NFS_Unstable": 0,
+   "Bounce": 0,
+   "WritebackTmp": 0,
+   "CommitLimit": 13779716,
+   "Committed_AS": 116957524,
+   "VmallocTotal": 259653632,
+   "VmallocUsed": 277396,
+   "VmallocChunk": 0,
+   "Percpu": 10816,
+   "AnonHugePages": 188416,
+   "ShmemHugePages": 0,
+   "ShmemPmdMapped": 0,
+   "FileHugePages": 0,
+   "FilePmdMapped": 0,
+   "HugepagePool": 495616,
+   "CmaTotal": 507904,
+   "CmaFree": 0,
+   "KgslShmemUsage": 112452,
+   "KgslReclaimed": 0,
+   "DmaHeapPool": 202868,
+   "system": 225880,
+   "zram0": 181512,
+   "KgslSharedmem": 113416
+  },
+  "thermal_status": 0,
+  "thermal_status_readable": true,
+  "thermal_dump": "IsStatusOverride: false\nThermalEventListeners:\n\tcallbacks: 1\n\tkilled: false\n\tbroadcasts count: -1\nThermalStatusListeners:\n\tcallbacks: 4\n\tkilled: false\n\tbroadcasts count: -1\nThermal Status: 0\nCached temperatures:\n\tTemperature{mValue=0.0, mType=2, mName=SUBBAT, mStatus=0}\n\tTemperature{mValue=26.6, mType=0, mName=AP, mStatus=0}\n\tTemperature{mValue=27.0, mType=5, mName=PA, mStatus=0}\n\tTemperature{mValue=24.2, mType=2, mName=BAT, mStatus=0}\n\tTemperature{mValue=24.9, mType=4, mName=USB, mStatus=0}\n\tTemperature{mValue=27.2, mType=3, mName=SKIN, mStatus=0}\n\tTemperature{mValue=24.2, mType=2, mName=MAINBATRAW, mStatus=0}\nHAL Ready: true\nHAL connection:\n\tThermalHAL 2.0 connected: yes\nCurrent temperatures from HAL:\n\tTemperature{mValue=26.6, mType=0, mName=AP, mStatus=0}\n\tTemperature{mValue=24.2, mType=2, mName=BAT, mStatus=0}\n\tTemperature{mValue=24.2, mType=2, mName=MAINBATRAW, mStatus=0}\n\tTemperature{mValue=27.0, mType=5, mName=PA, mStatus=0}\n\tTemperature{mValue=27.2, mType=3, mName=SKIN, mStatus=0}\n\tTemperature{mValue=0.0, mType=2, mName=SUBBAT, mStatus=0}\n\tTemperature{mValue=24.9, mType=4, mName=USB, mStatus=0}\nCurrent cooling devices from HAL:\nTemperature static thresholds from HAL:\n",
+  "clock_offset_ns": -4914787160,
+  "clock_precision_s": 1e-09
+ },
+ "workloads": [
+  {
+   "workload": "openac-primitives",
+   "marker_prefix": "OPENAC_",
+   "package": "com.openac.app",
+   "apks": [
+    {
+     "file": "app-profile.apk",
+     "sha256": "b5f676989d50d5ab3612c7a3ed45830aa990406d494339a58d11c7d3200898e4"
+    },
+    {
+     "file": "app-profile-androidTest.apk",
+     "sha256": "0fe4d7b66f1e181655faf12e5309ec4cfb6661dcc46d75b1350932cb08648247"
+    }
+   ],
+   "pushes": [
+    {
+     "dest": "/sdcard/zkbench/com.openac.app/sha256_2048_proving.key",
+     "pinned": "53880245eec91e59da5dc69a0d63c6d0e41a6a381a705aec4feecbf737f55938",
+     "device_sha256": "53880245eec91e59da5dc69a0d63c6d0e41a6a381a705aec4feecbf737f55938",
+     "already_on_device": false
+    }
+   ],
+   "runs": [
+    {
+     "name": "openac-sha256",
+     "attempt": 1,
+     "outcome": "ok",
+     "evidence": [],
+     "thermal_before": 0,
+     "thermal_after": 0,
+     "thermal_gated": false,
+     "thermal_wait_s": 32.19,
+     "thermal_source": "status",
+     "max_zone_c_before": 37.0,
+     "mem_available_kb_before": 7160864,
+     "config": {
+      "steps": [
+       "sha256"
+      ],
+      "warm_iters": 5,
+      "cooldown_ms": 10000
+     },
+     "raw_log": "raw/openac-sha256-1.log",
+     "logcat_buffer_set": true,
+     "logcat_buffer_error": null,
+     "out_dir": "raw/openac-sha256-1-out",
+     "outputs": [
+      {
+       "name": "sha256.instance",
+       "size": 42215,
+       "sha256": "850d3db96a68af105adc9e3d0dd5ada05b39f855a9114110a122fe4c69bbf4ba"
+      },
+      {
+       "name": "sha256.proof",
+       "size": 85807,
+       "sha256": "cedc92caaaba28af1ef325eaf6744d8a10c25c40a408b087f6f647e4a0ddd5f5"
+      }
+     ],
+     "verified": true,
+     "verify_tail": "PASS sha256.proof",
+     "verify_error": null,
+     "pull_failed": false,
+     "timed_out": false,
+     "start_host_ns": 1793331011425695000,
+     "samples": [
+      {
+       "t_host_ns": 1793331011425823000,
+       "thermal": 0,
+       "mem_available_kb": 7154208,
+       "max_zone_c": 47.3,
+       "cpu_khz": [
+        672000,
+        787200,
+        672000,
+        2803200,
+        2803200,
+        2803200,
+        2323200,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331021973895000,
+       "thermal": 0,
+       "mem_available_kb": 6902540,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        2016000,
+        1228800,
+        1113600,
+        614400,
+        2803200,
+        614400,
+        2803200,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331032546427000,
+       "thermal": 0,
+       "mem_available_kb": 6647472,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        556800,
+        1785600,
+        787200,
+        2803200,
+        614400,
+        2803200,
+        614400,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331043238645000,
+       "thermal": 0,
+       "mem_available_kb": 6647444,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        556800,
+        556800,
+        2016000,
+        2803200,
+        614400,
+        614400,
+        614400,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331053892971000,
+       "thermal": 0,
+       "mem_available_kb": 6642600,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        556800,
+        556800,
+        556800,
+        614400,
+        2803200,
+        614400,
+        2803200,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331064528253000,
+       "thermal": 0,
+       "mem_available_kb": 6642836,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        556800,
+        556800,
+        2016000,
+        614400,
+        614400,
+        1651200,
+        1785600,
+        864000
+       ]
+      },
+      {
+       "t_host_ns": 1793331069343527000,
+       "thermal": 0,
+       "mem_available_kb": 7181616,
+       "max_zone_c": 37.0,
+       "cpu_khz": [
+        1113600,
+        1113600,
+        2016000,
+        2803200,
+        2803200,
+        2803200,
+        2803200,
+        864000
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

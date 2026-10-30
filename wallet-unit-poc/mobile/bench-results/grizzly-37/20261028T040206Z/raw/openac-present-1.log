@@ -1,0 +1,345 @@
+--------- beginning of main
+--------- beginning of events
+--------- beginning of system
+10-27 21:08:03.746  1293  5486 I ActivityManager: Force stopping com.openac.app appid=10345 user=0: start instr
+10-27 21:08:03.771  1293  1486 I am_proc_start: [0,25739,10345,com.openac.app,added application,com.openac.app]
+10-27 21:08:03.771  1293  1486 I ActivityManager: Start proc 25739:com.openac.app/u0a345 for added application com.openac.app
+10-27 21:08:03.782 25739 25739 I libprocessgroup: Created cgroup /sys/fs/cgroup/apps/uid_10345/pid_25739
+10-27 21:08:03.791 25739 25739 I Zygote  : Process 25739 created for com.openac.app
+10-27 21:08:03.791 25739 25739 I com.openac.app: Late-enabling -Xcheck:jni
+10-27 21:08:03.817 25739 25739 I com.openac.app: Using generational CollectorTypeCMC GC.
+10-27 21:08:03.835 25739 25739 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+10-27 21:08:03.847  1293  5486 I am_proc_bound: [0,25739,com.openac.app]
+10-27 21:08:03.883 25739 25739 W ActivityThread: Package uses different ABI(s) than its instrumentation: package[com.openac.app]: arm64-v8a, null instrumentation[com.openac.app.test]: null, null
+10-27 21:08:03.884 25739 25739 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+10-27 21:08:03.885 25739 25739 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+10-27 21:08:03.887 25739 25739 W com.openac.app: ClassLoaderContext classpath element mismatch. expected=/system/framework/android.test.base.jar, found=/system_ext/framework/androidx.window.extensions.jar (PCL[]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]} | PCL[]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:03.892 25739 25739 W com.openac.app: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*805256125]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:03.894 25739 25739 W com.openac.app: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[] | PCL[/system/framework/android.test.runner.jar*805256125:/system/framework/android.test.mock.jar*4008448454]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:04.017 25739 25739 D nativeloader: Configuring clns-9 for other apk /system/framework/android.test.runner.jar:/system/framework/android.test.mock.jar:/system/framework/android.test.base.jar:/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/lib/arm64:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/lib/arm64:/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk!/lib/arm64-v8a:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.openac.app
+10-27 21:08:04.027 25739 25739 V GraphicsEnvironment: Currently set values for:
+10-27 21:08:04.027 25739 25739 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[com.android.angle]
+10-27 21:08:04.027 25739 25739 V GraphicsEnvironment:   angle_gl_driver_selection_values=[angle]
+10-27 21:08:04.027 25739 25739 V GraphicsEnvironment: com.openac.app is not listed in per-application setting
+10-27 21:08:04.028 25739 25739 V GraphicsEnvironment: No special selections for ANGLE, returning default driver choice
+10-27 21:08:04.028 25739 25739 V GraphicsEnvironment: No ANGLE debug package found. Loading ANGLE libraries from ANGLE Settings apk is deprecated in Android 17. ANGLE in system will be loaded
+10-27 21:08:04.029 25739 25739 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-27 21:08:04.033 25739 25739 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+10-27 21:08:04.035 25739 25739 D nativeloader: Configuring clns-10 for other apk /system/framework/android.test.mock.jar. target_sdk_version=36, uses_libraries=ALL, library_path=/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/lib/arm64:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/lib/arm64, permitted_path=/data:/mnt/expand
+10-27 21:08:04.035 25739 25739 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+10-27 21:08:04.036 25739 25739 D nativeloader: Configuring clns-11 for other apk /system/framework/android.test.runner.jar. target_sdk_version=36, uses_libraries=ALL, library_path=/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/lib/arm64:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/lib/arm64, permitted_path=/data:/mnt/expand
+10-27 21:08:04.037 25739 25739 W com.openac.app: ClassLoaderContext shared library size mismatch. Expected=2, found=3 (PCL[]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]} | PCL[]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]#PCL[/system/framework/android.test.runner.jar*805256125]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]}};PCL[/system/framework/android.test.runner.jar*805256125:/system/framework/android.test.mock.jar*4008448454:/system/framework/android.test.base.jar*736588042:/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk*3728670364:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk*3636113400]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:04.037 25739 25739 W com.openac.app: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*805256125]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]#PCL[/system/framework/android.test.runner.jar*805256125]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]}};PCL[/system/framework/android.test.runner.jar*805256125:/system/framework/android.test.mock.jar*4008448454:/system/framework/android.test.base.jar*736588042:/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk*3728670364:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk*3636113400]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:04.038 25739 25739 W com.openac.app: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[] | PCL[/system/framework/android.test.runner.jar*805256125:/system/framework/android.test.mock.jar*4008448454]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]#PCL[/system/framework/android.test.runner.jar*805256125]{PCL[/system/framework/android.test.base.jar*736588042]#PCL[/system/framework/android.test.mock.jar*4008448454]}};PCL[/system/framework/android.test.runner.jar*805256125:/system/framework/android.test.mock.jar*4008448454:/system/framework/android.test.base.jar*736588042:/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk*3728670364:/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk*3636113400]{PCL[/system_ext/framework/androidx.window.extensions.jar*1780475387]#PCL[/system_ext/framework/androidx.window.sidecar.jar*1581414808]})
+10-27 21:08:04.124 25739 25739 I MonitoringInstr: Instrumentation started!
+10-27 21:08:04.134 25739 25739 I MonitoringInstr: No JSBridge.
+10-27 21:08:04.137 25739 25752 I InstrConnection: Could not send broadcast or register receiver (isolatedProcess?)
+10-27 21:08:04.146 25739 25752 I UsageTrackerFacilitator: Usage tracking enabled
+10-27 21:08:04.149 25739 25752 I TestRequestBuilder: Scanning classpath to find tests in paths [/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk]
+10-27 21:08:04.150 25739 25752 W com.openac.app: Opening an oat file without a class loader. Are you using the deprecated DexFile APIs?
+10-27 21:08:04.154 25739 25752 I UiAutomation: Initialized for user 0 on display 0
+10-27 21:08:04.169 25739 25752 D TestExecutor: Adding listener androidx.test.internal.runner.listener.LogRunListener
+10-27 21:08:04.169 25739 25752 D TestExecutor: Adding listener androidx.test.internal.runner.listener.InstrumentationResultPrinter
+10-27 21:08:04.169 25739 25752 D TestExecutor: Adding listener androidx.test.internal.runner.listener.ActivityFinisherRunListener
+10-27 21:08:04.170 25739 25752 I TestRunner: run started: 1 tests
+10-27 21:08:04.171 25739 25752 W ActivityTestRule: getActivityIntent() returned null using default: Intent(Intent.ACTION_MAIN)
+10-27 21:08:04.187 25739 25763 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+10-27 21:08:04.188 25739 25763 D vulkan  : searching for layers in '/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/lib/arm64'
+10-27 21:08:04.188 25739 25763 D vulkan  : searching for layers in '/data/app/~~KAjNdmfRhoKehES7yNEaig==/com.openac.app.test-F2aK6VDFiLxJ95ZTsRUj7A==/base.apk!/lib/arm64-v8a'
+10-27 21:08:04.188 25739 25763 D vulkan  : searching for layers in '/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk!/lib/arm64-v8a'
+10-27 21:08:04.196 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: PRE_ON_CREATE
+10-27 21:08:04.210 25739 25774 D nativeloader: Load /data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk!/lib/arm64-v8a/libflutter.so using class loader ns clns-9 (caller=/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk): ok
+10-27 21:08:04.219 25739 25739 I auditd  : type=1400 audit(0.0:6334): avc:  denied  { read } for  comm="com.openac.app" name="max_map_count" dev="proc" ino=92953 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.openac.app
+10-27 21:08:04.219 25739 25739 W com.openac.app: type=1400 audit(0.0:6334): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=92953 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.openac.app
+10-27 21:08:04.231 25739 25786 I flutter : The Dart VM service is listening on http://127.0.0.1:35209/fInjPbsSkcc=/
+10-27 21:08:04.240 25739 25777 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+10-27 21:08:04.240 25739 25739 D nativeloader: Load /data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk!/lib/arm64-v8a/libdartjni.so using class loader ns clns-9 (caller=/data/app/~~c_VHRV7UiT5tsPmiUkoCrA==/com.openac.app-ti6BIR4BXhu1zVQ8fZ15Kw==/base.apk!classes4.dex): ok
+10-27 21:08:04.248 25739 25739 I com.openac.app: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app, TargetSdkVersion=36) using reflection: allowed
+10-27 21:08:04.248 25739 25739 I com.openac.app: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app, TargetSdkVersion=36) using reflection: allowed
+10-27 21:08:04.248 25739 25739 I com.openac.app: hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app, TargetSdkVersion=36) using reflection: allowed
+10-27 21:08:04.248 25739 25739 I com.openac.app: hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app, TargetSdkVersion=36) using reflection: allowed
+10-27 21:08:04.254 25739 25739 D CompatChangeReporter: Compat change id reported: 377864165; UID 10345; state: ENABLED
+10-27 21:08:04.255 25739 25739 I wm_on_create_called: [79923816,com.openac.app.MainActivity,performCreate,59]
+10-27 21:08:04.255 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: CREATED
+10-27 21:08:04.255 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: STARTED
+10-27 21:08:04.255 25739 25739 I wm_on_start_called: [79923816,com.openac.app.MainActivity,handleStartActivity,0]
+10-27 21:08:04.256 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: RESUMED
+10-27 21:08:04.256 25739 25739 I wm_on_resume_called: [79923816,com.openac.app.MainActivity,RESUME_ACTIVITY,0]
+10-27 21:08:04.263 25739 25739 I wm_on_top_resumed_gained_called: [79923816,com.openac.app.MainActivity,topStateChangedWhenResumed]
+10-27 21:08:04.264 25739 25739 I flutter : 00:00 +0: openac android benchmark
+10-27 21:08:04.267 25739 25739 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@cd72f86
+10-27 21:08:04.271 25739 25739 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=10, activity embedding enabled=true
+10-27 21:08:04.273 25739 25739 W UiContextUtils: Requested context is a non-UI Context. Creating a UI-Context with display: 0. Context: Context=android.app.Application@32deb08, of which baseContext=android.app.ContextImpl@b42951a
+10-27 21:08:04.279 25739 25739 D VRI[MainActivity]: WindowInsets changed: 1080x2410 statusBars:[0,172,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,204,0,84] 
+10-27 21:08:04.281 25739 25739 I Surface : Creating surface for consumer unnamed-25739-0 with slotExpansion=1 for 64 slots
+10-27 21:08:04.282 25739 25739 I Surface : Creating surface for consumer VRI[MainActivity]#0(BLAST Consumer)0 with slotExpansion=1 for 64 slots
+10-27 21:08:04.282 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:08:04.284 25739 25739 I surfaceview_layout: [SV[115734740 MainActivity],4,1080,2410,-2,layout,1,0,1]
+10-27 21:08:04.284 25739 25739 I Surface : Creating surface for consumer unnamed-25739-1 with slotExpansion=1 for 64 slots
+10-27 21:08:04.284 25739 25739 I Surface : Creating surface for consumer 6e5f8d4 SurfaceView[com.openac.app/com.openac.app.MainActivity]#1(BLAST Consumer)1 with slotExpansion=1 for 64 slots
+10-27 21:08:04.284 25739 25739 I surfaceview_callback: [SV[115734740 MainActivity],surfaceCreated]
+10-27 21:08:04.294 25739 25739 I surfaceview_callback: [SV[115734740 MainActivity],surfaceChanged -- format=4 w=1080 h=2410]
+10-27 21:08:04.295 25739 25739 I surfaceview_callback: [SV[115734740 MainActivity],surfaceRedrawNeeded]
+10-27 21:08:04.295 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,Canceling draw. cancelDueToPreDrawListener=true cancelDueToSync=false]
+10-27 21:08:04.300 25739 25739 D WindowLayoutComponentImpl: Register WindowLayoutInfoListener on Context=com.openac.app.MainActivity@10e2d7f, of which baseContext=android.app.ContextImpl@92f2a3b
+10-27 21:08:04.304 25739 25739 I flutter : Wrote assets/circom/jwt_input.json → /data/user/0/com.openac.app/app_flutter/circom/jwt_input.json
+10-27 21:08:04.304 25739 25739 I flutter : Wrote assets/circom/show_input.json → /data/user/0/com.openac.app/app_flutter/circom/show_input.json
+10-27 21:08:04.407 25739 25739 I auditd  : type=1400 audit(0.0:6335): avc:  denied  { search } for  comm="com.openac.app" name="/" dev="cgroup2" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup_v2:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.407 25739 25739 W com.openac.app: type=1400 audit(0.0:6335): avc:  denied  { search } for  name="/" dev="cgroup2" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup_v2:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.407 25739 25739 I auditd  : type=1400 audit(0.0:6336): avc:  denied  { search } for  comm="com.openac.app" name="/" dev="cgroup2" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup_v2:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.407 25739 25739 W com.openac.app: type=1400 audit(0.0:6336): avc:  denied  { search } for  name="/" dev="cgroup2" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup_v2:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.407 25739 25739 I auditd  : type=1400 audit(0.0:6337): avc:  denied  { search } for  comm="com.openac.app" name="/" dev="cgroup" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.407 25739 25739 W com.openac.app: type=1400 audit(0.0:6337): avc:  denied  { search } for  name="/" dev="cgroup" ino=1 scontext=u:r:untrusted_app_34:s0:c89,c257,c512,c768 tcontext=u:object_r:cgroup:s0 tclass=dir permissive=0 app=com.openac.app
+10-27 21:08:04.411 25739 25739 I flutter : OPENAC_DEVICE {"android_sdk":"37","big_cores":[2,3,4,5,6],"cpu_max_freq_khz":[2649000,2649000,3379000,3379000,3379000,3379000,4109000],"manufacturer":"Google","mem_available_kb":6713604,"mem_total_kb":11926604,"product_model":"Pixel 11 Pro","rayon_default_threads":7,"soc_manufacturer":"Google","soc_model":"Tensor G6","model":"Pixel 11 Pro","sdk":37,"threads":7,"harness":"contract"}
+10-27 21:08:04.566 25739 25743 I com.openac.app: Compiler allocated 5295KB to compile void android.view.ViewRootImpl.performTraversals(long)
+10-27 21:08:08.623 25739 25739 I flutter : OPENAC_SIZES {"step":"present","proof_bytes":159502,"out_prepare_proof_bytes":112103,"out_show_proof_bytes":47399,"prepare_proving_bytes":431866474,"show_proving_bytes":4862778,"prepare_instance_bytes":68015,"prepare_witness_bytes":67174417,"shared_blinds_bytes":40,"stage_ms":1066,"out_files":["out/present_prepare.proof","out/present_prepare.instance","out/present_show.proof","out/present_show.instance"]}
+10-27 21:08:08.623 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":0,"phase":"cold","process_cold":true,"load_ms":0,"prove_ms":353,"total_ms":353,"base_rss_kb":747440,"peak_rss_kb":772244,"mem_available_kb_before":6766776}
+10-27 21:08:08.623 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":0,"phase":"cold","process_cold":true,"load_ms":0,"prove_ms":1316,"total_ms":1316,"base_rss_kb":747440,"peak_rss_kb":1811676,"mem_available_kb_before":6766776}
+10-27 21:08:08.623 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":0,"phase":"cold","process_cold":true,"load_ms":0,"prove_ms":121,"total_ms":121,"base_rss_kb":747440,"peak_rss_kb":766240,"mem_available_kb_before":6766776}
+10-27 21:08:08.623 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":0,"phase":"cold","process_cold":true,"load_ms":1301,"prove_ms":1828,"total_ms":3140,"base_rss_kb":266584,"peak_rss_kb":1811676,"mem_available_kb_before":6766776}
+10-27 21:08:09.194 25739 25836 D ProfileInstaller: Installing profile for com.openac.app
+10-27 21:08:14.203  1293  1484 I am_pss  : [25739,10345,com.openac.app,0,0,0,854028288,0,2,9]
+10-27 21:08:20.504 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":1,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":341,"total_ms":341,"base_rss_kb":754312,"peak_rss_kb":770264,"mem_available_kb_before":6276288}
+10-27 21:08:20.504 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":1,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1328,"total_ms":1328,"base_rss_kb":754312,"peak_rss_kb":1809704,"mem_available_kb_before":6276288}
+10-27 21:08:20.504 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":1,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":156,"total_ms":156,"base_rss_kb":754312,"peak_rss_kb":764016,"mem_available_kb_before":6276288}
+10-27 21:08:20.504 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":1,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1861,"total_ms":1872,"base_rss_kb":754304,"peak_rss_kb":1809704,"mem_available_kb_before":6276288}
+10-27 21:08:32.369 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":2,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":307,"total_ms":307,"base_rss_kb":756708,"peak_rss_kb":772332,"mem_available_kb_before":6303948}
+10-27 21:08:32.370 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":2,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1374,"total_ms":1374,"base_rss_kb":756708,"peak_rss_kb":1806888,"mem_available_kb_before":6303948}
+10-27 21:08:32.370 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":2,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":135,"total_ms":135,"base_rss_kb":756708,"peak_rss_kb":766104,"mem_available_kb_before":6303948}
+10-27 21:08:32.370 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":2,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1851,"total_ms":1860,"base_rss_kb":756700,"peak_rss_kb":1806888,"mem_available_kb_before":6303948}
+--------- beginning of radio
+10-27 21:08:44.212 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":3,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":310,"total_ms":310,"base_rss_kb":755524,"peak_rss_kb":771532,"mem_available_kb_before":6301992}
+10-27 21:08:44.212 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":3,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1368,"total_ms":1368,"base_rss_kb":755524,"peak_rss_kb":1810464,"mem_available_kb_before":6301992}
+10-27 21:08:44.212 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":3,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":122,"total_ms":122,"base_rss_kb":755524,"peak_rss_kb":764992,"mem_available_kb_before":6301992}
+10-27 21:08:44.212 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":3,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1823,"total_ms":1835,"base_rss_kb":755520,"peak_rss_kb":1810464,"mem_available_kb_before":6301992}
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[binder:25739_1,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[InstrumentationConnectionThread,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nativePollOnce(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nextLegacy(MessageQueue.java:871)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.MessageQueue.next(MessageQueue.java:773)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.Looper.loopOnce(Looper.java:232)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.Looper.loop(Looper.java:397)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.os.HandlerThread.run(HandlerThread.java:139)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[MonitoringInstrumentation,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:405)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:543)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.app.Instrumentation.startActivitySync(Instrumentation.java:637)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     android.app.Instrumentation.startActivitySync(Instrumentation.java:570)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation.access$201(MonitoringInstrumentation.java:100)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation$4.call(MonitoringInstrumentation.java:480)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation$4.call(MonitoringInstrumentation.java:477)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.FutureTask.run(FutureTask.java:328)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1100)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[RenderThread,7,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[HeapTaskDaemon,5,system]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[flutter-worker-1,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     jdk.internal.misc.Unsafe.park(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:417)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.LinkedTransferQueue$DualNode.await(LinkedTransferQueue.java:452)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue$Transferer.xferLifo(SynchronousQueue.java:194)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue.xfer(SynchronousQueue.java:235)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue.poll(SynchronousQueue.java:338)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1025)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1086)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[Signal Catcher,10,system]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[ProtoLogBackground,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     jdk.internal.misc.Unsafe.park(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.LockSupport.park(LockSupport.java:376)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:520)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3797)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3738)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1752)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.LinkedBlockingDeque.takeFirst(LinkedBlockingDeque.java:486)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.LinkedBlockingDeque.take(LinkedBlockingDeque.java:680)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1026)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1086)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[binder:25739_4,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[binder:25739_3,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[binder:25739_5,5,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[hwuiTask0,6,main]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[ReferenceQueueDaemon,5,system]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:405)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:543)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Daemons$ReferenceQueueDaemon.runInternal(Daemons.java:262)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Daemons$Daemon.run(Daemons.java:135)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:   Thread[FinalizerDaemon,5,system]
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Native Method)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:405)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:207)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:228)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Daemons$FinalizerDaemon.runInternal(Daemons.java:350)
+10-27 21:08:49.179 25739 25752 E THREAD_STATE:     java.lang.Daemons$Daemon.run(Daemons.java:135)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[Profile Saver,4,system]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[main,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nativePollOnce(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nextLegacy(MessageQueue.java:871)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.next(MessageQueue.java:773)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.Looper.loopOnce(Looper.java:232)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.Looper.loop(Looper.java:397)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.app.ActivityThread.main(ActivityThread.java:9527)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.reflect.Method.invoke(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:575)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     com.android.internal.os.ZygoteInit.main(ZygoteInit.java:939)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[pool-4-thread-1,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     jdk.internal.misc.Unsafe.park(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.LockSupport.park(LockSupport.java:376)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:520)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3797)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3738)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1752)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1026)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1086)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[Instr: androidx.test.runner.AndroidJUnitRunner,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     dalvik.system.VMStack.getThreadStackTrace(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.getStackTrace(Thread.java:2852)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.getAllStackTraces(Thread.java:2919)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation.getThreadState(MonitoringInstrumentation.java:680)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation.dumpThreadStateToOutputs(MonitoringInstrumentation.java:675)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.runner.MonitoringInstrumentation.startActivitySync(MonitoringInstrumentation.java:487)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.rule.ActivityTestRule.launchActivity(ActivityTestRule.java:358)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     dev.flutter.plugins.integration_test.FlutterTestRunner.run(FlutterTestRunner.java:64)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.Suite.runChild(Suite.java:128)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.Suite.runChild(Suite.java:27)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runners.ParentRunner.run(ParentRunner.java:363)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     org.junit.runner.JUnitCore.run(JUnitCore.java:115)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.internal.runner.TestExecutor.execute(TestExecutor.java:56)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     androidx.test.runner.AndroidJUnitRunner.onStart(AndroidJUnitRunner.java:395)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2637)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[flutter-worker-0,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     jdk.internal.misc.Unsafe.park(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:417)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.LinkedTransferQueue$DualNode.await(LinkedTransferQueue.java:452)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue$Transferer.xferLifo(SynchronousQueue.java:194)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue.xfer(SynchronousQueue.java:235)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.SynchronousQueue.poll(SynchronousQueue.java:338)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1025)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1086)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[binder:25739_2,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[UiAutomation,5,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nativePollOnce(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.nextLegacy(MessageQueue.java:871)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.MessageQueue.next(MessageQueue.java:773)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.Looper.loopOnce(Looper.java:232)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.Looper.loop(Looper.java:397)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     android.os.HandlerThread.run(HandlerThread.java:139)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[Jit thread pool worker thread 0,4,system]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[FinalizerWatchdogDaemon,5,system]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Native Method)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:405)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Object.wait(Object.java:543)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Daemons$FinalizerWatchdogDaemon.sleepUntilNeeded(Daemons.java:483)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Daemons$FinalizerWatchdogDaemon.runInternal(Daemons.java:463)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Daemons$Daemon.run(Daemons.java:135)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:     java.lang.Thread.run(Thread.java:1572)
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.180 25739 25752 E THREAD_STATE:   Thread[hwuiTask1,6,main]
+10-27 21:08:49.180 25739 25752 E THREAD_STATE: 
+10-27 21:08:49.181 25739 25752 V FlutterTestRunner: launchActivity failed, possibly because the activity was already running. java.lang.RuntimeException: Could not launch intent Intent { act=android.intent.action.MAIN flg=0x14000000 cmp=com.openac.app/.MainActivity } within 45000 milliseconds. Perhaps the main thread has not gone idle within a reasonable amount of time? There could be an animation or something constantly repainting the screen. Or the activity is doing network calls on creation? See the threaddump logs. For your reference the last time the event queue was idle before your activity launch request was 1793160484134 and now the last time the queue went idle was: 1793160484134. If these numbers are the same your activity might be hogging the event queue.
+10-27 21:08:49.181 25739 25752 V FlutterTestRunner: Try disabling auto-launch of the activity, e.g. ActivityTestRule<>(MainActivity.class, true, false);
+10-27 21:08:56.103 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":4,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":330,"total_ms":330,"base_rss_kb":757508,"peak_rss_kb":773404,"mem_available_kb_before":6298552}
+10-27 21:08:56.103 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":4,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1368,"total_ms":1368,"base_rss_kb":757508,"peak_rss_kb":1812716,"mem_available_kb_before":6298552}
+10-27 21:08:56.103 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":4,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":138,"total_ms":138,"base_rss_kb":757508,"peak_rss_kb":766908,"mem_available_kb_before":6298552}
+10-27 21:08:56.103 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":4,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1873,"total_ms":1885,"base_rss_kb":757504,"peak_rss_kb":1812716,"mem_available_kb_before":6298552}
+10-27 21:09:07.967 25739 25739 I flutter : OPENAC_ITER {"step":"show_prove","iter":5,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":315,"total_ms":315,"base_rss_kb":750180,"peak_rss_kb":774044,"mem_available_kb_before":6308116}
+10-27 21:09:07.967 25739 25739 I flutter : OPENAC_ITER {"step":"prepare_reblind","iter":5,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1363,"total_ms":1363,"base_rss_kb":750180,"peak_rss_kb":1813260,"mem_available_kb_before":6308116}
+10-27 21:09:07.967 25739 25739 I flutter : OPENAC_ITER {"step":"show_reblind","iter":5,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":148,"total_ms":148,"base_rss_kb":750180,"peak_rss_kb":767376,"mem_available_kb_before":6308116}
+10-27 21:09:07.967 25739 25739 I flutter : OPENAC_ITER {"step":"present_total","iter":5,"phase":"warm","process_cold":false,"load_ms":0,"prove_ms":1847,"total_ms":1856,"base_rss_kb":750176,"peak_rss_kb":1813260,"mem_available_kb_before":6308116}
+10-27 21:09:08.028 25739 25739 I flutter : OPENAC_DONE {"ok":24,"errors":0}
+10-27 21:09:08.032 25739 25739 I flutter : 01:03 +1: (tearDownAll)
+10-27 21:09:08.033 25739 25752 I TestRunner: started: openac android benchmark(com.openac.app.MainActivityTest)
+10-27 21:09:08.033 25739 25739 I flutter : 01:03 +2: All tests passed!
+10-27 21:09:08.047 25739 25739 I surfaceview_callback: [SV[115734740 MainActivity],surfaceRedrawNeeded implemented]
+10-27 21:09:08.053 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,Draw frame after cancel]
+10-27 21:09:08.069 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,reportDrawFinished seqId=1]
+10-27 21:09:08.069 25739 25739 I MonitoringInstr: Activities that are still in CREATED to STOPPED: 1
+10-27 21:09:08.069 25739 25739 I MonitoringInstr: Finishing activity: com.openac.app.MainActivity@10e2d7f
+10-27 21:09:08.073 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.073 25739 25739 I wm_on_top_resumed_lost_called: [79923816,com.openac.app.MainActivity,topStateChangedWhenResumed]
+10-27 21:09:08.076 25739 25739 I wm_on_paused_called: [79923816,com.openac.app.MainActivity,performPause,0]
+10-27 21:09:08.076 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: PAUSED
+10-27 21:09:08.106  1293  1484 I am_pss  : [25739,10345,com.openac.app,0,0,0,883728384,0,4,2]
+10-27 21:09:08.123 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.173 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.224 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.274 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.324 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.375 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.425 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.475 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.526 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.576 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.627 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.677 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.728 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.778 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.829 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.879 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.930 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:08.980 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:09.030 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:09.081 25739 25752 I MonitoringInstr: Unstopped activity count: 1
+10-27 21:09:09.109 25739 25739 D VRI[MainActivity]: visibilityChanged oldVisibility=true newVisibility=false
+10-27 21:09:09.115 25739 25739 I surfaceview_layout: [SV[115734740 MainActivity],4,1080,2410,-2,layout,1,0,0]
+10-27 21:09:09.115 25739 25739 I surfaceview_callback: [SV[115734740 MainActivity],surfaceDestroyed]
+10-27 21:09:09.126 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:09:09.126 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:09:09.127 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,Not drawing due to not visible. Reason=!mAppVisible && !mForceDecorViewVisibility]
+10-27 21:09:09.129 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:09:09.129 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: STOPPED
+10-27 21:09:09.129 25739 25739 I wm_on_stop_called: [79923816,com.openac.app.MainActivity,LIFECYCLER_STOP_ACTIVITY,1]
+10-27 21:09:09.130 25739 25739 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-27 21:09:09.133 25739 25752 I TestRunner: finished: openac android benchmark(com.openac.app.MainActivityTest)
+10-27 21:09:09.150 25739 25739 I wm_on_destroy_called: [79923816,com.openac.app.MainActivity,performDestroy,19]
+10-27 21:09:09.150 25739 25739 D LifecycleMonitor: Lifecycle status change: com.openac.app.MainActivity@10e2d7f in: DESTROYED
+10-27 21:09:09.150 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:09:09.150 25739 25739 I viewroot_draw_event: [VRI[MainActivity]e06ad72,applyTransactionOnDraw applyImmediately]
+10-27 21:09:09.152 25739 25739 D ViewRootImpl: Skipping stats log for color mode
+10-27 21:09:09.154 25739 25752 I TestRunner: run finished: 1 tests, 0 failed, 0 ignored
+10-27 21:09:09.368 25739 25752 I MonitoringInstr: waitForActivitiesToComplete() took: 0ms
+10-27 21:09:09.374  1293  6401 I ActivityManager: Force stopping com.openac.app appid=10345 user=0: finished inst
+10-27 21:09:09.377  1293  6401 I ActivityManager: Killing 25739:com.openac.app/u0a345 (adj 0): stop com.openac.app due to finished inst
+10-27 21:09:09.377  1293  6401 I am_kill : [0,25739,com.openac.app,0,stop com.openac.app due to finished inst,752292]
+10-27 21:09:09.567  1293  6122 V ActivityManager: Got obituary of 25739:com.openac.app
