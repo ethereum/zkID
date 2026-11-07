@@ -97,6 +97,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@commander-js/extra-typings@npm:^12.1.0":
+  version: 12.1.0
+  resolution: "@commander-js/extra-typings@npm:12.1.0"
+  peerDependencies:
+    commander: ~12.1.0
+  checksum: 10c0/5d29eaa724b577e2a52a393ad54992924d2559931b8e493ab892477b7a4e878e475c6bf771260f8585d835f7d8e17ae4a2656c191e9595d210ae0b48291c0b3d
+  languageName: node
+  linkType: hard
+
 "@cspotcode/source-map-support@npm:^0.8.0":
   version: 0.8.1
   resolution: "@cspotcode/source-map-support@npm:0.8.1"
@@ -697,16 +706,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@iden3/binfileutils@npm:0.0.11":
-  version: 0.0.11
-  resolution: "@iden3/binfileutils@npm:0.0.11"
-  dependencies:
-    fastfile: "npm:0.0.20"
-    ffjavascript: "npm:^0.2.48"
-  checksum: 10c0/a7c735ccb734f1bebaa4269284ecdae82bbfe2d2c11b76a627922f8f511033ce9e1300873c22f8f689d682edb3a39c9ad182d8794b6b7412cf55e44c287e93d0
-  languageName: node
-  linkType: hard
-
 "@iden3/binfileutils@npm:0.0.12":
   version: 0.0.12
   resolution: "@iden3/binfileutils@npm:0.0.12"
@@ -1016,7 +1015,7 @@ __metadata:
     bs58: "npm:^6.0.0"
     cbor: "npm:^10.0.0"
     circom_tester: "npm:^0.0.21"
-    circomkit: "npm:^0.3.4"
+    circomkit: "npm:^0.4.0"
     circomlib: "npm:^2.0.5"
     did-resolver: "npm:^4.1.0"
     jose: "npm:^6.0.10"
@@ -1626,13 +1625,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"child_process@npm:^1.0.2":
-  version: 1.0.2
-  resolution: "child_process@npm:1.0.2"
-  checksum: 10c0/6e45dff224c704dc5c5edc14532e6c0c5c23a7c5f823574349246082d94a29780a68a46155d8a6989ffa986cb12ed0b01fbfc6c713b6655959fabb6b8cd52e4a
-  languageName: node
-  linkType: hard
-
 "chokidar@npm:^4.0.1":
   version: 4.0.3
   resolution: "chokidar@npm:4.0.3"
@@ -1660,22 +1652,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"circom_tester@npm:^0.0.19":
-  version: 0.0.19
-  resolution: "circom_tester@npm:0.0.19"
-  dependencies:
-    chai: "npm:^4.3.6"
-    child_process: "npm:^1.0.2"
-    ffjavascript: "npm:^0.2.56"
-    fnv-plus: "npm:^1.3.1"
-    r1csfile: "npm:^0.0.41"
-    snarkjs: "npm:0.5.0"
-    tmp-promise: "npm:^3.0.3"
-    util: "npm:^0.12.4"
-  checksum: 10c0/a09372c360cc2dfda85e888cc37c6b9daa8ec77728b9f6c91e84ef15cfc02a99cd66de8e01d7008827be7d13930e84ab3cdd9b185de117fd848d645b0975056d
-  languageName: node
-  linkType: hard
-
 "circom_tester@npm:^0.0.21":
   version: 0.0.21
   resolution: "circom_tester@npm:0.0.21"
@@ -1691,19 +1667,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"circomkit@npm:^0.3.4":
-  version: 0.3.4
-  resolution: "circomkit@npm:0.3.4"
+"circomkit@npm:^0.4.0":
+  version: 0.4.0
+  resolution: "circomkit@npm:0.4.0"
   dependencies:
-    circom_tester: "npm:^0.0.19"
+    "@commander-js/extra-typings": "npm:^12.1.0"
     commander: "npm:^12.1.0"
+    ffjavascript: "npm:^0.3.1"
     loglevel: "npm:^1.9.2"
   peerDependencies:
     "@types/snarkjs": ^0.7.x
-    snarkjs: ^0.7.x
+    snarkjs: ^0.7.5
   bin:
     circomkit: dist/cli.js
-  checksum: 10c0/9ae58dd2fdb5fda47fab784680d94b8a16973f4eb53bb3b312b1bc44044da353b1837f967b4a68e549a2377e41cce951ec88245fab190d8f08602bd23cafaa31
+  checksum: 10c0/1d3ba540b359d566bcb663ee4ff2d07dedf659f73c876b01c02b9fbfd8729ec633aa1238157c415eb8bb3b7d5e86f8aad90f188c654721d53307927eb0505827
   languageName: node
   linkType: hard
 
@@ -2191,17 +2168,6 @@ __metadata:
     picomatch:
       optional: true
   checksum: 10c0/e345083c4306b3aed6cb8ec551e26c36bab5c511e99ea4576a16750ddc8d3240e63826cc624f5ae17ad4dc82e68a253213b60d556c11bfad064b7607847ed07f
-  languageName: node
-  linkType: hard
-
-"ffjavascript@npm:0.2.56, ffjavascript@npm:^0.2.48, ffjavascript@npm:^0.2.56":
-  version: 0.2.56
-  resolution: "ffjavascript@npm:0.2.56"
-  dependencies:
-    wasmbuilder: "npm:0.0.16"
-    wasmcurves: "npm:0.2.0"
-    web-worker: "npm:^1.2.0"
-  checksum: 10c0/62cd9e8a2a2f44eb210d3e7a6b35618a5c9779192a8ed8d614f5e8b8c7e69cd9810d1cb2b569a47423026e4bbff4c2a88096234a4e536e60d3d5f7fefdeb276e
   languageName: node
   linkType: hard
 
@@ -3213,18 +3179,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"r1csfile@npm:^0.0.41":
-  version: 0.0.41
-  resolution: "r1csfile@npm:0.0.41"
-  dependencies:
-    "@iden3/bigarray": "npm:0.0.2"
-    "@iden3/binfileutils": "npm:0.0.11"
-    fastfile: "npm:0.0.20"
-    ffjavascript: "npm:0.2.56"
-  checksum: 10c0/93446afea94aa45de5abfe118155d31699d7fb174d41df33f71ced0f6e5155d580d20f6489aeb4afa6f4055deba6078a04301c31a4239a6c3212b04d918c0209
-  languageName: node
-  linkType: hard
-
 "randombytes@npm:^2.1.0":
   version: 2.1.0
   resolution: "randombytes@npm:2.1.0"
@@ -3655,7 +3609,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"util@npm:^0.12.4, util@npm:^0.12.5":
+"util@npm:^0.12.5":
   version: 0.12.5
   resolution: "util@npm:0.12.5"
   dependencies:
@@ -3689,15 +3643,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"wasmcurves@npm:0.2.0":
-  version: 0.2.0
-  resolution: "wasmcurves@npm:0.2.0"
-  dependencies:
-    wasmbuilder: "npm:0.0.16"
-  checksum: 10c0/e8ee355e2e67c9f8e46138fbee11dd28f77372696bb6f1d370af35ec311c371fc7cb9e8359224c32940f7844755986a4906419a8002f639e231d2c902be480c0
-  languageName: node
-  linkType: hard
-
 "wasmcurves@npm:0.2.2":
   version: 0.2.2
   resolution: "wasmcurves@npm:0.2.2"
@@ -3707,7 +3652,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"web-worker@npm:1.2.0, web-worker@npm:^1.2.0":
+"web-worker@npm:1.2.0":
   version: 1.2.0
   resolution: "web-worker@npm:1.2.0"
   checksum: 10c0/2bec036cd4784148e2f135207c62facf4457a0f2b205d6728013b9f0d7c62404dced95fcd849478387e10c8ae636d665600bd0d99d80b18c3bb2a7f045aa20d8
