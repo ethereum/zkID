@@ -55,6 +55,10 @@ struct BenchmarkResults {
     reblind_show_ms: u128,
     verify_prepare_ms: u128,
     verify_show_ms: u128,
+    load_prepare_vk_ms: u128,
+    load_show_vk_ms: u128,
+    verify_prepare_warm_ms: u128,
+    verify_show_warm_ms: u128,
 
     prepare_proving_key_bytes: u64,
     prepare_verifying_key_bytes: u64,
@@ -113,12 +117,28 @@ impl BenchmarkResults {
             self.reblind_show_ms
         );
         println!(
-            "║ Verify Prepare:         {:>10} ms          ║",
+            "║ Load Prepare VK:        {:>10} ms          ║",
+            self.load_prepare_vk_ms
+        );
+        println!(
+            "║ Load Show VK:           {:>10} ms          ║",
+            self.load_show_vk_ms
+        );
+        println!(
+            "║ Verify Prepare (first): {:>10} ms          ║",
             self.verify_prepare_ms
         );
         println!(
-            "║ Verify Show:            {:>10} ms          ║",
+            "║ Verify Prepare (warm):  {:>10} ms          ║",
+            self.verify_prepare_warm_ms
+        );
+        println!(
+            "║ Verify Show (first):    {:>10} ms          ║",
             self.verify_show_ms
+        );
+        println!(
+            "║ Verify Show (warm):     {:>10} ms          ║",
+            self.verify_show_warm_ms
         );
         println!("╠════════════════════════════════════════════════════╣");
         println!("║ SIZE MEASUREMENTS                                  ║");
@@ -222,8 +242,12 @@ fn print_comparison_table(results: &[BenchmarkResults]) {
     row("Reblind Prepare", &ms(|r| r.reblind_prepare_ms));
     row("Prove Show", &ms(|r| r.prove_show_ms));
     row("Reblind Show", &ms(|r| r.reblind_show_ms));
-    row("Verify Prepare", &ms(|r| r.verify_prepare_ms));
-    row("Verify Show", &ms(|r| r.verify_show_ms));
+    row("Load Prepare VK", &ms(|r| r.load_prepare_vk_ms));
+    row("Load Show VK", &ms(|r| r.load_show_vk_ms));
+    row("Verify Prepare (first)", &ms(|r| r.verify_prepare_ms));
+    row("Verify Prepare (warm)", &ms(|r| r.verify_prepare_warm_ms));
+    row("Verify Show (first)", &ms(|r| r.verify_show_ms));
+    row("Verify Show (warm)", &ms(|r| r.verify_show_warm_ms));
 
     print!("╠{:═<width$}╬", "", width = label_w + 2);
     println!(
@@ -338,12 +362,16 @@ fn run_prove_pipeline(
 
     let prepare_pk = load_proving_key(&prepare_pk_path)
         .map_err(|e| format!("Failed to load prepare proving key: {e}"))?;
+    let t0 = Instant::now();
     let prepare_vk = load_verifying_key(&prepare_vk_path)
         .map_err(|e| format!("Failed to load prepare verifying key: {e}"))?;
+    let load_prepare_vk_ms = t0.elapsed().as_millis();
     let show_pk = load_proving_key(&show_pk_path)
         .map_err(|e| format!("Failed to load show proving key: {e}"))?;
+    let t0 = Instant::now();
     let show_vk = load_verifying_key(&show_vk_path)
         .map_err(|e| format!("Failed to load show verifying key: {e}"))?;
+    let load_show_vk_ms = t0.elapsed().as_millis();
 
     info!("Generating shared blinds...");
     let t0 = Instant::now();
@@ -425,6 +453,10 @@ fn run_prove_pipeline(
     let prepare_public_values = verify_circuit_with_loaded_data(&prepare_proof, &prepare_vk);
     let verify_prepare_ms = t0.elapsed().as_millis();
     println!("✓ Prepare proof verified: {} ms", verify_prepare_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&prepare_proof, &prepare_vk);
+    let verify_prepare_warm_ms = t0.elapsed().as_millis();
+    println!("✓ Prepare proof verified (warm): {} ms", verify_prepare_warm_ms);
     let jwt_layout = calculate_jwt_output_indices(size);
     print_public_statement(
         &prepare_public_values,
@@ -441,6 +473,10 @@ fn run_prove_pipeline(
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    let verify_show_warm_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof verified (warm): {} ms", verify_show_warm_ms);
     if !show_public_values.is_empty() {
         let expression_result = show_public_values[0] == Field::ONE;
         println!("  expressionResult: {}\n", expression_result);
@@ -490,6 +526,10 @@ fn run_prove_pipeline(
         reblind_show_ms,
         verify_prepare_ms,
         verify_show_ms,
+        load_prepare_vk_ms,
+        load_show_vk_ms,
+        verify_prepare_warm_ms,
+        verify_show_warm_ms,
         prepare_proving_key_bytes,
         prepare_verifying_key_bytes,
         show_proving_key_bytes,
@@ -542,12 +582,16 @@ fn run_mdoc_prove_pipeline(
 
     let mdoc_pk = load_proving_key(&mdoc_pk_path)
         .map_err(|e| format!("Failed to load mdoc proving key: {e}"))?;
+    let t0 = Instant::now();
     let mdoc_vk = load_verifying_key(&mdoc_vk_path)
         .map_err(|e| format!("Failed to load mdoc verifying key: {e}"))?;
+    let load_prepare_vk_ms = t0.elapsed().as_millis();
     let show_pk = load_proving_key(&show_pk_path)
         .map_err(|e| format!("Failed to load show proving key: {e}"))?;
+    let t0 = Instant::now();
     let show_vk = load_verifying_key(&show_vk_path)
         .map_err(|e| format!("Failed to load show verifying key: {e}"))?;
+    let load_show_vk_ms = t0.elapsed().as_millis();
 
     info!("Generating shared blinds...");
     let t0 = Instant::now();
@@ -628,6 +672,10 @@ fn run_mdoc_prove_pipeline(
     let mdoc_public_values = verify_circuit_with_loaded_data(&mdoc_proof, &mdoc_vk);
     let verify_mdoc_ms = t0.elapsed().as_millis();
     println!("✓ MDOC proof verified: {} ms", verify_mdoc_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&mdoc_proof, &mdoc_vk);
+    let verify_prepare_warm_ms = t0.elapsed().as_millis();
+    println!("✓ MDOC proof verified (warm): {} ms", verify_prepare_warm_ms);
     let mdoc_layout =
         calculate_mdoc_output_indices(ecdsa_spartan2::circuits::mdoc_circuit::MDOC_MAX_CLAIMS);
     print_public_statement(
@@ -644,6 +692,10 @@ fn run_mdoc_prove_pipeline(
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    let verify_show_warm_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof verified (warm): {} ms", verify_show_warm_ms);
     if !show_public_values.is_empty() {
         let expression_result = show_public_values[0] == Field::ONE;
         println!("  expressionResult: {}\n", expression_result);
@@ -660,6 +712,10 @@ fn run_mdoc_prove_pipeline(
         reblind_show_ms,
         verify_prepare_ms: verify_mdoc_ms,
         verify_show_ms,
+        load_prepare_vk_ms,
+        load_show_vk_ms,
+        verify_prepare_warm_ms,
+        verify_show_warm_ms,
         prepare_proving_key_bytes: get_file_size(&mdoc_pk_path.to_string_lossy()),
         prepare_verifying_key_bytes: get_file_size(&mdoc_vk_path.to_string_lossy()),
         show_proving_key_bytes: get_file_size(&show_pk_path.to_string_lossy()),
