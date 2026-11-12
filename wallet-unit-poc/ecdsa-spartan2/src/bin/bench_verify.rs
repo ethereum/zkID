@@ -1,19 +1,21 @@
 //! Splits standalone verification into its stages (issue #38).
 //!
-//! Usage: bench_verify <vk_path> <proof_path> [runs]
+//! Usage: bench_verify <vk_path> <proof_path> [runs] [pk_path]
 
 use std::{
     env,
     fs::{self, File},
-    io::{BufReader, Cursor},
+    io::{BufReader, Cursor, Read, Seek, SeekFrom, Write},
+    path::Path,
     time::Instant,
 };
 
-use ecdsa_spartan2::{load_proof, Scalar, E};
+use ecdsa_spartan2::{load_proof, load_verifying_key, Scalar, E};
 use ff::Field;
 use memmap2::MmapOptions;
 use serde::Deserialize;
 use spartan2::{
+    digest::{DigestComputer, Digestible},
     traits::{
         pcs::PCSEngineTrait,
         snark::{DigestHelperTrait, R1CSSNARKTrait},
@@ -46,6 +48,40 @@ struct ShapeMirror {
 struct VkMirror {
     _vk_ee: <<E as Engine>::PCS as PCSEngineTrait<E>>::VerifierKey,
     shape: ShapeMirror,
+}
+
+// Hashes raw bytes with no bincode length prefix, so DigestComputer yields
+// plain SHA3-256 of the file without a direct sha3 dependency.
+struct RawBytes<'a>(&'a [u8]);
+
+impl Digestible for RawBytes<'_> {
+    fn write_bytes<W: Sized + Write>(&self, byte_sink: &mut W) -> Result<(), std::io::Error> {
+        byte_sink.write_all(self.0)
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn cross_check(vk_path: &str, pk_path: Option<&String>) {
+    let file_hash = DigestComputer::new(&RawBytes(&fs::read(vk_path).unwrap()))
+        .digest()
+        .unwrap();
+    println!("sha3-256(vk file)              {}", hex(&file_hash));
+
+    match fs::read(Path::new(vk_path).with_extension("digest")) {
+        Ok(sidecar) => println!("sidecar equals file hash       {}", sidecar == file_hash),
+        Err(_) => println!("sidecar equals file hash       no sidecar"),
+    }
+
+    if let Some(pk_path) = pk_path {
+        let mut pk = File::open(pk_path).unwrap();
+        let mut tail = [0u8; 32];
+        pk.seek(SeekFrom::End(-32)).unwrap();
+        pk.read_exact(&mut tail).unwrap();
+        println!("pk tail equals file hash       {}", tail == file_hash);
+    }
 }
 
 fn ms(t: Instant) -> f64 {
@@ -89,6 +125,8 @@ fn main() {
     let vk_path = &args[1];
     let proof_path = &args[2];
     let runs: usize = args.get(3).map_or(5, |s| s.parse().unwrap());
+    let pk_path = args.get(4);
+    let has_sidecar = Path::new(vk_path).with_extension("digest").exists();
 
     let proof = load_proof(proof_path).expect("load proof");
     println!(
@@ -99,6 +137,9 @@ fn main() {
         std::thread::available_parallelism().unwrap()
     );
 
+    cross_check(vk_path, pk_path);
+
+    let (mut sidecar_load, mut sidecar_verify) = (vec![], vec![]);
     let (mut mmap_load, mut read, mut deser, mut bufread) = (vec![], vec![], vec![], vec![]);
     let (mut digest, mut first_verify, mut warm_verify) = (vec![], vec![], vec![]);
 
@@ -138,6 +179,18 @@ fn main() {
                 .unwrap();
         bufread.push(ms(t));
         drop(vk);
+
+        if has_sidecar {
+            let t = Instant::now();
+            let vk = load_verifying_key(vk_path).expect("load_verifying_key");
+            sidecar_load.push(ms(t));
+
+            let t = Instant::now();
+            proof
+                .verify(&vk)
+                .expect("verify failed on the sidecar-restored key: the sidecar digest does not match the key");
+            sidecar_verify.push(ms(t));
+        }
     }
 
     report("load: mmap + deserialize (current)", &mut mmap_load);
@@ -147,10 +200,17 @@ fn main() {
     report("vk.digest() on a fresh key", &mut digest);
     report("verify, first call on a fresh key", &mut first_verify);
     report("verify, digest cached", &mut warm_verify);
+    if has_sidecar {
+        report("load: load_verifying_key (sidecar)", &mut sidecar_load);
+        report("verify, first call (sidecar restored)", &mut sidecar_verify);
+    } else {
+        println!("sidecar rows skipped: no .digest file next to the vk path");
+    }
 
     let mirror: VkMirror = bincode::deserialize(&fs::read(vk_path).unwrap()).unwrap();
     println!("shape sizes {:?}", mirror.shape.sizes);
     matrix_stats("A", &mirror.shape.a);
     matrix_stats("B", &mirror.shape.b);
     matrix_stats("C", &mirror.shape.c);
+    println!("all verifications succeeded");
 }
