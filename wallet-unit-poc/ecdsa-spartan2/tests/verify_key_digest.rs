@@ -86,6 +86,58 @@ impl SpartanCircuit<E> for CubicCircuit {
     }
 }
 
+/// Different shape and constants from `CubicCircuit`: y = x^2 + 7 with x = 2.
+#[derive(Clone, Debug, Default)]
+struct SquareCircuit;
+
+impl SpartanCircuit<E> for SquareCircuit {
+    fn public_values(&self) -> Result<Vec<<E as Engine>::Scalar>, SynthesisError> {
+        Ok(vec![<E as Engine>::Scalar::from(11u64)])
+    }
+
+    fn shared<CS: ConstraintSystem<<E as Engine>::Scalar>>(
+        &self,
+        _: &mut CS,
+    ) -> Result<Vec<AllocatedNum<<E as Engine>::Scalar>>, SynthesisError> {
+        Ok(vec![])
+    }
+
+    fn precommitted<CS: ConstraintSystem<<E as Engine>::Scalar>>(
+        &self,
+        _: &mut CS,
+        _: &[AllocatedNum<<E as Engine>::Scalar>],
+    ) -> Result<Vec<AllocatedNum<<E as Engine>::Scalar>>, SynthesisError> {
+        Ok(vec![])
+    }
+
+    fn num_challenges(&self) -> usize {
+        0
+    }
+
+    fn synthesize<CS: ConstraintSystem<<E as Engine>::Scalar>>(
+        &self,
+        cs: &mut CS,
+        _: &[AllocatedNum<<E as Engine>::Scalar>],
+        _: &[AllocatedNum<<E as Engine>::Scalar>],
+        _: Option<&[<E as Engine>::Scalar]>,
+    ) -> Result<(), SynthesisError> {
+        let two = <E as Engine>::Scalar::from(2u64);
+        let x = AllocatedNum::alloc(cs.namespace(|| "x"), || Ok(two))?;
+        let x_sq = x.square(cs.namespace(|| "x_sq"))?;
+        let y = AllocatedNum::alloc(cs.namespace(|| "y"), || {
+            Ok(x_sq.get_value().unwrap() + <E as Engine>::Scalar::from(7u64))
+        })?;
+        cs.enforce(
+            || "y = x^2 + 7",
+            |lc| lc + x_sq.get_variable() + (<E as Engine>::Scalar::from(7u64), CS::one()),
+            |lc| lc + CS::one(),
+            |lc| lc + y.get_variable(),
+        );
+        let _ = y.inputize(cs.namespace(|| "output"));
+        Ok(())
+    }
+}
+
 struct Fixture {
     proof: Proof,
     vk_path: PathBuf,
@@ -101,8 +153,11 @@ fn tmp_dir(name: &str) -> PathBuf {
 }
 
 fn fixture(name: &str) -> Fixture {
+    fixture_for(name, CubicCircuit)
+}
+
+fn fixture_for<C: SpartanCircuit<E> + Clone>(name: &str, circuit: C) -> Fixture {
     let dir = tmp_dir(name);
-    let circuit = CubicCircuit;
     let (pk, vk) = Proof::setup(circuit.clone()).unwrap();
     let prep = Proof::prep_prove(&pk, circuit.clone(), false).unwrap();
     let proof = Proof::prove(&pk, circuit, &prep, false).unwrap();
@@ -115,6 +170,10 @@ fn fixture(name: &str) -> Fixture {
         vk_path,
         pk_digest: pk.vk_digest,
     }
+}
+
+fn cubic_out() -> [<E as Engine>::Scalar; 1] {
+    [<E as Engine>::Scalar::from(15u64)]
 }
 
 fn flip_bit(path: &Path) {
@@ -194,6 +253,237 @@ fn short_sidecar_is_a_load_error() {
     let f = fixture("short_sidecar");
     fs::write(&f.sidecar_path, &f.pk_digest[..31]).unwrap();
     assert!(load_verifying_key(&f.vk_path).is_err());
+}
+
+// ---- soundness: a sidecar the attacker controls can only make verification fail ----
+
+fn a_and_b(name: &str) -> (Fixture, Fixture) {
+    let a = fixture_for(&format!("{name}_a"), CubicCircuit);
+    let b = fixture_for(&format!("{name}_b"), SquareCircuit);
+    assert_ne!(a.pk_digest, b.pk_digest, "test circuits must differ");
+    (a, b)
+}
+
+#[test]
+fn proof_for_a_is_rejected_by_key_b_with_its_own_sidecar() {
+    let (a, b) = a_and_b("cross_baseline");
+    let vk_a = load_verifying_key(&a.vk_path).unwrap();
+    let vk_b = load_verifying_key(&b.vk_path).unwrap();
+    assert!(a.proof.verify(&vk_a).is_ok());
+    assert!(b.proof.verify(&vk_b).is_ok());
+    assert!(a.proof.verify(&vk_b).is_err());
+    assert!(b.proof.verify(&vk_a).is_err());
+}
+
+#[test]
+fn key_b_with_a_digest_rejects_proof_for_a() {
+    let (a, b) = a_and_b("b_with_a_digest_a_proof");
+    fs::write(&b.sidecar_path, a.pk_digest).unwrap();
+    let vk_b = load_verifying_key(&b.vk_path).unwrap();
+    assert_eq!(vk_b.digest().unwrap(), a.pk_digest);
+    assert!(a.proof.verify(&vk_b).is_err());
+}
+
+#[test]
+fn key_b_with_a_digest_rejects_proof_for_b() {
+    let (a, b) = a_and_b("b_with_a_digest_b_proof");
+    fs::write(&b.sidecar_path, a.pk_digest).unwrap();
+    let vk_b = load_verifying_key(&b.vk_path).unwrap();
+    assert!(b.proof.verify(&vk_b).is_err());
+}
+
+#[test]
+fn key_a_with_b_digest_rejects_both_proofs() {
+    let (a, b) = a_and_b("a_with_b_digest");
+    fs::write(&a.sidecar_path, b.pk_digest).unwrap();
+    let vk_a = load_verifying_key(&a.vk_path).unwrap();
+    assert!(a.proof.verify(&vk_a).is_err());
+    assert!(b.proof.verify(&vk_a).is_err());
+}
+
+#[test]
+fn all_zero_and_all_ff_sidecars_reject() {
+    let (a, b) = a_and_b("zero_ff");
+    for fill in [0x00u8, 0xff] {
+        for f in [&a, &b] {
+            fs::write(&f.sidecar_path, [fill; 32]).unwrap();
+            let vk = load_verifying_key(&f.vk_path).unwrap();
+            assert!(f.proof.verify(&vk).is_err(), "fill {fill:#x}");
+        }
+    }
+}
+
+// ---- sidecar edge cases ----
+
+#[test]
+fn empty_sidecar_is_a_load_error() {
+    let f = fixture("empty_sidecar");
+    fs::write(&f.sidecar_path, []).unwrap();
+    assert!(load_verifying_key(&f.vk_path).is_err());
+}
+
+#[test]
+fn long_sidecar_is_a_load_error() {
+    let f = fixture("long_sidecar");
+    let mut bytes = f.pk_digest.to_vec();
+    bytes.push(0);
+    fs::write(&f.sidecar_path, bytes).unwrap();
+    assert!(load_verifying_key(&f.vk_path).is_err());
+}
+
+#[test]
+fn sidecar_that_is_a_directory_is_a_load_error() {
+    let f = fixture("sidecar_dir");
+    fs::remove_file(&f.sidecar_path).unwrap();
+    fs::create_dir(&f.sidecar_path).unwrap();
+    assert!(load_verifying_key(&f.vk_path).is_err());
+}
+
+/// `Path::exists` follows symlinks, so a dangling sidecar link reads as "missing" and loading
+/// silently falls back to the lazy digest. Pinned as the current behavior.
+#[test]
+fn dangling_sidecar_symlink_falls_back_silently() {
+    let f = fixture("dangling_sidecar");
+    fs::remove_file(&f.sidecar_path).unwrap();
+    symlink(f.vk_path.with_file_name("does_not_exist"), &f.sidecar_path).unwrap();
+    let vk = load_verifying_key(&f.vk_path).expect("dangling link is treated as missing");
+    assert_eq!(f.proof.verify(&vk).unwrap(), cubic_out());
+}
+
+#[test]
+fn sidecar_symlink_to_valid_file_is_followed() {
+    let f = fixture("symlinked_sidecar");
+    let real = f.vk_path.with_file_name("real.digest");
+    fs::rename(&f.sidecar_path, &real).unwrap();
+    symlink(&real, &f.sidecar_path).unwrap();
+    let vk = load_verifying_key(&f.vk_path).unwrap();
+    assert_eq!(vk.digest().unwrap(), f.pk_digest);
+}
+
+/// Copies the VK to `name` and plants a wrong sidecar at `sidecar`. Returns whether the wrong
+/// digest was consulted, i.e. verification failed.
+fn wrong_sidecar_is_consulted(label: &str, name: &str, sidecar: &str) -> bool {
+    let f = fixture(label);
+    let dir = f.vk_path.parent().unwrap().to_path_buf();
+    let vk_path = dir.join(name);
+    fs::copy(&f.vk_path, &vk_path).unwrap();
+    let mut wrong = f.pk_digest;
+    wrong[0] ^= 1;
+    fs::write(dir.join(sidecar), wrong).unwrap();
+    let vk = load_verifying_key(&vk_path).unwrap();
+    f.proof.verify(&vk).is_err()
+}
+
+#[test]
+fn sidecar_path_for_extensionless_vk_is_name_dot_digest() {
+    assert!(wrong_sidecar_is_consulted("ext_none", "foo", "foo.digest"));
+    assert!(!wrong_sidecar_is_consulted("ext_none_other", "foo", "foo.key.digest"));
+}
+
+#[test]
+fn sidecar_path_replaces_only_the_last_extension() {
+    assert!(wrong_sidecar_is_consulted("ext_multi", "foo.bar.key", "foo.bar.digest"));
+    assert!(!wrong_sidecar_is_consulted("ext_multi_other", "foo.bar.key", "foo.bar.key.digest"));
+}
+
+#[test]
+fn vk_named_digest_has_sidecar_equal_to_itself() {
+    // with_extension("digest") on "x.digest" is "x.digest": the key file would be its own sidecar.
+    // Pin that this fails loudly (the key file is not 32 bytes) rather than silently.
+    let f = fixture("self_sidecar");
+    let path = f.vk_path.with_file_name("x.digest");
+    fs::copy(&f.vk_path, &path).unwrap();
+    assert!(load_verifying_key(&path).is_err());
+}
+
+// ---- round trip ----
+
+#[test]
+fn round_trip_preserves_digest_and_resave_is_identical() {
+    let dir = tmp_dir("round_trip");
+    let circuit = CubicCircuit;
+    let (pk, vk) = Proof::setup(circuit.clone()).unwrap();
+    let vk_path = dir.join("rt_verifying.key");
+    save_keys(dir.join("rt_proving.key"), &vk_path, &pk, &vk).unwrap();
+    let sidecar_path = vk_path.with_extension("digest");
+    let first_sidecar = fs::read(&sidecar_path).unwrap();
+    let first_vk = fs::read(&vk_path).unwrap();
+
+    let loaded = load_verifying_key(&vk_path).unwrap();
+    assert_eq!(loaded.digest().unwrap(), vk.digest().unwrap());
+    assert_eq!(loaded.digest().unwrap(), pk.vk_digest);
+
+    let dir2 = tmp_dir("round_trip_resave");
+    let vk_path2 = dir2.join("rt_verifying.key");
+    save_keys(dir2.join("rt_proving.key"), &vk_path2, &pk, &loaded).unwrap();
+    assert_eq!(fs::read(vk_path2.with_extension("digest")).unwrap(), first_sidecar);
+    assert_eq!(fs::read(&vk_path2).unwrap(), first_vk);
+}
+
+#[test]
+fn save_keys_twice_overwrites_sidecar() {
+    let a = fixture_for("overwrite", CubicCircuit);
+    let dir = a.vk_path.parent().unwrap().to_path_buf();
+    fs::write(&a.sidecar_path, [0xaau8; 32]).unwrap();
+
+    let circuit = SquareCircuit;
+    let (pk2, vk2) = Proof::setup(circuit.clone()).unwrap();
+    save_keys(dir.join("tiny_proving.key"), &a.vk_path, &pk2, &vk2).unwrap();
+    assert_eq!(fs::read(&a.sidecar_path).unwrap(), pk2.vk_digest);
+
+    // Saving the same key again keeps it correct, and the file is not left longer than 32 bytes.
+    save_keys(dir.join("tiny_proving.key"), &a.vk_path, &pk2, &vk2).unwrap();
+    assert_eq!(fs::read(&a.sidecar_path).unwrap(), pk2.vk_digest);
+    let vk = load_verifying_key(&a.vk_path).unwrap();
+    assert_eq!(vk.digest().unwrap(), pk2.vk_digest);
+}
+
+// ---- mutation coverage ----
+
+/// The proof carries bytes the verifier never reads (the instance's `blind_vars`), so some
+/// mutants verify regardless of this change. A restored digest must not change that set: it has
+/// to be identical with and without the sidecar.
+#[test]
+fn restored_digest_does_not_change_which_mutants_verify() {
+    let f = fixture("mutation_differential");
+    let restored = load_verifying_key(&f.vk_path).unwrap();
+    let lazy: VerifierKey = bincode::deserialize(&fs::read(&f.vk_path).unwrap()).unwrap();
+    let bytes = bincode::serialize(&f.proof).unwrap();
+
+    let step = (bytes.len() / 200).max(1);
+    let (mut reached, mut accepted) = (0, 0);
+    for offset in (0..bytes.len()).step_by(step) {
+        let mut mutated = bytes.clone();
+        mutated[offset] ^= 1 << (offset % 8);
+        if let Ok(mutant) = bincode::deserialize::<Proof>(&mutated) {
+            reached += 1;
+            let with_sidecar = mutant.verify(&restored).is_ok();
+            let without = mutant.verify(&lazy).is_ok();
+            assert_eq!(with_sidecar, without, "offset {offset}");
+            accepted += with_sidecar as usize;
+        }
+    }
+    println!("{reached} mutants reached verify, {accepted} accepted under both keys");
+    assert!(reached > 0);
+}
+
+// ---- fork level: the digest is not part of the serialized key ----
+
+#[test]
+fn restoring_a_digest_does_not_change_key_bytes() {
+    let f = fixture("serialize_same");
+    let original = fs::read(&f.vk_path).unwrap();
+    let lazy: VerifierKey = bincode::deserialize(&original).unwrap();
+
+    lazy.restore_digest_unchecked(f.pk_digest).unwrap();
+    assert_eq!(bincode::serialize(&lazy).unwrap(), original);
+
+    let mut wrong = f.pk_digest;
+    wrong[31] ^= 0x80;
+    let wrong_key: VerifierKey = bincode::deserialize(&original).unwrap();
+    wrong_key.restore_digest_unchecked(wrong).unwrap();
+    assert_eq!(bincode::serialize(&wrong_key).unwrap(), original);
+    assert_eq!(wrong_key.digest().unwrap(), wrong);
 }
 
 fn keys_dir() -> PathBuf {
@@ -291,4 +581,51 @@ fn real_2k_show() {
         "2k_show",
         "f0c447a9757d182e8aa23083bc3dba5a9a22f3e0fcbb344724568cc3c83352d8",
     );
+}
+
+/// Loads `vk_name`'s key with the digest sidecar of `digest_from`, then verifies both proofs.
+fn real_cross(vk_name: &str, digest_from: &str, proof_names: [&str; 2]) {
+    let vk_path = fixture_path(&format!("{vk_name}_verifying.key"));
+    let pk_path = fixture_path(&format!("{digest_from}_proving.key"));
+    let mut pk_file = fs::File::open(&pk_path).unwrap();
+    pk_file.seek(SeekFrom::End(-32)).unwrap();
+    let mut foreign = [0u8; 32];
+    pk_file.read_exact(&mut foreign).unwrap();
+
+    let dir = tmp_dir(&format!("real_cross_{vk_name}_with_{digest_from}"));
+    let linked = dir.join(format!("{vk_name}_verifying.key"));
+    symlink(&vk_path, &linked).unwrap();
+    fs::write(linked.with_extension("digest"), foreign).unwrap();
+    let vk = load_verifying_key(&linked).unwrap();
+    assert_eq!(vk.digest().unwrap(), foreign);
+
+    for proof_name in proof_names {
+        let proof: Proof =
+            bincode::deserialize(&fs::read(fixture_path(&format!("{proof_name}_proof.bin"))).unwrap())
+                .unwrap();
+        assert!(
+            proof.verify(&vk).is_err(),
+            "{proof_name} proof accepted by {vk_name} key with {digest_from} digest"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs v5.0.0 key files in keys/"]
+fn real_2k_show_key_with_prepare_digest_rejects() {
+    real_cross("2k_show", "2k_prepare", ["2k_prepare", "2k_show"]);
+}
+
+#[test]
+#[ignore = "needs v5.0.0 key files in keys/"]
+fn real_2k_prepare_key_with_show_digest_rejects() {
+    real_cross("2k_prepare", "2k_show", ["2k_show", "2k_prepare"]);
+}
+
+#[test]
+#[ignore = "needs v5.0.0 key files in keys/"]
+fn real_cross_proof_with_correct_sidecar_rejects() {
+    for (vk_name, proof_name) in [("2k_show", "2k_prepare"), ("2k_prepare", "2k_show")] {
+        real_cross(vk_name, vk_name, [proof_name, proof_name]);
+    }
 }
