@@ -212,10 +212,7 @@ fn save_keys_writes_sidecar_matching_digest() {
 fn loaded_key_verifies_proof() {
     let f = fixture("loaded_verifies");
     let vk = load_verifying_key(&f.vk_path).unwrap();
-    assert_eq!(
-        f.proof.verify(&vk).unwrap(),
-        [<E as Engine>::Scalar::from(15u64)]
-    );
+    assert_eq!(f.proof.verify(&vk).unwrap(), cubic_out());
 }
 
 #[test]
@@ -231,10 +228,7 @@ fn missing_sidecar_falls_back_to_lazy_digest() {
     let f = fixture("missing_sidecar");
     fs::remove_file(&f.sidecar_path).unwrap();
     let vk = load_verifying_key(&f.vk_path).unwrap();
-    assert_eq!(
-        f.proof.verify(&vk).unwrap(),
-        [<E as Engine>::Scalar::from(15u64)]
-    );
+    assert_eq!(f.proof.verify(&vk).unwrap(), cubic_out());
     assert!(!f.sidecar_path.exists(), "load must not write a sidecar");
 }
 
@@ -275,30 +269,19 @@ fn proof_for_a_is_rejected_by_key_b_with_its_own_sidecar() {
     assert!(b.proof.verify(&vk_a).is_err());
 }
 
+/// Plants `donor`'s digest next to `key`'s file. Each key must then reject its own proof, which
+/// only the digest can cause. The other circuit's proof is rejected on shape alone, so that
+/// assertion says nothing about the digest.
 #[test]
-fn key_b_with_a_digest_rejects_proof_for_a() {
-    let (a, b) = a_and_b("b_with_a_digest_a_proof");
-    fs::write(&b.sidecar_path, a.pk_digest).unwrap();
-    let vk_b = load_verifying_key(&b.vk_path).unwrap();
-    assert_eq!(vk_b.digest().unwrap(), a.pk_digest);
-    assert!(a.proof.verify(&vk_b).is_err());
-}
-
-#[test]
-fn key_b_with_a_digest_rejects_proof_for_b() {
-    let (a, b) = a_and_b("b_with_a_digest_b_proof");
-    fs::write(&b.sidecar_path, a.pk_digest).unwrap();
-    let vk_b = load_verifying_key(&b.vk_path).unwrap();
-    assert!(b.proof.verify(&vk_b).is_err());
-}
-
-#[test]
-fn key_a_with_b_digest_rejects_both_proofs() {
-    let (a, b) = a_and_b("a_with_b_digest");
-    fs::write(&a.sidecar_path, b.pk_digest).unwrap();
-    let vk_a = load_verifying_key(&a.vk_path).unwrap();
-    assert!(a.proof.verify(&vk_a).is_err());
-    assert!(b.proof.verify(&vk_a).is_err());
+fn foreign_digest_makes_key_reject_its_own_proof() {
+    let (a, b) = a_and_b("foreign_digest");
+    for (key, donor) in [(&b, &a), (&a, &b)] {
+        fs::write(&key.sidecar_path, donor.pk_digest).unwrap();
+        let vk = load_verifying_key(&key.vk_path).unwrap();
+        assert_eq!(vk.digest().unwrap(), donor.pk_digest);
+        assert!(key.proof.verify(&vk).is_err());
+        assert!(donor.proof.verify(&vk).is_err());
+    }
 }
 
 #[test]
@@ -401,8 +384,7 @@ fn vk_named_digest_has_sidecar_equal_to_itself() {
 #[test]
 fn round_trip_preserves_digest_and_resave_is_identical() {
     let dir = tmp_dir("round_trip");
-    let circuit = CubicCircuit;
-    let (pk, vk) = Proof::setup(circuit.clone()).unwrap();
+    let (pk, vk) = Proof::setup(CubicCircuit).unwrap();
     let vk_path = dir.join("rt_verifying.key");
     save_keys(dir.join("rt_proving.key"), &vk_path, &pk, &vk).unwrap();
     let sidecar_path = vk_path.with_extension("digest");
@@ -422,12 +404,11 @@ fn round_trip_preserves_digest_and_resave_is_identical() {
 
 #[test]
 fn save_keys_twice_overwrites_sidecar() {
-    let a = fixture_for("overwrite", CubicCircuit);
+    let a = fixture("overwrite");
     let dir = a.vk_path.parent().unwrap().to_path_buf();
     fs::write(&a.sidecar_path, [0xaau8; 32]).unwrap();
 
-    let circuit = SquareCircuit;
-    let (pk2, vk2) = Proof::setup(circuit.clone()).unwrap();
+    let (pk2, vk2) = Proof::setup(SquareCircuit).unwrap();
     save_keys(dir.join("tiny_proving.key"), &a.vk_path, &pk2, &vk2).unwrap();
     assert_eq!(fs::read(&a.sidecar_path).unwrap(), pk2.vk_digest);
 
@@ -451,7 +432,7 @@ fn restored_digest_does_not_change_which_mutants_verify() {
     let bytes = bincode::serialize(&f.proof).unwrap();
 
     let step = (bytes.len() / 200).max(1);
-    let (mut reached, mut accepted) = (0, 0);
+    let mut reached = 0;
     for offset in (0..bytes.len()).step_by(step) {
         let mut mutated = bytes.clone();
         mutated[offset] ^= 1 << (offset % 8);
@@ -460,10 +441,8 @@ fn restored_digest_does_not_change_which_mutants_verify() {
             let with_sidecar = mutant.verify(&restored).is_ok();
             let without = mutant.verify(&lazy).is_ok();
             assert_eq!(with_sidecar, without, "offset {offset}");
-            accepted += with_sidecar as usize;
         }
     }
-    println!("{reached} mutants reached verify, {accepted} accepted under both keys");
     assert!(reached > 0);
 }
 
@@ -504,6 +483,15 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The last 32 bytes of a proving key are the SHA3-256 digest of its verifying key.
+fn pk_tail(pk_path: &Path) -> [u8; 32] {
+    let mut pk_file = fs::File::open(pk_path).unwrap();
+    pk_file.seek(SeekFrom::End(-32)).unwrap();
+    let mut tail = [0u8; 32];
+    pk_file.read_exact(&mut tail).unwrap();
+    tail
+}
+
 fn check_real_key(name: &str, sdk_sha256: &str) {
     let vk_path = fixture_path(&format!("{name}_verifying.key"));
     let pk_path = fixture_path(&format!("{name}_proving.key"));
@@ -516,19 +504,16 @@ fn check_real_key(name: &str, sdk_sha256: &str) {
         "{name} VK SHA-256 pin"
     );
 
-    let mut pk_file = fs::File::open(&pk_path).unwrap();
-    pk_file.seek(SeekFrom::End(-32)).unwrap();
-    let mut pk_tail = [0u8; 32];
-    pk_file.read_exact(&mut pk_tail).unwrap();
+    let tail = pk_tail(&pk_path);
 
     let file_digest: [u8; 32] = Sha3_256::digest(&vk_bytes).into();
-    assert_eq!(file_digest, pk_tail, "{name} SHA3-256(VK file) vs PK tail");
+    assert_eq!(file_digest, tail, "{name} SHA3-256(VK file) vs PK tail");
 
     // Bypasses load_verifying_key so no sidecar is restored: this is the lazy digest.
     let lazy_vk: VerifierKey = bincode::deserialize(&vk_bytes).unwrap();
     assert_eq!(
         lazy_vk.digest().unwrap(),
-        pk_tail,
+        tail,
         "{name} lazy digest vs PK tail"
     );
 
@@ -540,7 +525,7 @@ fn check_real_key(name: &str, sdk_sha256: &str) {
     let proof_bytes = fs::read(&proof_path).unwrap();
     let proof: Proof = bincode::deserialize(&proof_bytes).unwrap();
 
-    fs::write(&sidecar, pk_tail).unwrap();
+    fs::write(&sidecar, tail).unwrap();
     let vk = load_verifying_key(&linked_vk).unwrap();
     assert!(
         proof.verify(&vk).is_ok(),
@@ -583,14 +568,11 @@ fn real_2k_show() {
     );
 }
 
-/// Loads `vk_name`'s key with the digest sidecar of `digest_from`, then verifies both proofs.
-fn real_cross(vk_name: &str, digest_from: &str, proof_names: [&str; 2]) {
+/// Loads `vk_name`'s key with the digest sidecar of `digest_from`, then checks each proof is
+/// rejected. A proof of a circuit other than `vk_name` is rejected on shape alone.
+fn real_cross(vk_name: &str, digest_from: &str, proof_names: &[&str]) {
     let vk_path = fixture_path(&format!("{vk_name}_verifying.key"));
-    let pk_path = fixture_path(&format!("{digest_from}_proving.key"));
-    let mut pk_file = fs::File::open(&pk_path).unwrap();
-    pk_file.seek(SeekFrom::End(-32)).unwrap();
-    let mut foreign = [0u8; 32];
-    pk_file.read_exact(&mut foreign).unwrap();
+    let foreign = pk_tail(&fixture_path(&format!("{digest_from}_proving.key")));
 
     let dir = tmp_dir(&format!("real_cross_{vk_name}_with_{digest_from}"));
     let linked = dir.join(format!("{vk_name}_verifying.key"));
@@ -613,19 +595,19 @@ fn real_cross(vk_name: &str, digest_from: &str, proof_names: [&str; 2]) {
 #[test]
 #[ignore = "needs v5.0.0 key files in keys/"]
 fn real_2k_show_key_with_prepare_digest_rejects() {
-    real_cross("2k_show", "2k_prepare", ["2k_prepare", "2k_show"]);
+    real_cross("2k_show", "2k_prepare", &["2k_prepare", "2k_show"]);
 }
 
 #[test]
 #[ignore = "needs v5.0.0 key files in keys/"]
 fn real_2k_prepare_key_with_show_digest_rejects() {
-    real_cross("2k_prepare", "2k_show", ["2k_show", "2k_prepare"]);
+    real_cross("2k_prepare", "2k_show", &["2k_show", "2k_prepare"]);
 }
 
 #[test]
 #[ignore = "needs v5.0.0 key files in keys/"]
-fn real_cross_proof_with_correct_sidecar_rejects() {
+fn real_proof_of_other_circuit_rejects_under_correct_digest() {
     for (vk_name, proof_name) in [("2k_show", "2k_prepare"), ("2k_prepare", "2k_show")] {
-        real_cross(vk_name, vk_name, [proof_name, proof_name]);
+        real_cross(vk_name, vk_name, &[proof_name]);
     }
 }
