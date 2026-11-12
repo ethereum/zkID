@@ -35,6 +35,9 @@ witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.gi
 num-bigint = "0.4.6"
 base64 = "0.22"
 
+[dev-dependencies]
+sha3 = "0.10"
+
 [build-dependencies]
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }
 
