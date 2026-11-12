@@ -611,3 +611,72 @@ fn real_proof_of_other_circuit_rejects_under_correct_digest() {
         real_cross(vk_name, vk_name, &[proof_name]);
     }
 }
+
+// ---- interrupted saves: the sidecar is absent or matches the key file ----
+
+fn dir_entries(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn save_keys_leaves_no_temporary_file() {
+    let f = fixture("no_temp_file");
+    let dir = f.vk_path.parent().unwrap().to_path_buf();
+    assert_eq!(
+        dir_entries(&dir),
+        ["tiny_proving.key", "tiny_verifying.digest", "tiny_verifying.key"]
+    );
+
+    let (pk2, vk2) = Proof::setup(SquareCircuit).unwrap();
+    save_keys(dir.join("tiny_proving.key"), &f.vk_path, &pk2, &vk2).unwrap();
+    assert_eq!(
+        dir_entries(&dir),
+        ["tiny_proving.key", "tiny_verifying.digest", "tiny_verifying.key"]
+    );
+}
+
+/// The state the save ordering leaves after a crash between the VK write and the sidecar rename:
+/// key B's file, no sidecar.
+#[test]
+fn key_replaced_without_sidecar_verifies_lazily() {
+    let (a, b) = a_and_b("crash_state");
+    fs::copy(&b.vk_path, &a.vk_path).unwrap();
+    fs::remove_file(&a.sidecar_path).unwrap();
+    let vk = load_verifying_key(&a.vk_path).unwrap();
+    assert!(b.proof.verify(&vk).is_ok());
+    assert!(a.proof.verify(&vk).is_err());
+}
+
+/// A save that fails at the VK file (here: a directory sits in its place) must not leave the
+/// previous key's sidecar behind.
+#[test]
+fn failed_vk_write_removes_the_old_sidecar() {
+    let f = fixture("failed_vk_write");
+    let dir = f.vk_path.parent().unwrap().to_path_buf();
+    fs::remove_file(&f.vk_path).unwrap();
+    fs::create_dir(&f.vk_path).unwrap();
+    assert!(f.sidecar_path.exists());
+
+    let (pk2, vk2) = Proof::setup(SquareCircuit).unwrap();
+    assert!(save_keys(dir.join("tiny_proving.key"), &f.vk_path, &pk2, &vk2).is_err());
+    assert!(!f.sidecar_path.exists());
+}
+
+/// A sidecar that cannot be removed fails the save before the VK file is touched.
+#[test]
+fn unremovable_sidecar_fails_before_the_vk_is_rewritten() {
+    let f = fixture("unremovable_sidecar");
+    let dir = f.vk_path.parent().unwrap().to_path_buf();
+    let before = fs::read(&f.vk_path).unwrap();
+    fs::remove_file(&f.sidecar_path).unwrap();
+    fs::create_dir(&f.sidecar_path).unwrap();
+
+    let (pk2, vk2) = Proof::setup(SquareCircuit).unwrap();
+    assert!(save_keys(dir.join("tiny_proving.key"), &f.vk_path, &pk2, &vk2).is_err());
+    assert_eq!(fs::read(&f.vk_path).unwrap(), before);
+}
