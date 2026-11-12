@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 use std::{
-    fs::{create_dir_all, File},
+    fs::{create_dir_all, remove_file, rename, File},
     io::{BufReader, Cursor, Write},
     path::Path,
 };
@@ -39,6 +39,17 @@ pub fn save_keys(
         create_dir_all(parent)?;
     }
 
+    // The sidecar on disk is either absent (loads fall back to the lazy digest) or matches the VK
+    // file: it is removed before the VK is touched and renamed into place only after the VK is
+    // written, so a crash or error in between never pairs a key with the previous key's digest.
+    // Concurrent saves to the same path are not covered.
+    let digest = vk.digest()?;
+    let digest_path = vk_path.with_extension("digest");
+    match remove_file(&digest_path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+        _ => {}
+    }
+
     let pk_bytes = bincode::serialize(pk)?;
     let mut pk_file = File::create(pk_path)?;
     pk_file.write_all(&pk_bytes)?;
@@ -50,8 +61,9 @@ pub fn save_keys(
     vk_file.write_all(&vk_bytes)?;
     info!("Saved ZK-Spartan verifying key to: {}", vk_path.display());
 
-    let digest_path = vk_path.with_extension("digest");
-    File::create(&digest_path)?.write_all(&vk.digest()?)?;
+    let tmp_path = digest_path.with_extension("digest.tmp");
+    File::create(&tmp_path)?.write_all(&digest)?;
+    rename(&tmp_path, &digest_path)?;
     info!(
         "Saved ZK-Spartan verifying key digest to: {}",
         digest_path.display()
