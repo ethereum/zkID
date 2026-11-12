@@ -8,7 +8,11 @@ use std::{
 
 use spartan2::{
     r1cs::{R1CSWitness, SplitR1CSInstance},
-    traits::{circuit::SpartanCircuit, snark::R1CSSNARKTrait, Engine},
+    traits::{
+        circuit::SpartanCircuit,
+        snark::{DigestHelperTrait, R1CSSNARKTrait},
+        Engine,
+    },
     zk_spartan::R1CSSNARK,
 };
 use tracing::info;
@@ -45,6 +49,13 @@ pub fn save_keys(
     let mut vk_file = File::create(vk_path)?;
     vk_file.write_all(&vk_bytes)?;
     info!("Saved ZK-Spartan verifying key to: {}", vk_path.display());
+
+    let digest_path = vk_path.with_extension("digest");
+    File::create(&digest_path)?.write_all(&vk.digest()?)?;
+    info!(
+        "Saved ZK-Spartan verifying key digest to: {}",
+        digest_path.display()
+    );
 
     Ok(())
 }
@@ -91,10 +102,27 @@ pub fn load_proving_key(
 pub fn load_verifying_key(
     vk_path: impl AsRef<Path>,
 ) -> Result<<R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey, Box<dyn std::error::Error>> {
-    let vk_file = File::open(vk_path.as_ref())?;
+    let vk_path = vk_path.as_ref();
+    let vk_file = File::open(vk_path)?;
     let vk_mmap = unsafe { MmapOptions::new().map(&vk_file)? };
     let vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey =
         bincode::deserialize_from(Cursor::new(&vk_mmap[..]))?;
+
+    // Trusted like the key file itself: a wrong value only makes honest proofs fail to verify.
+    let digest_path = vk_path.with_extension("digest");
+    if digest_path.exists() {
+        let digest: [u8; 32] = std::fs::read(&digest_path)?.try_into().map_err(|_| {
+            format!(
+                "verifying key digest {} must be exactly 32 bytes",
+                digest_path.display()
+            )
+        })?;
+        vk.restore_digest_unchecked(digest)?;
+        info!(
+            "Restored verifying key digest from: {}",
+            digest_path.display()
+        );
+    }
     Ok(vk)
 }
 
