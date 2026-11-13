@@ -4,11 +4,17 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<void> initApp() => RustLib.instance.api.openacMobileAppInitApp();
+
+/// Text of an error that crossed the Flutter bridge, where it arrives as an
+/// opaque handle whose `toString` says nothing.
+Future<String> zkErrorMessage({required ZkProofError e}) =>
+    RustLib.instance.api.openacMobileAppZkErrorMessage(e: e);
 
 /// Setup JWT circuit keys
 /// Generates proving and verifying keys for the JWT circuit
@@ -64,6 +70,61 @@ Future<bool> verifyJwt({required String documentsPath}) =>
 /// Verifies the proof using the verifying key
 Future<bool> verifyShow({required String documentsPath}) => RustLib.instance.api
     .openacMobileAppVerifyShow(documentsPath: documentsPath);
+
+/// Verify a full presentation: both proofs verify AND commit to the same shared
+/// witness (Item 12). This is the check a verifier must make — verifying the two
+/// proofs separately does not bind them to the same credential.
+Future<bool> verifyPresentation({required String documentsPath}) => RustLib
+    .instance
+    .api
+    .openacMobileAppVerifyPresentation(documentsPath: documentsPath);
+
+/// Load the Prepare (JWT) proving key from `path` into the flow session;
+/// returns load time in ms.
+Future<BigInt> loadPrepareKey({required String path}) =>
+    RustLib.instance.api.openacMobileAppLoadPrepareKey(path: path);
+
+/// Load the Show proving key from `path` into the flow session; returns load
+/// time in ms.
+Future<BigInt> loadShowKey({required String path}) =>
+    RustLib.instance.api.openacMobileAppLoadShowKey(path: path);
+
+/// Prove Prepare from the circuit input at `input_path` with the loaded key and
+/// keep the result for `flow_present`. Writes nothing under `documents_path`.
+Future<FlowPrepareResult> flowPrepare({
+  required String documentsPath,
+  required String inputPath,
+}) => RustLib.instance.api.openacMobileAppFlowPrepare(
+  documentsPath: documentsPath,
+  inputPath: inputPath,
+);
+
+/// Prove Show from `show_input_path`, then reblind it and the kept Prepare
+/// proof with fresh shared blinds. Each call yields an unlinkable pair.
+Future<FlowPresentation> flowPresent({
+  required String documentsPath,
+  required String showInputPath,
+}) => RustLib.instance.api.openacMobileAppFlowPresent(
+  documentsPath: documentsPath,
+  showInputPath: showInputPath,
+);
+
+/// Verify both proofs and their link, then compare the public values with
+/// `expected`. Verifying keys are read from `{documents_path}/keys/` on first use.
+Future<FlowVerifyResult> flowVerify({
+  required String documentsPath,
+  required List<int> prepareProof,
+  required List<int> showProof,
+  required FlowExpectedStatement expected,
+}) => RustLib.instance.api.openacMobileAppFlowVerify(
+  documentsPath: documentsPath,
+  prepareProof: prepareProof,
+  showProof: showProof,
+  expected: expected,
+);
+
+/// Drop every key and proof the flow session holds.
+Future<void> flowUnload() => RustLib.instance.api.openacMobileAppFlowUnload();
 
 /// Run complete benchmark pipeline for both JWT and Show circuits
 /// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
@@ -179,6 +240,188 @@ class BenchmarkResults {
           showProofBytes == other.showProofBytes &&
           jwtWitnessBytes == other.jwtWitnessBytes &&
           showWitnessBytes == other.showWitnessBytes;
+}
+
+/// What the verifier expects, as decimal strings. `show_statement` is the Show
+/// public values after `expressionResult`: the nonce hash, then the policy.
+class FlowExpectedStatement {
+  final List<String> preparePublicValues;
+  final List<String> showStatement;
+
+  const FlowExpectedStatement({
+    required this.preparePublicValues,
+    required this.showStatement,
+  });
+
+  @override
+  int get hashCode => preparePublicValues.hashCode ^ showStatement.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlowExpectedStatement &&
+          runtimeType == other.runtimeType &&
+          preparePublicValues == other.preparePublicValues &&
+          showStatement == other.showStatement;
+}
+
+/// Timing and shape of the Prepare proof the flow keeps for presentations
+class FlowPrepareResult {
+  final BigInt witnessMs;
+  final BigInt proveMs;
+  final BigInt proofBytes;
+  final BigInt instanceBytes;
+  final String proofFingerprint;
+  final String commWShared;
+
+  const FlowPrepareResult({
+    required this.witnessMs,
+    required this.proveMs,
+    required this.proofBytes,
+    required this.instanceBytes,
+    required this.proofFingerprint,
+    required this.commWShared,
+  });
+
+  @override
+  int get hashCode =>
+      witnessMs.hashCode ^
+      proveMs.hashCode ^
+      proofBytes.hashCode ^
+      instanceBytes.hashCode ^
+      proofFingerprint.hashCode ^
+      commWShared.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlowPrepareResult &&
+          runtimeType == other.runtimeType &&
+          witnessMs == other.witnessMs &&
+          proveMs == other.proveMs &&
+          proofBytes == other.proofBytes &&
+          instanceBytes == other.instanceBytes &&
+          proofFingerprint == other.proofFingerprint &&
+          commWShared == other.commWShared;
+}
+
+/// One presentation: reblinded Prepare and Show proofs, serialized
+class FlowPresentation {
+  final Uint8List prepareProof;
+  final Uint8List showProof;
+  final String prepareFingerprint;
+  final String showFingerprint;
+  final String prepareCommWShared;
+  final String showCommWShared;
+  final BigInt showProveMs;
+  final BigInt prepareReblindMs;
+  final BigInt showReblindMs;
+  final BigInt totalMs;
+
+  const FlowPresentation({
+    required this.prepareProof,
+    required this.showProof,
+    required this.prepareFingerprint,
+    required this.showFingerprint,
+    required this.prepareCommWShared,
+    required this.showCommWShared,
+    required this.showProveMs,
+    required this.prepareReblindMs,
+    required this.showReblindMs,
+    required this.totalMs,
+  });
+
+  @override
+  int get hashCode =>
+      prepareProof.hashCode ^
+      showProof.hashCode ^
+      prepareFingerprint.hashCode ^
+      showFingerprint.hashCode ^
+      prepareCommWShared.hashCode ^
+      showCommWShared.hashCode ^
+      showProveMs.hashCode ^
+      prepareReblindMs.hashCode ^
+      showReblindMs.hashCode ^
+      totalMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlowPresentation &&
+          runtimeType == other.runtimeType &&
+          prepareProof == other.prepareProof &&
+          showProof == other.showProof &&
+          prepareFingerprint == other.prepareFingerprint &&
+          showFingerprint == other.showFingerprint &&
+          prepareCommWShared == other.prepareCommWShared &&
+          showCommWShared == other.showCommWShared &&
+          showProveMs == other.showProveMs &&
+          prepareReblindMs == other.prepareReblindMs &&
+          showReblindMs == other.showReblindMs &&
+          totalMs == other.totalMs;
+}
+
+class FlowVerifyResult {
+  final bool valid;
+  final bool expressionResult;
+  final bool proofsLinked;
+  final bool issuerTrusted;
+  final bool normalizationMatches;
+  final bool nonceMatches;
+  final bool policyMatches;
+  final String issuerKeyX;
+  final String issuerKeyY;
+  final BigInt vkLoadMs;
+  final BigInt verifyMs;
+  final String? failure;
+
+  const FlowVerifyResult({
+    required this.valid,
+    required this.expressionResult,
+    required this.proofsLinked,
+    required this.issuerTrusted,
+    required this.normalizationMatches,
+    required this.nonceMatches,
+    required this.policyMatches,
+    required this.issuerKeyX,
+    required this.issuerKeyY,
+    required this.vkLoadMs,
+    required this.verifyMs,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      valid.hashCode ^
+      expressionResult.hashCode ^
+      proofsLinked.hashCode ^
+      issuerTrusted.hashCode ^
+      normalizationMatches.hashCode ^
+      nonceMatches.hashCode ^
+      policyMatches.hashCode ^
+      issuerKeyX.hashCode ^
+      issuerKeyY.hashCode ^
+      vkLoadMs.hashCode ^
+      verifyMs.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlowVerifyResult &&
+          runtimeType == other.runtimeType &&
+          valid == other.valid &&
+          expressionResult == other.expressionResult &&
+          proofsLinked == other.proofsLinked &&
+          issuerTrusted == other.issuerTrusted &&
+          normalizationMatches == other.normalizationMatches &&
+          nonceMatches == other.nonceMatches &&
+          policyMatches == other.policyMatches &&
+          issuerKeyX == other.issuerKeyX &&
+          issuerKeyY == other.issuerKeyY &&
+          vkLoadMs == other.vkLoadMs &&
+          verifyMs == other.verifyMs &&
+          failure == other.failure;
 }
 
 /// Result of a proving operation with timing and proof metadata
