@@ -1,14 +1,18 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 use std::{
-    fs::{create_dir_all, File},
+    fs::{create_dir_all, remove_file, rename, File},
     io::{BufReader, Cursor, Write},
     path::Path,
 };
 
 use spartan2::{
     r1cs::{R1CSWitness, SplitR1CSInstance},
-    traits::{circuit::SpartanCircuit, snark::R1CSSNARKTrait, Engine},
+    traits::{
+        circuit::SpartanCircuit,
+        snark::{DigestHelperTrait, R1CSSNARKTrait},
+        Engine,
+    },
     zk_spartan::R1CSSNARK,
 };
 use tracing::info;
@@ -35,6 +39,12 @@ pub fn save_keys(
         create_dir_all(parent)?;
     }
 
+    // The sidecar is absent or matches the VK file even after a crash or error partway through
+    // a save: it is removed before the VK is created and renamed into place only after the VK
+    // is synced. Concurrent saves to the same path are not covered.
+    let digest = vk.digest()?;
+    let digest_path = vk_path.with_extension("digest");
+
     let pk_bytes = bincode::serialize(pk)?;
     let mut pk_file = File::create(pk_path)?;
     pk_file.write_all(&pk_bytes)?;
@@ -42,9 +52,24 @@ pub fn save_keys(
     info!("Saved ZK-Spartan proving key to: {}", pk_path.display());
 
     let vk_bytes = bincode::serialize(vk)?;
+    match remove_file(&digest_path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+        _ => {}
+    }
     let mut vk_file = File::create(vk_path)?;
     vk_file.write_all(&vk_bytes)?;
+    vk_file.sync_all()?;
     info!("Saved ZK-Spartan verifying key to: {}", vk_path.display());
+
+    let tmp_path = digest_path.with_extension("digest.tmp");
+    let mut tmp_file = File::create(&tmp_path)?;
+    tmp_file.write_all(&digest)?;
+    tmp_file.sync_all()?;
+    rename(&tmp_path, &digest_path)?;
+    info!(
+        "Saved ZK-Spartan verifying key digest to: {}",
+        digest_path.display()
+    );
 
     Ok(())
 }
@@ -91,10 +116,28 @@ pub fn load_proving_key(
 pub fn load_verifying_key(
     vk_path: impl AsRef<Path>,
 ) -> Result<<R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey, Box<dyn std::error::Error>> {
-    let vk_file = File::open(vk_path.as_ref())?;
+    let vk_path = vk_path.as_ref();
+    let vk_file = File::open(vk_path)?;
     let vk_mmap = unsafe { MmapOptions::new().map(&vk_file)? };
     let vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey =
         bincode::deserialize_from(Cursor::new(&vk_mmap[..]))?;
+
+    // The digest is not checked against the key, so it must come from the same trusted source as
+    // the key; a wrong value makes honest proofs fail.
+    let digest_path = vk_path.with_extension("digest");
+    if digest_path.exists() {
+        let digest: [u8; 32] = std::fs::read(&digest_path)?.try_into().map_err(|_| {
+            format!(
+                "verifying key digest {} must be exactly 32 bytes",
+                digest_path.display()
+            )
+        })?;
+        vk.restore_digest_unchecked(digest)?;
+        info!(
+            "Restored verifying key digest from: {}",
+            digest_path.display()
+        );
+    }
     Ok(vk)
 }
 

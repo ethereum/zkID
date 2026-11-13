@@ -528,6 +528,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sha3",
  "spartan2",
  "tracing",
  "tracing-subscriber",
@@ -1434,7 +1435,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 [[package]]
 name = "spartan2"
 version = "0.4.0"
-source = "git+https://github.com/0xVikasRushi/Spartan2.git?branch=openac-sdk#d687dbb639eccbdd21e62fecec97c5826bc4dbbf"
+source = "git+https://github.com/moven0831/Spartan2?rev=5d20a9357134460ef49c86a911c35279d0fff65f#5d20a9357134460ef49c86a911c35279d0fff65f"
 dependencies = [
  "bellpepper",
  "bellpepper-core",

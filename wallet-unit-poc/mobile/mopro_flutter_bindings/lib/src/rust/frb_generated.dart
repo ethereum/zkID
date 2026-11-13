@@ -910,8 +910,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BenchmarkResults dco_decode_benchmark_results(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return BenchmarkResults(
       jwtSetupMs: dco_decode_u_64(arr[0]),
       showSetupMs: dco_decode_u_64(arr[1]),
@@ -922,14 +922,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reblindShowMs: dco_decode_u_64(arr[6]),
       verifyJwtMs: dco_decode_u_64(arr[7]),
       verifyShowMs: dco_decode_u_64(arr[8]),
-      jwtProvingKeyBytes: dco_decode_u_64(arr[9]),
-      jwtVerifyingKeyBytes: dco_decode_u_64(arr[10]),
-      showProvingKeyBytes: dco_decode_u_64(arr[11]),
-      showVerifyingKeyBytes: dco_decode_u_64(arr[12]),
-      jwtProofBytes: dco_decode_u_64(arr[13]),
-      showProofBytes: dco_decode_u_64(arr[14]),
-      jwtWitnessBytes: dco_decode_u_64(arr[15]),
-      showWitnessBytes: dco_decode_u_64(arr[16]),
+      jwtVkLoadMs: dco_decode_u_64(arr[9]),
+      showVkLoadMs: dco_decode_u_64(arr[10]),
+      verifyJwtFirstMs: dco_decode_u_64(arr[11]),
+      verifyShowFirstMs: dco_decode_u_64(arr[12]),
+      jwtProvingKeyBytes: dco_decode_u_64(arr[13]),
+      jwtVerifyingKeyBytes: dco_decode_u_64(arr[14]),
+      showProvingKeyBytes: dco_decode_u_64(arr[15]),
+      showVerifyingKeyBytes: dco_decode_u_64(arr[16]),
+      jwtProofBytes: dco_decode_u_64(arr[17]),
+      showProofBytes: dco_decode_u_64(arr[18]),
+      jwtWitnessBytes: dco_decode_u_64(arr[19]),
+      showWitnessBytes: dco_decode_u_64(arr[20]),
     );
   }
 
@@ -1135,6 +1139,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reblindShowMs = sse_decode_u_64(deserializer);
     var var_verifyJwtMs = sse_decode_u_64(deserializer);
     var var_verifyShowMs = sse_decode_u_64(deserializer);
+    var var_jwtVkLoadMs = sse_decode_u_64(deserializer);
+    var var_showVkLoadMs = sse_decode_u_64(deserializer);
+    var var_verifyJwtFirstMs = sse_decode_u_64(deserializer);
+    var var_verifyShowFirstMs = sse_decode_u_64(deserializer);
     var var_jwtProvingKeyBytes = sse_decode_u_64(deserializer);
     var var_jwtVerifyingKeyBytes = sse_decode_u_64(deserializer);
     var var_showProvingKeyBytes = sse_decode_u_64(deserializer);
@@ -1153,6 +1161,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reblindShowMs: var_reblindShowMs,
       verifyJwtMs: var_verifyJwtMs,
       verifyShowMs: var_verifyShowMs,
+      jwtVkLoadMs: var_jwtVkLoadMs,
+      showVkLoadMs: var_showVkLoadMs,
+      verifyJwtFirstMs: var_verifyJwtFirstMs,
+      verifyShowFirstMs: var_verifyShowFirstMs,
       jwtProvingKeyBytes: var_jwtProvingKeyBytes,
       jwtVerifyingKeyBytes: var_jwtVerifyingKeyBytes,
       showProvingKeyBytes: var_showProvingKeyBytes,
@@ -1413,6 +1425,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.reblindShowMs, serializer);
     sse_encode_u_64(self.verifyJwtMs, serializer);
     sse_encode_u_64(self.verifyShowMs, serializer);
+    sse_encode_u_64(self.jwtVkLoadMs, serializer);
+    sse_encode_u_64(self.showVkLoadMs, serializer);
+    sse_encode_u_64(self.verifyJwtFirstMs, serializer);
+    sse_encode_u_64(self.verifyShowFirstMs, serializer);
     sse_encode_u_64(self.jwtProvingKeyBytes, serializer);
     sse_encode_u_64(self.jwtVerifyingKeyBytes, serializer);
     sse_encode_u_64(self.showProvingKeyBytes, serializer);

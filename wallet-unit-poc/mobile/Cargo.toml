@@ -44,7 +44,7 @@ anyhow = "1.0.99"
 ecdsa-spartan2 = { path = "../ecdsa-spartan2", default-features = false }
 
 # SPARTAN2_DEPENDENCIES
-spartan2 = { git = "https://github.com/0xVikasRushi/Spartan2.git", branch = "openac-sdk", default-features = false }
+spartan2 = { git = "https://github.com/moven0831/Spartan2", rev = "5d20a9357134460ef49c86a911c35279d0fff65f", default-features = false }
 bellpepper-core = "0.4.0"
 bellpepper = "0.4.0"
 ff = { version = "0.13.0", features = ["derive"] }
@@ -77,7 +77,7 @@ serde_json = "1.0"
 mopro-ffi = { version = "0.3.5", features = ["uniffi-tests"] }
 
 [build-dependencies]
-spartan2 = { git = "https://github.com/0xVikasRushi/Spartan2.git", branch = "openac-sdk", default-features = false }
+spartan2 = { git = "https://github.com/moven0831/Spartan2", rev = "5d20a9357134460ef49c86a911c35279d0fff65f", default-features = false }
 
 [profile.release]
 opt-level = 3       # Optimize for performance

@@ -2,6 +2,7 @@
 name = "ecdsa-spartan2"
 version = "0.0.1"
 edition = "2021"
+default-run = "ecdsa-spartan2"
 
 [lib]
 name = "ecdsa_spartan2"
@@ -18,7 +19,7 @@ default = ["native-witness"]
 native-witness = ["dep:witnesscalc-adapter"]
 
 [dependencies]
-spartan2 = { git = "https://github.com/0xVikasRushi/Spartan2.git", branch = "openac-sdk", default-features = false }
+spartan2 = { git = "https://github.com/moven0831/Spartan2", rev = "5d20a9357134460ef49c86a911c35279d0fff65f", default-features = false }
 circom-scotia = { git = "https://github.com/0xVikasRushi/circom-scotia", branch="feat/spartan2", default-features = false }
 
 bellpepper = "0.4.0"
@@ -34,6 +35,9 @@ memmap2 = "0.9.8"
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }
 num-bigint = "0.4.6"
 base64 = "0.22"
+
+[dev-dependencies]
+sha3 = "0.10"
 
 [build-dependencies]
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }
