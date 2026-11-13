@@ -680,3 +680,42 @@ fn unremovable_sidecar_fails_before_the_vk_is_rewritten() {
     assert!(save_keys(dir.join("tiny_proving.key"), &f.vk_path, &pk2, &vk2).is_err());
     assert_eq!(fs::read(&f.vk_path).unwrap(), before);
 }
+
+/// The VK is rewritten and then the sidecar step fails (a directory sits at the temporary
+/// sidecar path): the sidecar must be absent and the new key must verify lazily.
+#[test]
+fn failed_sidecar_write_after_vk_rewrite_leaves_no_sidecar() {
+    let a = fixture("failed_sidecar_write");
+    let dir = a.vk_path.parent().unwrap().to_path_buf();
+    fs::create_dir(a.sidecar_path.with_extension("digest.tmp")).unwrap();
+
+    let (pk_b, vk_b) = Proof::setup(SquareCircuit).unwrap();
+    let prep = Proof::prep_prove(&pk_b, SquareCircuit, false).unwrap();
+    let proof_b = Proof::prove(&pk_b, SquareCircuit, &prep, false).unwrap();
+    assert!(save_keys(dir.join("tiny_proving.key"), &a.vk_path, &pk_b, &vk_b).is_err());
+
+    assert!(!a.sidecar_path.exists());
+    let vk = load_verifying_key(&a.vk_path).unwrap();
+    assert!(proof_b.verify(&vk).is_ok());
+    assert!(a.proof.verify(&vk).is_err());
+}
+
+/// The PK is the largest file and the likeliest to hit a full disk. A failure there must leave
+/// the VK and its still-valid sidecar alone.
+#[test]
+fn failed_pk_write_leaves_vk_and_sidecar_untouched() {
+    let a = fixture("failed_pk_write");
+    let dir = a.vk_path.parent().unwrap().to_path_buf();
+    let pk_path = dir.join("tiny_proving.key");
+    fs::remove_file(&pk_path).unwrap();
+    fs::create_dir(&pk_path).unwrap();
+    let vk_before = fs::read(&a.vk_path).unwrap();
+
+    let (pk_b, vk_b) = Proof::setup(SquareCircuit).unwrap();
+    assert!(save_keys(&pk_path, &a.vk_path, &pk_b, &vk_b).is_err());
+
+    assert_eq!(fs::read(&a.vk_path).unwrap(), vk_before);
+    assert_eq!(fs::read(&a.sidecar_path).unwrap(), a.pk_digest);
+    let vk = load_verifying_key(&a.vk_path).unwrap();
+    assert!(a.proof.verify(&vk).is_ok());
+}

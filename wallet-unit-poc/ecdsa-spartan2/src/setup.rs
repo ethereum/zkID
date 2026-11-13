@@ -39,16 +39,12 @@ pub fn save_keys(
         create_dir_all(parent)?;
     }
 
-    // The sidecar on disk is either absent (loads fall back to the lazy digest) or matches the VK
-    // file: it is removed before the VK is touched and renamed into place only after the VK is
-    // written, so a crash or error in between never pairs a key with the previous key's digest.
+    // After a crash, error or power loss partway through a save, the sidecar is absent (loads fall
+    // back to the lazy digest) or matches the VK file: it is removed right before the VK is
+    // created, and renamed into place only after the VK and the sidecar data are synced.
     // Concurrent saves to the same path are not covered.
     let digest = vk.digest()?;
     let digest_path = vk_path.with_extension("digest");
-    match remove_file(&digest_path) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
-        _ => {}
-    }
 
     let pk_bytes = bincode::serialize(pk)?;
     let mut pk_file = File::create(pk_path)?;
@@ -57,12 +53,19 @@ pub fn save_keys(
     info!("Saved ZK-Spartan proving key to: {}", pk_path.display());
 
     let vk_bytes = bincode::serialize(vk)?;
+    match remove_file(&digest_path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+        _ => {}
+    }
     let mut vk_file = File::create(vk_path)?;
     vk_file.write_all(&vk_bytes)?;
+    vk_file.sync_all()?;
     info!("Saved ZK-Spartan verifying key to: {}", vk_path.display());
 
     let tmp_path = digest_path.with_extension("digest.tmp");
-    File::create(&tmp_path)?.write_all(&digest)?;
+    let mut tmp_file = File::create(&tmp_path)?;
+    tmp_file.write_all(&digest)?;
+    tmp_file.sync_all()?;
     rename(&tmp_path, &digest_path)?;
     info!(
         "Saved ZK-Spartan verifying key digest to: {}",
