@@ -97,7 +97,17 @@ flutter devices
 flutter emulator --launch <EMULATOR_TYPE>
 ```
 
-#### 4(c). Run Flutter with Release Mode
+#### 4(c). Prepare Assets
+
+The circuit assets and flow fixtures are generated locally from the circuits and never committed. Run this before the first build and after the circuits change:
+
+```sh
+bash scripts/prepare-assets.sh
+```
+
+It recompiles the circuits when the build is missing or out of date, so the first run takes a while.
+
+#### 4(d). Run Flutter with Release Mode
 
 ```sh
 cd flutter
