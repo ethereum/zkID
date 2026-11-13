@@ -39,10 +39,9 @@ pub fn save_keys(
         create_dir_all(parent)?;
     }
 
-    // After a crash, error or power loss partway through a save, the sidecar is absent (loads fall
-    // back to the lazy digest) or matches the VK file: it is removed right before the VK is
-    // created, and renamed into place only after the VK and the sidecar data are synced.
-    // Concurrent saves to the same path are not covered.
+    // The sidecar is absent or matches the VK file even after a crash or error partway through
+    // a save: it is removed before the VK is created and renamed into place only after the VK
+    // is synced. Concurrent saves to the same path are not covered.
     let digest = vk.digest()?;
     let digest_path = vk_path.with_extension("digest");
 
@@ -123,7 +122,8 @@ pub fn load_verifying_key(
     let vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey =
         bincode::deserialize_from(Cursor::new(&vk_mmap[..]))?;
 
-    // Trusted like the key file itself: a wrong value only makes honest proofs fail to verify.
+    // The digest is not checked against the key, so it must come from the same trusted source as
+    // the key; a wrong value makes honest proofs fail.
     let digest_path = vk_path.with_extension("digest");
     if digest_path.exists() {
         let digest: [u8; 32] = std::fs::read(&digest_path)?.try_into().map_err(|_| {
