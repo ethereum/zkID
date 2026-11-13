@@ -79,8 +79,8 @@ Future<bool> verifyPresentation({required String documentsPath}) => RustLib
     .api
     .openacMobileAppVerifyPresentation(documentsPath: documentsPath);
 
-/// Load the Prepare (JWT) proving key from `path` into the flow session;
-/// returns load time in ms.
+/// Load the Prepare proving key from `path`; returns load time in ms.
+/// Drops any kept Prepare proof, since it was made under the old key.
 Future<BigInt> loadPrepareKey({required String path}) =>
     RustLib.instance.api.openacMobileAppLoadPrepareKey(path: path);
 
@@ -110,7 +110,7 @@ Future<FlowPresentation> flowPresent({
 );
 
 /// Verify both proofs and their link, then compare the public values with
-/// `expected`. Verifying keys are read from `{documents_path}/keys/` on first use.
+/// `expected`. Missing verifying keys are read from `{documents_path}/keys/`.
 Future<FlowVerifyResult> flowVerify({
   required String documentsPath,
   required List<int> prepareProof,
@@ -161,8 +161,16 @@ class BenchmarkResults {
   final BigInt reblindJwtMs;
   final BigInt proveShowMs;
   final BigInt reblindShowMs;
+
+  /// Verifies with the key setup just built in memory.
   final BigInt verifyJwtMs;
+
+  /// Verifies with the key setup just built in memory.
   final BigInt verifyShowMs;
+  final BigInt jwtVkLoadMs;
+  final BigInt showVkLoadMs;
+  final BigInt verifyJwtFirstMs;
+  final BigInt verifyShowFirstMs;
   final BigInt jwtProvingKeyBytes;
   final BigInt jwtVerifyingKeyBytes;
   final BigInt showProvingKeyBytes;
@@ -182,6 +190,10 @@ class BenchmarkResults {
     required this.reblindShowMs,
     required this.verifyJwtMs,
     required this.verifyShowMs,
+    required this.jwtVkLoadMs,
+    required this.showVkLoadMs,
+    required this.verifyJwtFirstMs,
+    required this.verifyShowFirstMs,
     required this.jwtProvingKeyBytes,
     required this.jwtVerifyingKeyBytes,
     required this.showProvingKeyBytes,
@@ -209,6 +221,10 @@ class BenchmarkResults {
       reblindShowMs.hashCode ^
       verifyJwtMs.hashCode ^
       verifyShowMs.hashCode ^
+      jwtVkLoadMs.hashCode ^
+      showVkLoadMs.hashCode ^
+      verifyJwtFirstMs.hashCode ^
+      verifyShowFirstMs.hashCode ^
       jwtProvingKeyBytes.hashCode ^
       jwtVerifyingKeyBytes.hashCode ^
       showProvingKeyBytes.hashCode ^
@@ -232,6 +248,10 @@ class BenchmarkResults {
           reblindShowMs == other.reblindShowMs &&
           verifyJwtMs == other.verifyJwtMs &&
           verifyShowMs == other.verifyShowMs &&
+          jwtVkLoadMs == other.jwtVkLoadMs &&
+          showVkLoadMs == other.showVkLoadMs &&
+          verifyJwtFirstMs == other.verifyJwtFirstMs &&
+          verifyShowFirstMs == other.verifyShowFirstMs &&
           jwtProvingKeyBytes == other.jwtProvingKeyBytes &&
           jwtVerifyingKeyBytes == other.jwtVerifyingKeyBytes &&
           showProvingKeyBytes == other.showProvingKeyBytes &&
@@ -361,6 +381,8 @@ class FlowPresentation {
           totalMs == other.totalMs;
 }
 
+/// `valid` covers proof validity and the statement checks. Whether the policy
+/// holds is reported separately in `expression_result`.
 class FlowVerifyResult {
   final bool valid;
   final bool expressionResult;
