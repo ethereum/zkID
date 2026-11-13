@@ -269,9 +269,9 @@ fn proof_for_a_is_rejected_by_key_b_with_its_own_sidecar() {
     assert!(b.proof.verify(&vk_a).is_err());
 }
 
-/// Plants `donor`'s digest next to `key`'s file. Each key must then reject its own proof, which
-/// only the digest can cause. The other circuit's proof is rejected on shape alone, so that
-/// assertion says nothing about the digest.
+/// A key loaded with the other circuit's digest must reject its own proof, which only the digest
+/// can cause. The other circuit's proof fails on shape alone, so that assertion says nothing
+/// about the digest.
 #[test]
 fn foreign_digest_makes_key_reject_its_own_proof() {
     let (a, b) = a_and_b("foreign_digest");
@@ -323,7 +323,7 @@ fn sidecar_that_is_a_directory_is_a_load_error() {
 }
 
 /// `Path::exists` follows symlinks, so a dangling sidecar link reads as "missing" and loading
-/// silently falls back to the lazy digest. Pinned as the current behavior.
+/// silently falls back to the lazy digest.
 #[test]
 fn dangling_sidecar_symlink_falls_back_silently() {
     let f = fixture("dangling_sidecar");
@@ -371,8 +371,8 @@ fn sidecar_path_replaces_only_the_last_extension() {
 
 #[test]
 fn vk_named_digest_has_sidecar_equal_to_itself() {
-    // with_extension("digest") on "x.digest" is "x.digest": the key file would be its own sidecar.
-    // Pin that this fails loudly (the key file is not 32 bytes) rather than silently.
+    // A key named `x.digest` is its own sidecar, which fails loudly because the key file is not
+    // 32 bytes.
     let f = fixture("self_sidecar");
     let path = f.vk_path.with_file_name("x.digest");
     fs::copy(&f.vk_path, &path).unwrap();
@@ -422,8 +422,8 @@ fn save_keys_twice_overwrites_sidecar() {
 // ---- mutation coverage ----
 
 /// The proof carries bytes the verifier never reads (the instance's `blind_vars`), so some
-/// mutants verify regardless of this change. A restored digest must not change that set: it has
-/// to be identical with and without the sidecar.
+/// mutants verify regardless of the digest. The set of such mutants must be identical with and
+/// without the sidecar.
 #[test]
 fn restored_digest_does_not_change_which_mutants_verify() {
     let f = fixture("mutation_differential");

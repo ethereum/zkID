@@ -1,4 +1,4 @@
-//! Splits standalone verification into its stages (issue #38).
+//! Times the stages of standalone verification: key load, digest, first verify and warm verify.
 //!
 //! Usage: bench_verify <vk_path> <proof_path> [runs] [pk_path]
 
