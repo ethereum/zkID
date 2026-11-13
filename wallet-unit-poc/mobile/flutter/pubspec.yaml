@@ -6,6 +6,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 environment:
   sdk: ">=3.3.4 <4.0.0"
+  flutter: ">=3.47.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -55,10 +56,8 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/circom/jwt.r1cs.gz
-    - assets/circom/jwt_input.json
-    - assets/circom/show.r1cs.gz
-    - assets/circom/show_input.json
+    - assets/circom/
+    - assets/flow/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

@@ -29,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
+    "gen:mobile-fixtures": "tsx scripts/gen-mobile-fixtures.ts",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build:all"
   },
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@types/node": "^20.3.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^1.6.0"
   },

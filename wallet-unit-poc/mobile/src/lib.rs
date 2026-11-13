@@ -19,6 +19,9 @@ use std::path::PathBuf;
 // Initializes the shared UniFFI scaffolding and defines the `MoproError` enum.
 mopro_ffi::app!();
 
+mod flow;
+mod statement;
+
 const JWT_CIRCUIT_NAME: &str = "jwt";
 const SHOW_CIRCUIT_NAME: &str = "show";
 
@@ -103,6 +106,12 @@ impl std::fmt::Display for ZkProofError {
 }
 
 impl std::error::Error for ZkProofError {}
+
+/// Text of an error that crossed the Flutter bridge, where it arrives as an
+/// opaque handle whose `toString` says nothing.
+pub fn zk_error_message(e: &ZkProofError) -> String {
+    e.to_string()
+}
 
 impl From<std::io::Error> for ZkProofError {
     fn from(e: std::io::Error) -> Self {
@@ -411,6 +420,117 @@ pub fn verify_presentation(documents_path: String) -> Result<bool, ZkProofError>
 }
 
 // ============================================================================
+// In-memory Flow
+// ============================================================================
+
+/// Timing and shape of the Prepare proof the flow keeps for presentations
+#[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct FlowPrepareResult {
+    pub witness_ms: u64,
+    pub prove_ms: u64,
+    pub proof_bytes: u64,
+    pub instance_bytes: u64,
+    pub proof_fingerprint: String,
+    pub comm_w_shared: String,
+}
+
+/// One presentation: reblinded Prepare and Show proofs, serialized
+#[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct FlowPresentation {
+    pub prepare_proof: Vec<u8>,
+    pub show_proof: Vec<u8>,
+    pub prepare_fingerprint: String,
+    pub show_fingerprint: String,
+    pub prepare_comm_w_shared: String,
+    pub show_comm_w_shared: String,
+    pub show_prove_ms: u64,
+    pub prepare_reblind_ms: u64,
+    pub show_reblind_ms: u64,
+    pub total_ms: u64,
+}
+
+/// What the verifier expects, as decimal strings. `show_statement` is the Show
+/// public values after `expressionResult`: the nonce hash, then the policy.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct FlowExpectedStatement {
+    pub prepare_public_values: Vec<String>,
+    pub show_statement: Vec<String>,
+}
+
+/// `valid` covers proof validity and the statement checks. Whether the policy
+/// holds is reported separately in `expression_result`.
+#[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct FlowVerifyResult {
+    pub valid: bool,
+    pub expression_result: bool,
+    pub proofs_linked: bool,
+    pub issuer_trusted: bool,
+    pub normalization_matches: bool,
+    pub nonce_matches: bool,
+    pub policy_matches: bool,
+    pub issuer_key_x: String,
+    pub issuer_key_y: String,
+    pub vk_load_ms: u64,
+    pub verify_ms: u64,
+    pub failure: Option<String>,
+}
+
+/// Load the Prepare proving key from `path`; returns load time in ms.
+/// Drops any kept Prepare proof, since it was made under the old key.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_prepare_key(path: String) -> Result<u64, ZkProofError> {
+    flow::load_prepare_key(&path)
+}
+
+/// Load the Show proving key from `path` into the flow session; returns load
+/// time in ms.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn load_show_key(path: String) -> Result<u64, ZkProofError> {
+    flow::load_show_key(&path)
+}
+
+/// Prove Prepare from the circuit input at `input_path` with the loaded key and
+/// keep the result for `flow_present`. Writes nothing under `documents_path`.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn flow_prepare(
+    documents_path: String,
+    input_path: String,
+) -> Result<FlowPrepareResult, ZkProofError> {
+    flow::prepare(&documents_path, &input_path)
+}
+
+/// Prove Show from `show_input_path`, then reblind it and the kept Prepare
+/// proof with fresh shared blinds. Each call yields an unlinkable pair.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn flow_present(
+    documents_path: String,
+    show_input_path: String,
+) -> Result<FlowPresentation, ZkProofError> {
+    flow::present(&documents_path, &show_input_path)
+}
+
+/// Verify both proofs and their link, then compare the public values with
+/// `expected`. Missing verifying keys are read from `{documents_path}/keys/`.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn flow_verify(
+    documents_path: String,
+    prepare_proof: Vec<u8>,
+    show_proof: Vec<u8>,
+    expected: FlowExpectedStatement,
+) -> Result<FlowVerifyResult, ZkProofError> {
+    flow::verify(&documents_path, &prepare_proof, &show_proof, &expected)
+}
+
+/// Drop every key and proof the flow session holds.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn flow_unload() {
+    flow::unload()
+}
+
+// ============================================================================
 // Benchmark Operations
 // ============================================================================
 
@@ -651,9 +771,7 @@ fn extract_comm_w_shared(
         ),
     })?;
 
-    // Convert comm_W_shared to hex string
-    let comm_w_shared_hex = format!("{:?}", instance.comm_W_shared);
-    Ok(comm_w_shared_hex)
+    Ok(flow::comm_w_shared_hex(&instance))
 }
 
 /// Get the size of a proof file in bytes
@@ -728,6 +846,7 @@ mod tests {
 mod e2e_tests {
     use super::*;
     use std::fs;
+    use std::path::Path;
 
     // Absolute path to this crate, set at compile time.
     const CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
@@ -748,7 +867,7 @@ mod e2e_tests {
     ///     show_input.json                       ← show inputs (for prove_show + run_complete_benchmark)
     ///
     /// Returns the documents_path string.
-    fn setup_mobile_docs(path: &PathBuf) -> String {
+    fn setup_mobile_docs(path: &Path) -> String {
         let docs = path.join("circom");
         let circom = circom_root();
 
@@ -768,8 +887,9 @@ mod e2e_tests {
         )
         .expect("copy show.r1cs");
 
-        let jwt_2k_input = circom.join("inputs/jwt/2k/default.json");
-        let show_input = circom.join("inputs/show/2k/default.json");
+        let assets = PathBuf::from(CRATE_DIR).join("flutter/assets/circom");
+        let jwt_2k_input = assets.join("jwt_input.json");
+        let show_input = assets.join("show_input.json");
 
         fs::copy(&jwt_2k_input, docs.join("jwt_input.json"))
             .expect("copy jwt 2k input -> jwt_input.json");
@@ -784,11 +904,11 @@ mod e2e_tests {
     ///   prove_jwt → reblind_jwt → prove_show → reblind_show →
     ///   verify_jwt → verify_show → comm_W_shared linkage check
     #[test]
-    #[ignore = "Long-running e2e (~5 min); run with: cargo test -- --ignored e2e_full_workflow"]
+    #[ignore = "Long-running e2e (~5 min); needs scripts/prepare-assets.sh first; run with: cargo test -- --ignored e2e_full_workflow"]
     fn e2e_full_workflow() {
         let temp = tempfile::tempdir().expect("create temp dir");
 
-        let docs = setup_mobile_docs(&temp);
+        let docs = setup_mobile_docs(temp.path());
 
         // Step 1: Setup JWT keys
         let r = setup_jwt_keys(docs.clone());
@@ -860,10 +980,10 @@ mod e2e_tests {
 
     /// Complete benchmark pipeline — exercises all 9 operations with precise timing.
     #[test]
-    #[ignore = "Long-running e2e (~10 min); run with: cargo test -- --ignored e2e_complete_benchmark"]
+    #[ignore = "Long-running e2e (~10 min); needs scripts/prepare-assets.sh first; run with: cargo test -- --ignored e2e_complete_benchmark"]
     fn e2e_complete_benchmark() {
         let temp = tempfile::tempdir().expect("create temp dir");
-        let docs = setup_mobile_docs(&temp);
+        let docs = setup_mobile_docs(temp.path());
 
         let r = run_complete_benchmark(docs);
         assert!(r.is_ok(), "run_complete_benchmark failed: {:?}", r.err());

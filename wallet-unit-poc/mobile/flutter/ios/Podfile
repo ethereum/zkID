@@ -1,5 +1,5 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -45,7 +45,7 @@ post_install do |installer|
     # This is required for witnesscalc-adapter to compile C++ witness calculator code
     target.build_configurations.each do |config|
       # Set a consistent iOS deployment target to avoid conflicts
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
 
       # Preserve existing PATH and add common tool locations
       config.build_settings['PATH'] = '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/opt/make/libexec/gnubin'
