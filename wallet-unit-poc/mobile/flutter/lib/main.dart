@@ -45,10 +45,13 @@ class MyApp extends StatelessWidget {
 }
 
 class BenchmarkScreen extends StatefulWidget {
-  const BenchmarkScreen({super.key, this.busy});
+  const BenchmarkScreen({super.key, this.busy, this.initialResults});
 
   /// Set while a Rust call runs, so the shell can lock its navigation.
   final ValueNotifier<bool>? busy;
+
+  @visibleForTesting
+  final BenchmarkResults? initialResults;
 
   @override
   State<BenchmarkScreen> createState() => _BenchmarkScreenState();
@@ -64,7 +67,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
 
   Exception? _error;
 
-  BenchmarkResults? _benchmarkResults;
+  late BenchmarkResults? _benchmarkResults = widget.initialResults;
 
   Future<void> _runBenchmark() async {
     setState(() {
@@ -227,7 +230,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               ],
             ),
             const SizedBox(height: 16),
-
             Text('Timing Metrics',
                 style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600, color: scheme.primary)),
@@ -249,9 +251,12 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                 _timingRow('Reblind Show', r.reblindShowMs),
                 _timingRow('Verify Prepare', r.verifyJwtMs),
                 _timingRow('Verify Show', r.verifyShowMs),
+                _timingRow('Load Prepare VK', r.jwtVkLoadMs),
+                _timingRow('Load Show VK', r.showVkLoadMs),
+                _timingRow('Verify Prepare (first)', r.verifyJwtFirstMs),
+                _timingRow('Verify Show (first)', r.verifyShowFirstMs),
               ],
             ),
-
             const SizedBox(height: 24),
             Text('Artifact Sizes',
                 style: theme.textTheme.titleSmall?.copyWith(
