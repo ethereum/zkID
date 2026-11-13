@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openac/flow/flow_backend.dart';
 import 'package:openac/flow/rust_flow_backend.dart';
@@ -29,6 +31,47 @@ void main() {
     final plan = planWithout({'prepare_verifying.key'});
     expect(plan.prepare, isTrue);
     expect(plan.show, isFalse);
+  });
+
+  test('the setup decision ignores the verifying-key sidecar', () {
+    final asked = <String>[];
+    final plan = planKeySetup((name) {
+      asked.add(name);
+      return !name.endsWith('.digest');
+    });
+    expect(plan.any, isFalse);
+    expect(asked.where((n) => n.endsWith('.digest')), isEmpty);
+  });
+
+  test('setup clears the sidecar with the keys it replaces', () async {
+    final dir = Directory.systemTemp.createTempSync('keys_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final keys = Directory('${dir.path}/keys')..createSync();
+    const prepare = [
+      'prepare_proving.key',
+      'prepare_verifying.key',
+      'prepare_verifying.digest',
+    ];
+    const show = [
+      'show_proving.key',
+      'show_verifying.key',
+      'show_verifying.digest'
+    ];
+    for (final n in [...prepare, ...show]) {
+      File('${keys.path}/$n').writeAsStringSync('x');
+    }
+    File('${keys.path}/prepare_proving.key').deleteSync();
+
+    // Setup deletes first, then reaches the Rust call, which cannot run here.
+    await expectLater(
+        RustFlowBackend(dir.path).ensureKeys(), throwsA(anything));
+
+    for (final n in prepare) {
+      expect(File('${keys.path}/$n').existsSync(), isFalse, reason: n);
+    }
+    for (final n in show) {
+      expect(File('${keys.path}/$n').existsSync(), isTrue, reason: n);
+    }
   });
 
   test('everything missing sets up both', () {
