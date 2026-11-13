@@ -116,6 +116,14 @@ cd flutter
 flutter run --release
 ```
 
+## Screenshots
+
+Pixel 10 Pro, release build.
+
+| Flow, before setup | Flow, after Present | Benchmark results |
+|:---:|:---:|:---:|
+| <img src="/wallet-unit-poc/mobile/assets/flow-before-setup.jpg" width="260" alt="Flow tab before key setup"> | <img src="/wallet-unit-poc/mobile/assets/flow-after-present.jpg" width="260" alt="Flow tab after Prepare and Present with the Over 18 request"> | <img src="/wallet-unit-poc/mobile/assets/benchmark-results.jpg" width="260" alt="Benchmark tab with timing results"> |
+
 ## Timing Measurements (Mobile)
 
 All timing measurements are in milliseconds (ms).
@@ -144,10 +152,6 @@ The Show circuit has constant performance regardless of JWT payload size.
 |:------------:|:----------:|:----------:|:------------:|:-----------:|
 |  iPhone 17   |     43     |     85     |      30      |     13      |
 | Pixel 10 Pro |     99     |    308     |     130      |     65      |
-
-| iPhone 17 | Pixel 10 Pro |
-|-----------|--------------|
-| <img src="/wallet-unit-poc/mobile/assets/openac-iphone-17.jpg" width="300"> | <img src="/wallet-unit-poc/mobile/assets/openac-pixel-10-pro.jpg" width="300"> |
 
 ## Note
 
