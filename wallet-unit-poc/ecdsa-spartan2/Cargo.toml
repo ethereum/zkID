@@ -2,6 +2,7 @@
 name = "ecdsa-spartan2"
 version = "0.0.1"
 edition = "2021"
+default-run = "ecdsa-spartan2"
 
 [lib]
 name = "ecdsa_spartan2"
