@@ -68,20 +68,26 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 1,
       title: 'Set up keys',
-      description:
-          'One-time proving keys for the two circuits. Setup is slow; later runs only load them.',
       status: _c.status(FlowStep.keys),
       error: _c.error(FlowStep.keys),
       actionLabel: 'Set up and load',
       onAction: _c.canRun(FlowStep.keys) ? _c.runKeys : null,
-      child: k == null
+      timing: k == null
           ? null
-          : _Lines([
-              k.setupRan
-                  ? 'Setup ran: ${k.setupMs} ms'
-                  : 'Keys already existed, setup skipped',
-              'Load: ${k.loadMs} ms',
-            ]),
+          : k.setupRan
+              ? 'Keys ready in ${_duration(k.setupMs + k.loadMs)}'
+              : 'Keys loaded in ${_duration(k.loadMs)}',
+      details: [
+        const Text(
+            'One-time proving keys for the two circuits. Setup is slow; later runs only load them.'),
+        if (k != null)
+          _Lines([
+            k.setupRan
+                ? 'Setup ran: ${k.setupMs} ms'
+                : 'Keys already existed, setup skipped',
+            'Load: ${k.loadMs} ms',
+          ]),
+      ],
     );
   }
 
@@ -91,12 +97,8 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 2,
       title: 'Your credential',
-      description:
-          'What we would normally hand over to a verifier. Next, we prove things about it instead.',
       status: _c.status(FlowStep.credential),
-      actionLabel: 'Show credential',
-      onAction: _c.canRun(FlowStep.credential) ? _c.inspectCredential : null,
-      child: !shown
+      result: !shown
           ? null
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,10 +106,16 @@ class _FlowScreenState extends State<FlowScreen> {
                 for (final claim in cred.claims)
                   _KeyValue(claim.name, claim.value),
                 _KeyValue('Issuer', cred.issuer),
-                _KeyValue('Issuer key', _jwk(cred.issuerKey)),
-                _KeyValue('Device key', _jwk(cred.deviceKey)),
               ],
             ),
+      details: [
+        const Text(
+            'What we would normally hand over to a verifier. Next, we prove things about it instead.'),
+        if (shown) ...[
+          _KeyValue('Issuer key', _jwk(cred.issuerKey)),
+          _KeyValue('Device key', _jwk(cred.deviceKey)),
+        ],
+      ],
     );
   }
 
@@ -116,27 +124,25 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 3,
       title: 'Prepare once',
-      description:
-          'Proves the issuer signed this credential. Done once; reused for every verifier.',
       status: _c.status(FlowStep.prepare),
       error: _c.error(FlowStep.prepare),
       actionLabel: 'Prepare',
       onAction: _c.canRun(FlowStep.prepare) ? _c.runPrepare : null,
-      child: p == null
-          ? null
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Lines([
-                  'Witness: ${p.witnessMs} ms',
-                  'Prove: ${p.proveMs} ms',
-                  'Proof: ${_kb(p.proofBytes)}',
-                ]),
-                _Mono('Fingerprint ${p.proofFingerprint}'),
-                const SizedBox(height: 4),
-                const Text('The proof holds none of the claim values above.'),
-              ],
-            ),
+      timing:
+          p == null ? null : 'Prepared in ${_duration(p.witnessMs + p.proveMs)}',
+      details: [
+        const Text(
+            'Proves the issuer signed this credential. Done once; reused for every verifier.'),
+        if (p != null) ...[
+          _Lines([
+            'Witness: ${p.witnessMs} ms',
+            'Prove: ${p.proveMs} ms',
+            'Proof: ${_kb(p.proofBytes)}',
+          ]),
+          _Mono('Fingerprint ${p.proofFingerprint}'),
+          const Text('The proof holds none of the claim values above.'),
+        ],
+      ],
     );
   }
 
@@ -147,9 +153,8 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 4,
       title: 'A verifier asks',
-      description: 'Pick a scenario. Each one is a different kind of request.',
       status: _c.status(FlowStep.request),
-      child: Column(
+      result: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
@@ -168,14 +173,16 @@ class _FlowScreenState extends State<FlowScreen> {
           ),
           const SizedBox(height: 8),
           Text(s.description),
-          if (enabled) ...[
-            const SizedBox(height: 8),
-            _KeyValue('Verifier', req.verifier),
-            _KeyValue('Asks', req.policyText),
-            _KeyValue('Nonce', req.nonce, mono: true),
-          ],
         ],
       ),
+      details: [
+        const Text('Pick a scenario. Each one is a different kind of request.'),
+        if (enabled) ...[
+          _KeyValue('Verifier', req.verifier),
+          _KeyValue('Asks', req.policyText),
+          _KeyValue('Nonce', req.nonce, mono: true),
+        ],
+      ],
     );
   }
 
@@ -185,34 +192,27 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 5,
       title: 'Present a proof',
-      description:
-          'Proves the policy for this verifier and re-randomises both proofs, so they cannot be matched to earlier ones.',
       status: _c.status(FlowStep.present),
       error: _c.error(FlowStep.present),
       actionLabel: p == null ? 'Present' : 'Present again',
       onAction: _c.canRun(FlowStep.present) ? _c.runPresent : null,
-      child: p == null
-          ? null
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Lines([
-                  'Show prove: ${p.showProveMs} ms',
-                  'Reblind: ${p.prepareReblindMs} + ${p.showReblindMs} ms',
-                  'Total: ${p.totalMs} ms',
-                  'Sizes: ${_kb(p.prepareProof.length)} + ${_kb(p.showProof.length)}',
-                ]),
-                const SizedBox(height: 8),
-                _fingerprints(prev == null ? 'This presentation' : 'New', p),
-                if (prev != null) ...[
-                  const SizedBox(height: 8),
-                  _fingerprints('Previous', prev),
-                  const SizedBox(height: 4),
-                  const Text(
-                      'Same credential, but nothing in the two proofs matches.'),
-                ],
-              ],
-            ),
+      timing: p == null ? null : 'Presented in ${_duration(p.totalMs)}',
+      details: [
+        const Text(
+            'Proves the policy for this verifier and re-randomises both proofs, so they cannot be matched to earlier ones.'),
+        if (p != null) ...[
+          _Lines([
+            'Show prove: ${p.showProveMs} ms',
+            'Reblind: ${p.prepareReblindMs} + ${p.showReblindMs} ms',
+            'Sizes: ${_kb(p.prepareProof.length)} + ${_kb(p.showProof.length)}',
+          ]),
+          _fingerprints(prev == null ? 'This presentation' : 'New', p),
+          if (prev != null) ...[
+            _fingerprints('Previous', prev),
+            const Text('Same credential, but nothing in the two proofs matches.'),
+          ],
+        ],
+      ],
     );
   }
 
@@ -232,32 +232,30 @@ class _FlowScreenState extends State<FlowScreen> {
     return _StepCard(
       number: 6,
       title: 'Verify',
-      description: 'The verifier checks the proofs against what it asked for.',
       status: _c.status(FlowStep.verify),
       error: _c.error(FlowStep.verify),
       actionLabel: 'Verify',
       onAction: _c.canRun(FlowStep.verify) ? _c.runVerify : null,
-      child: v == null
+      result: v == null
           ? null
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Check('Proofs linked to one credential', v.proofsLinked),
-                _Check('Issuer trusted', v.issuerTrusted),
-                _Check('Claims normalized as expected', v.normalizationMatches),
-                _Check('Nonce is ${against.verifier}\'s', v.nonceMatches),
-                _Check('Policy is what was asked', v.policyMatches),
-                const SizedBox(height: 8),
-                _VerdictBanner(
-                  verdict: _c.verdict!,
-                  matches: _c.matchesExpected!,
-                  expected: _c.scenario.expect.verdict,
-                  failure: v.failure,
-                ),
-                const SizedBox(height: 4),
-                Text('Verify: ${v.verifyMs} ms, key load: ${v.vkLoadMs} ms'),
-              ],
+          : _VerdictBanner(
+              verdict: _c.verdict!,
+              matches: _c.matchesExpected!,
+              expected: _c.scenario.expect.verdict,
+              failure: v.failure,
             ),
+      timing: v == null ? null : 'Verified in ${_duration(v.vkLoadMs + v.verifyMs)}',
+      details: [
+        const Text('The verifier checks the proofs against what it asked for.'),
+        if (v != null) ...[
+          _Check('Proofs linked to one credential', v.proofsLinked),
+          _Check('Issuer trusted', v.issuerTrusted),
+          _Check('Claims normalized as expected', v.normalizationMatches),
+          _Check('Nonce is ${against.verifier}\'s', v.nonceMatches),
+          _Check('Policy is what was asked', v.policyMatches),
+          Text('Verify: ${v.verifyMs} ms, key load: ${v.vkLoadMs} ms'),
+        ],
+      ],
     );
   }
 }
@@ -267,39 +265,47 @@ String _jwk(PublicJwk k) => '${k.crv} x=${_short(k.x)} y=${_short(k.y)}';
 String _short(String s) =>
     s.length <= 14 ? s : '${s.substring(0, 6)}…${s.substring(s.length - 6)}';
 
+String _duration(int ms) =>
+    ms < 1000 ? '$ms ms' : '${(ms / 1000).toStringAsFixed(1)} s';
+
 String _kb(int bytes) => '${(bytes / 1024).toStringAsFixed(1)} KB';
 
 class _StepCard extends StatelessWidget {
   const _StepCard({
     required this.number,
     required this.title,
-    required this.description,
     required this.status,
     this.error,
     this.actionLabel,
     this.onAction,
-    this.child,
+    this.result,
+    this.timing,
+    this.details = const [],
   });
 
   final int number;
   final String title;
-  final String description;
   final StepStatus status;
   final String? error;
   final String? actionLabel;
   final VoidCallback? onAction;
-  final Widget? child;
+  final Widget? result;
+  final String? timing;
+
+  /// Shown in a collapsed "Details" tile.
+  final List<Widget> details;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final disabled = status == StepStatus.disabled;
     return Opacity(
       opacity: disabled ? 0.5 : 1,
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -319,8 +325,8 @@ class _StepCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(title,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -330,16 +336,40 @@ class _StepCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(description),
-              if (child != null && !disabled) ...[
+              if (result != null && !disabled) ...[
                 const SizedBox(height: 12),
-                child!,
+                result!,
+              ],
+              if (timing != null && !disabled) ...[
+                const SizedBox(height: 8),
+                Text(timing!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface, fontWeight: FontWeight.w600)),
               ],
               if (error != null) ...[
                 const SizedBox(height: 8),
                 Text(error!, style: TextStyle(color: scheme.error)),
               ],
+              ExpansionTile(
+                title: Text('Details',
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(color: scheme.onSurfaceVariant)),
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                minTileHeight: 32,
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                shape: const Border(),
+                collapsedShape: const Border(),
+                children: [
+                  for (final d in details)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: d,
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -459,6 +489,7 @@ class _VerdictBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     final (bg, fg) = switch (verdict) {
       Verdict.verified => (Colors.green.shade100, Colors.green.shade900),
       Verdict.policyNotSatisfied => (
@@ -476,8 +507,8 @@ class _VerdictBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(verdict.label,
-              style: TextStyle(
-                  color: fg, fontSize: 18, fontWeight: FontWeight.bold)),
+              style: textTheme.titleMedium
+                  ?.copyWith(color: fg, fontWeight: FontWeight.w600)),
           if (failure != null) Text(failure!, style: TextStyle(color: fg)),
           Text(
               matches

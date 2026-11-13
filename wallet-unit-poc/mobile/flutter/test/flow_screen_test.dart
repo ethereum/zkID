@@ -30,6 +30,15 @@ Future<void> tapButton(WidgetTester t, String label) async {
   await t.pumpAndSettle();
 }
 
+Future<void> openDetails(WidgetTester t, String cardTitle) async {
+  final details = find.descendant(
+    of: find.widgetWithText(Card, cardTitle),
+    matching: find.text('Details'),
+  );
+  await t.tap(details);
+  await t.pumpAndSettle();
+}
+
 bool enabled(WidgetTester t, String label) =>
     t
         .widget<FilledButton>(find.widgetWithText(FilledButton, label))
@@ -45,24 +54,57 @@ void main() {
     expect(enabled(t, 'Prepare'), isFalse);
 
     await tapButton(t, 'Set up and load');
-    expect(find.text('Setup ran: 1200 ms'), findsOneWidget);
-
-    await tapButton(t, 'Show credential');
+    expect(find.text('Keys ready in 1.5 s'), findsOneWidget);
     expect(find.textContaining('Alice'), findsOneWidget);
     expect(find.textContaining('https://issuer.example/'), findsOneWidget);
 
     await tapButton(t, 'Prepare');
+    expect(find.text('Prepared in 5.4 s'), findsOneWidget);
+    await openDetails(t, 'Prepare once');
     expect(find.text('Prove: 5000 ms'), findsOneWidget);
     expect(find.text('Fingerprint aaaaaaaaaaaaaaaa'), findsOneWidget);
     expect(find.textContaining('none of the claim values'), findsOneWidget);
-    expect(find.textContaining('Corner bar'), findsOneWidget);
+    expect(find.textContaining('Corner bar'), findsNothing);
 
     await tapButton(t, 'Present');
+    expect(find.text('Presented in 1.0 s'), findsOneWidget);
+    await openDetails(t, 'Present a proof');
     expect(find.textContaining('show0000000000001'), findsOneWidget);
 
     await tapButton(t, 'Verify');
     expect(find.text('VERIFIED'), findsOneWidget);
+    expect(find.text('Verified in 30 ms'), findsOneWidget);
     expect(find.text('Matches the expected outcome.'), findsOneWidget);
+  });
+
+  testWidgets('details are collapsed by default; results stay visible',
+      (t) async {
+    await pumpFlow(t, FakeFlowBackend());
+    await tapButton(t, 'Set up and load');
+    await tapButton(t, 'Prepare');
+    await tapButton(t, 'Present');
+    await tapButton(t, 'Verify');
+
+    expect(find.text('Prepared in 5.4 s'), findsOneWidget);
+    expect(find.text('VERIFIED'), findsOneWidget);
+    expect(find.text('Fingerprint aaaaaaaaaaaaaaaa'), findsNothing);
+    expect(find.text('Issuer trusted'), findsNothing);
+
+    await openDetails(t, 'Prepare once');
+    expect(find.text('Fingerprint aaaaaaaaaaaaaaaa'), findsOneWidget);
+    await openDetails(t, 'Verify');
+    expect(find.text('Issuer trusted'), findsOneWidget);
+  });
+
+  testWidgets('credential has no button and Prepare is enabled after keys',
+      (t) async {
+    await pumpFlow(t, FakeFlowBackend());
+    await tapButton(t, 'Set up and load');
+
+    final card = find.widgetWithText(Card, 'Your credential');
+    expect(find.descendant(of: card, matching: find.byType(FilledButton)),
+        findsNothing);
+    expect(enabled(t, 'Prepare'), isTrue);
   });
 
   testWidgets('a rejected scenario shows the reason and still matches',
@@ -70,7 +112,6 @@ void main() {
     final backend = FakeFlowBackend();
     await pumpFlow(t, backend);
     await tapButton(t, 'Set up and load');
-    await tapButton(t, 'Show credential');
     await tapButton(t, 'Prepare');
     await t.tap(find.text('Replayed proof'));
     await t.pumpAndSettle();
@@ -85,10 +126,10 @@ void main() {
     final backend = FakeFlowBackend();
     await pumpFlow(t, backend);
     await tapButton(t, 'Set up and load');
-    await tapButton(t, 'Show credential');
     await tapButton(t, 'Prepare');
     await tapButton(t, 'Present');
     await tapButton(t, 'Present again');
+    await openDetails(t, 'Present a proof');
 
     expect(find.text('Show show0000000000001'), findsOneWidget);
     expect(find.text('Show show0000000000002'), findsOneWidget);
@@ -105,14 +146,13 @@ void main() {
 
     await tapButton(t, 'Set up and load');
     expect(find.textContaining('ensureKeys failed'), findsNothing);
-    expect(find.text('Setup ran: 1200 ms'), findsOneWidget);
+    expect(find.text('Keys ready in 1.5 s'), findsOneWidget);
   });
 
   testWidgets('every action button is disabled while a call runs', (t) async {
     final backend = FakeFlowBackend();
     await pumpFlow(t, backend);
     await tapButton(t, 'Set up and load');
-    await tapButton(t, 'Show credential');
     await tapButton(t, 'Prepare');
 
     backend.gate = Completer<void>();
@@ -120,7 +160,6 @@ void main() {
     await t.pump();
     for (final label in [
       'Set up and load',
-      'Show credential',
       'Prepare',
       'Present',
       'Verify',
@@ -174,7 +213,6 @@ void main() {
     }
 
     await tapScrolled('Set up and load');
-    await tapScrolled('Show credential');
     await tapScrolled('Prepare');
     await tapScrolled('Present');
     await tapScrolled('Present again');
@@ -187,7 +225,6 @@ void main() {
   testWidgets('a verdict that contradicts the scenario is flagged', (t) async {
     await pumpFlow(t, _ContradictingBackend());
     await tapButton(t, 'Set up and load');
-    await tapButton(t, 'Show credential');
     await tapButton(t, 'Prepare');
     await tapButton(t, 'Present');
     await tapButton(t, 'Verify');

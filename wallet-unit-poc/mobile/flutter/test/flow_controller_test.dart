@@ -23,7 +23,6 @@ Future<FlowController> readyController(FakeFlowBackend backend,
 
 Future<void> upToRequest(FlowController c) async {
   await c.runKeys();
-  c.inspectCredential();
   await c.runPrepare();
 }
 
@@ -63,9 +62,6 @@ void main() {
     await c.runKeys();
     expect(c.status(FlowStep.keys), StepStatus.done);
     expect(c.keys!.setupRan, isTrue);
-    expect(c.status(FlowStep.credential), StepStatus.active);
-
-    c.inspectCredential();
     expect(c.status(FlowStep.credential), StepStatus.done);
     expect(c.status(FlowStep.prepare), StepStatus.active);
 

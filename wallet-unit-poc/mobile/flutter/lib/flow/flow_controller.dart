@@ -74,19 +74,13 @@ class FlowController extends ChangeNotifier {
     _notify();
   }
 
+  /// The credential step has no backend call or button; it shows what the
+  /// wallet would normally hand over as soon as the keys are ready.
   Future<void> runKeys() => _run(FlowStep.keys, () async {
         keys = await backend.ensureKeys();
-        _status[FlowStep.credential] = StepStatus.active;
+        _status[FlowStep.credential] = StepStatus.done;
+        _status[FlowStep.prepare] = StepStatus.active;
       });
-
-  /// The credential step holds no backend call; it only shows what the
-  /// wallet would normally hand over.
-  void inspectCredential() {
-    if (status(FlowStep.credential) != StepStatus.active) return;
-    _status[FlowStep.credential] = StepStatus.done;
-    _status[FlowStep.prepare] = StepStatus.active;
-    _notify();
-  }
 
   Future<void> runPrepare() => _run(FlowStep.prepare, () async {
         prepared = await backend.prepare();
