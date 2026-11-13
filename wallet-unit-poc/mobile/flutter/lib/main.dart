@@ -1,105 +1,54 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 
-import 'package:mopro_flutter_bindings/src/rust/frb_generated.dart';
-import 'package:mopro_flutter_bindings/src/rust/third_party/openac_mobile_app.dart'
-    show
-        BenchmarkResults,
-        ProofResult,
-        generateSharedBlinds,
-        proveJwt,
-        proveShow,
-        reblindJwt,
-        reblindShow,
-        runCompleteBenchmark,
-        setupJwtKeys,
-        setupShowKeys,
-        verifyJwt,
-        verifyShow;
+import 'package:openac/assets.dart';
+import 'package:openac/flow/flow_backend.dart';
+import 'package:openac/flow/rust_flow_backend.dart';
+import 'package:openac/home_shell.dart';
+
+import 'package:mopro_flutter_bindings/mopro_flutter_bindings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
-  await _copyAssetsToDocuments();
-  runApp(const MyApp());
-}
-
-/// Copy circuit files from Flutter assets into the app's documents directory,
-/// mirroring the layout used by Rust's PathConfig::mobile:
-///
-///   {docs}/build/jwt/jwt_js/jwt.r1cs   ← decompressed from jwt.r1cs.gz
-///   {docs}/build/show/show_js/show.r1cs ← decompressed from show.r1cs.gz
-///   {docs}/jwt_input.json               ← prove_jwt + run_complete_benchmark
-///   {docs}/show_input.json              ← prove_show + run_complete_benchmark
-Future<void> _copyAssetsToDocuments() async {
+  String? assetsError;
+  String? docsPath;
   try {
-    final documentsDir = await getApplicationDocumentsDirectory();
-    final circomDir = Directory('${documentsDir.path}/circom');
-
-    final jwtBuildDir = Directory('${circomDir.path}/build/jwt/jwt_js');
-    final showBuildDir = Directory('${circomDir.path}/build/show/show_js');
-    await jwtBuildDir.create(recursive: true);
-    await showBuildDir.create(recursive: true);
-
-    // Decompress r1cs files — skip if already extracted (each is ~350MB).
-    final compressedAssets = {
-      'assets/circom/jwt.r1cs.gz': '${jwtBuildDir.path}/jwt.r1cs',
-      'assets/circom/show.r1cs.gz': '${showBuildDir.path}/show.r1cs',
-    };
-    for (final entry in compressedAssets.entries) {
-      final target = File(entry.value);
-      if (!await target.exists()) {
-        debugPrint('Decompressing ${entry.key}');
-        final data = await rootBundle.load(entry.key);
-        final decompressed = gzip.decode(data.buffer.asUint8List());
-        await target.writeAsBytes(decompressed);
-        debugPrint(
-            '  → ${(decompressed.length / 1024 / 1024).toStringAsFixed(2)} MB');
-      }
-    }
-
-    // Always overwrite input JSON files so stale cached versions from a
-    // previous app install never cause witness synthesis mismatches.
-    // jwt_input.json is used by prove_jwt; show_input.json by prove_show;
-    // run_complete_benchmark derives both paths from documentsPath automatically.
-    final inputAssets = {
-      'assets/circom/jwt_input.json': [
-        '${circomDir.path}/jwt_input.json',
-      ],
-      'assets/circom/show_input.json': [
-        '${circomDir.path}/show_input.json',
-      ],
-    };
-    for (final entry in inputAssets.entries) {
-      final data = await rootBundle.load(entry.key);
-      final bytes = data.buffer.asUint8List();
-      for (final dest in entry.value) {
-        await File(dest).writeAsBytes(bytes);
-        debugPrint('Wrote ${entry.key} → $dest');
-      }
-    }
+    docsPath = await prepareAssets();
   } catch (e) {
-    debugPrint('Error copying assets: $e');
+    assetsError = e.toString();
   }
+  runApp(MyApp(docsPath: docsPath, assetsError: assetsError));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.docsPath, this.assetsError});
+
+  /// Null when asset preparation failed; the flow then reports the error.
+  final String? docsPath;
+  final String? assetsError;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: const E2EProofWorkflowScreen(),
+      home: HomeShell(
+        backend: docsPath == null
+            ? UnavailableFlowBackend(
+                assetsError ?? 'Circuit assets are not available.')
+            : RustFlowBackend(docsPath!),
+        assetsError: assetsError,
+        benchmarkBuilder: (busy) => E2EProofWorkflowScreen(busy: busy),
+      ),
     );
   }
 }
 
 class E2EProofWorkflowScreen extends StatefulWidget {
-  const E2EProofWorkflowScreen({super.key});
+  const E2EProofWorkflowScreen({super.key, this.busy});
+
+  /// Set while a Rust call runs, so the shell can lock its navigation.
+  final ValueNotifier<bool>? busy;
 
   @override
   State<E2EProofWorkflowScreen> createState() =>
@@ -145,7 +94,13 @@ class TaskResult {
 }
 
 class _E2EProofWorkflowScreenState extends State<E2EProofWorkflowScreen> {
-  bool _isOperating = false;
+  bool _operating = false;
+  bool get _isOperating => _operating;
+  set _isOperating(bool v) {
+    _operating = v;
+    widget.busy?.value = v;
+  }
+
   Exception? _error;
 
   Map<String, TaskResult> _results = {};
@@ -154,11 +109,6 @@ class _E2EProofWorkflowScreenState extends State<E2EProofWorkflowScreen> {
 
   bool _workflowRunning = false;
   String? _currentWorkflowStep;
-
-  Future<String> _getDocumentsPath() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return '${dir.path}/circom';
-  }
 
   /// Execute a single proof step and return its result.
   /// All Rust functions resolve their own input paths from documents_path;
@@ -256,7 +206,7 @@ class _E2EProofWorkflowScreenState extends State<E2EProofWorkflowScreen> {
       _error = null;
     });
     try {
-      final docs = await _getDocumentsPath();
+      final docs = await getDocumentsPath();
       final result = await _executeStep(taskType, docs);
       setState(() {
         _results[taskType.name] = result;
@@ -288,7 +238,7 @@ class _E2EProofWorkflowScreenState extends State<E2EProofWorkflowScreen> {
       _currentWorkflowStep = null;
     });
 
-    final docs = await _getDocumentsPath();
+    final docs = await getDocumentsPath();
 
     const steps = [
       ProofTaskType.setupJwt,
@@ -354,7 +304,7 @@ class _E2EProofWorkflowScreenState extends State<E2EProofWorkflowScreen> {
       _benchmarkResults = null;
     });
     try {
-      final docs = await _getDocumentsPath();
+      final docs = await getDocumentsPath();
       final results = await runCompleteBenchmark(
         documentsPath: docs,
       );

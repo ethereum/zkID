@@ -109,6 +109,8 @@ It recompiles the circuits when the build is missing or out of date, so the firs
 
 #### 4(d). Run Flutter with Release Mode
 
+The app has two screens: Flow, a full OpenAC walk-through (prepare, present, verify), and Benchmark.
+
 ```sh
 cd flutter
 flutter run --release
