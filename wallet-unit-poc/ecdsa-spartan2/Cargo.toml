@@ -18,7 +18,7 @@ default = ["native-witness"]
 native-witness = ["dep:witnesscalc-adapter"]
 
 [dependencies]
-spartan2 = { git = "https://github.com/0xVikasRushi/Spartan2.git", branch = "openac-sdk", default-features = false }
+spartan2 = { git = "https://github.com/moven0831/Spartan2", rev = "5d20a9357134460ef49c86a911c35279d0fff65f", default-features = false }
 circom-scotia = { git = "https://github.com/0xVikasRushi/circom-scotia", branch="feat/spartan2", default-features = false }
 
 bellpepper = "0.4.0"
