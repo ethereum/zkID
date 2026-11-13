@@ -13,23 +13,24 @@ void main() {
     expect(find.text('E2E Full Workflow'), findsNothing);
   });
 
-  testWidgets('lists the key load and first verify rows', (t) async {
+  testWidgets('each timing label sits on the row of its own value', (t) async {
+    BigInt ms(int v) => BigInt.from(v);
     await t.pumpWidget(MaterialApp(
       home: BenchmarkScreen(
-        initialResults: BenchmarkResults(
-          jwtSetupMs: BigInt.from(1),
-          showSetupMs: BigInt.from(2),
-          generateBlindsMs: BigInt.from(3),
-          proveJwtMs: BigInt.from(4),
-          reblindJwtMs: BigInt.from(5),
-          proveShowMs: BigInt.from(6),
-          reblindShowMs: BigInt.from(7),
-          verifyJwtMs: BigInt.from(8),
-          verifyShowMs: BigInt.from(9),
-          jwtVkLoadMs: BigInt.from(1101),
-          showVkLoadMs: BigInt.from(1102),
-          verifyJwtFirstMs: BigInt.from(1103),
-          verifyShowFirstMs: BigInt.from(1104),
+        runBenchmark: () async => BenchmarkResults(
+          jwtSetupMs: ms(101),
+          showSetupMs: ms(102),
+          generateBlindsMs: ms(103),
+          proveJwtMs: ms(104),
+          reblindJwtMs: ms(105),
+          proveShowMs: ms(106),
+          reblindShowMs: ms(107),
+          verifyJwtMs: ms(108),
+          verifyShowMs: ms(109),
+          jwtVkLoadMs: ms(110),
+          showVkLoadMs: ms(111),
+          verifyJwtFirstMs: ms(112),
+          verifyShowFirstMs: ms(113),
           jwtProvingKeyBytes: BigInt.zero,
           jwtVerifyingKeyBytes: BigInt.zero,
           showProvingKeyBytes: BigInt.zero,
@@ -41,17 +42,26 @@ void main() {
         ),
       ),
     ));
+    await t.tap(find.text('Run Complete Benchmark'));
+    await t.pumpAndSettle();
     for (final row in {
-      'Load Prepare VK': '1101',
-      'Load Show VK': '1102',
-      'Verify Prepare (first)': '1103',
-      'Verify Show (first)': '1104',
+      'Verify Prepare': '108',
+      'Verify Show': '109',
+      'Load Prepare VK': '110',
+      'Load Show VK': '111',
+      'Verify Prepare (first)': '112',
+      'Verify Show (first)': '113',
     }.entries) {
       await t.scrollUntilVisible(find.text(row.key), 100);
       expect(find.text(row.key), findsOneWidget);
       expect(find.text(row.value), findsOneWidget);
+      expect(
+        (t.getCenter(find.text(row.key)).dy -
+                t.getCenter(find.text(row.value)).dy)
+            .abs(),
+        lessThan(1),
+        reason: '${row.key} is not on the row showing ${row.value}',
+      );
     }
-    expect(find.text('Verify Prepare'), findsOneWidget);
-    expect(find.text('Verify Show'), findsOneWidget);
   });
 }

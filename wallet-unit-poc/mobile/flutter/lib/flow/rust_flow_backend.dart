@@ -12,11 +12,6 @@ import 'flow_models.dart';
 const _prepareKeyFiles = ['prepare_proving.key', 'prepare_verifying.key'];
 const _showKeyFiles = ['show_proving.key', 'show_verifying.key'];
 
-// The digest sidecar belongs to its verifying key, so it is cleared with the
-// keys but never decides whether setup is needed.
-const _prepareSidecars = ['prepare_verifying.digest'];
-const _showSidecars = ['show_verifying.digest'];
-
 /// Which circuits need key setup.
 class KeySetupPlan {
   const KeySetupPlan({required this.prepare, required this.show});
@@ -51,18 +46,13 @@ class RustFlowBackend implements FlowBackend {
             planKeySetup((name) => File('$_keysDir/$name').existsSync());
         var setupRan = plan.any;
         final setupWatch = Stopwatch()..start();
-        if (plan.prepare) {
-          await _setup(_prepareKeyFiles, _prepareSidecars, rust.setupJwtKeys);
-        }
-        if (plan.show) {
-          await _setup(_showKeyFiles, _showSidecars, rust.setupShowKeys);
-        }
+        if (plan.prepare) await _setup(_prepareKeyFiles, rust.setupJwtKeys);
+        if (plan.show) await _setup(_showKeyFiles, rust.setupShowKeys);
         var setupMs = setupWatch.elapsedMilliseconds;
 
         final loadWatch = Stopwatch();
         Future<void> load(
           List<String> files,
-          List<String> sidecars,
           bool setupRanThisCall,
           Future<BigInt> Function({required String path}) loadKey,
           Future<String> Function({required String documentsPath}) setup,
@@ -81,7 +71,7 @@ class RustFlowBackend implements FlowBackend {
             setupWatch
               ..reset()
               ..start();
-            await _setup(files, sidecars, setup);
+            await _setup(files, setup);
             setupMs += setupWatch.elapsedMilliseconds;
             loadWatch.start();
             try {
@@ -94,10 +84,10 @@ class RustFlowBackend implements FlowBackend {
           loadWatch.stop();
         }
 
-        await load(_prepareKeyFiles, _prepareSidecars, plan.prepare,
-            rust.loadPrepareKey, rust.setupJwtKeys);
-        await load(_showKeyFiles, _showSidecars, plan.show, rust.loadShowKey,
-            rust.setupShowKeys);
+        await load(_prepareKeyFiles, plan.prepare, rust.loadPrepareKey,
+            rust.setupJwtKeys);
+        await load(
+            _showKeyFiles, plan.show, rust.loadShowKey, rust.setupShowKeys);
         return KeysInfo(
           setupRan: setupRan,
           setupMs: setupMs,
@@ -107,10 +97,9 @@ class RustFlowBackend implements FlowBackend {
 
   Future<void> _setup(
     List<String> files,
-    List<String> sidecars,
     Future<String> Function({required String documentsPath}) setup,
   ) async {
-    for (final name in [...files, ...sidecars]) {
+    for (final name in files) {
       final f = File('$_keysDir/$name');
       if (f.existsSync()) await f.delete();
     }
