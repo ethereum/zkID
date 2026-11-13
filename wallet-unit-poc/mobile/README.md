@@ -6,7 +6,7 @@ Mobile App for [OpenAC Wallet-Unit-PoC](/wallet-unit-poc/ecdsa-spartan2/), suppo
 
 Before getting started, ensure you have the Flutter SDK installed:
 
-1. Install Flutter SDK (3.0.0 or higher) from the [official Flutter installation guide](https://docs.flutter.dev/get-started/install)
+1. Install Flutter SDK (3.47 or higher) from the [official Flutter installation guide](https://docs.flutter.dev/get-started/install)
 
 2. Verify your installation:
 
@@ -52,9 +52,9 @@ Before building for Android, install Android Studio and configure the NDK enviro
 
 1. **Install Android Studio** from [developer.android.com/studio](https://developer.android.com/studio)
 
-2. **Install JDK**: Download from [Oracle](https://www.oracle.com/java/technologies/downloads/) or use your package manager
+2. **Install JDK 17 or higher**: Android Studio's bundled JDK works. Otherwise download from [Oracle](https://www.oracle.com/java/technologies/downloads/) or use your package manager
 
-3. **Install NDK** via Android Studio: `SDK Manager > SDK Tools > NDK (Side by Side)`
+3. **Install NDK 27.0.12077973** via Android Studio: `SDK Manager > SDK Tools > NDK (Side by Side)`
 
 4. **Install Rust Android Targets**:
 
@@ -69,10 +69,10 @@ Before building for Android, install Android Studio and configure the NDK enviro
     export ANDROID_HOME="$HOME/Library/Android/sdk"
 
     # Find your NDK version
-    ls $ANDROID_HOME/ndk  # e.g., 26.1.10909125
+    ls $ANDROID_HOME/ndk  # e.g., 27.0.12077973
 
     # Set NDK path (replace version with yours)
-    export NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125"
+    export NDK_PATH="$ANDROID_HOME/ndk/27.0.12077973"
     ```
 
 6. Reload your shell or run `source ~/.zshrc`
@@ -105,7 +105,7 @@ The circuit assets and flow fixtures are generated locally from the circuits and
 bash scripts/prepare-assets.sh
 ```
 
-It recompiles the circuits when the build is missing or out of date, so the first run takes a while.
+It needs circom 2.2.3, Node.js with npm, yarn v1 and `shasum`. It recompiles the circuits when the build is missing or out of date, so the first run compiles the 2k circuit, which takes a few minutes and several GB of disk.
 
 #### 4(d). Run Flutter with Release Mode
 

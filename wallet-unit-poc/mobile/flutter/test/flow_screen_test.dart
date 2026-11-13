@@ -96,6 +96,24 @@ void main() {
     expect(find.text('Issuer trusted'), findsOneWidget);
   });
 
+  testWidgets('details show instance size, commitments and the issuer key',
+      (t) async {
+    await pumpFlow(t, FakeFlowBackend());
+    await tapButton(t, 'Set up and load');
+    await tapButton(t, 'Prepare');
+    await tapButton(t, 'Present');
+    await tapButton(t, 'Verify');
+
+    await openDetails(t, 'Prepare once');
+    expect(find.text('Proof: 120.6 KB + instance 0.8 KB'), findsOneWidget);
+    expect(find.text('Commitment c0ffee'), findsOneWidget);
+    await openDetails(t, 'Present a proof');
+    expect(find.text('Commitment (Prepare) cw0001'), findsOneWidget);
+    expect(find.text('Commitment (Show) cw0001'), findsOneWidget);
+    await openDetails(t, 'Verify');
+    expect(find.textContaining('x=111111…111111'), findsOneWidget);
+  });
+
   testWidgets('credential has no button and Prepare is enabled after keys',
       (t) async {
     await pumpFlow(t, FakeFlowBackend());

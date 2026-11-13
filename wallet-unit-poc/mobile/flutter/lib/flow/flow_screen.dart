@@ -137,9 +137,10 @@ class _FlowScreenState extends State<FlowScreen> {
           _Lines([
             'Witness: ${p.witnessMs} ms',
             'Prove: ${p.proveMs} ms',
-            'Proof: ${_kb(p.proofBytes)}',
+            'Proof: ${_kb(p.proofBytes)} + instance ${_kb(p.instanceBytes)}',
           ]),
           _Mono('Fingerprint ${p.proofFingerprint}'),
+          _Mono('Commitment ${_short(p.commWShared)}'),
           const Text('The proof holds none of the claim values above.'),
         ],
       ],
@@ -222,7 +223,8 @@ class _FlowScreenState extends State<FlowScreen> {
           Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
           _Mono('Prepare ${p.prepareFingerprint}'),
           _Mono('Show ${p.showFingerprint}'),
-          _Mono('Commitment ${p.prepareCommWShared}'),
+          _Mono('Commitment (Prepare) ${_short(p.prepareCommWShared)}'),
+          _Mono('Commitment (Show) ${_short(p.showCommWShared)}'),
         ],
       );
 
@@ -253,6 +255,9 @@ class _FlowScreenState extends State<FlowScreen> {
           _Check('Claims normalized as expected', v.normalizationMatches),
           _Check('Nonce is ${against.verifier}\'s', v.nonceMatches),
           _Check('Policy is what was asked', v.policyMatches),
+          if (v.issuerKeyX.isNotEmpty)
+            _KeyValue('Issuer key',
+                'x=${_short(v.issuerKeyX)} y=${_short(v.issuerKeyY)}'),
           Text('Verify: ${v.verifyMs} ms, key load: ${v.vkLoadMs} ms'),
         ],
       ],

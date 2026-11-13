@@ -73,7 +73,7 @@ void main() {
 
     await c.runPresent();
     expect(c.status(FlowStep.present), StepStatus.done);
-    expect(c.presentation!.requestId, 'A');
+    expect(backend.presentedFor.last, 'A');
     expect(c.status(FlowStep.verify), StepStatus.active);
 
     await c.runVerify();
@@ -103,7 +103,7 @@ void main() {
     await upToRequest(c);
     c.selectScenario('replay');
     await c.runPresent();
-    expect(c.presentation!.requestId, 'A');
+    expect(backend.presentedFor.last, 'A');
     await c.runVerify();
     expect(c.verifyOutcome!.nonceMatches, isFalse);
     expect(c.verifyOutcome!.failure, 'nonce mismatch');
@@ -158,6 +158,42 @@ void main() {
     backend.failNext = 'verify';
     await c.runVerify();
     expect(c.status(FlowStep.verify), StepStatus.error);
+    await c.runVerify();
+    expect(c.verdict, Verdict.verified);
+  });
+
+  test('a failed Present again clears the old verdict and locks Verify',
+      () async {
+    final c = await readyController(backend);
+    await upToRequest(c);
+    await runScenario(c, 'over18');
+    expect(c.verdict, Verdict.verified);
+
+    backend.failNext = 'present';
+    await c.runPresent();
+    expect(c.status(FlowStep.present), StepStatus.error);
+    expect(c.verifyOutcome, isNull);
+    expect(c.verdict, isNull);
+    expect(c.canRun(FlowStep.verify), isFalse);
+
+    await c.runPresent();
+    expect(c.status(FlowStep.verify), StepStatus.active);
+    await c.runVerify();
+    expect(c.verdict, Verdict.verified);
+  });
+
+  test('a failed re-verify clears the old verdict and can be retried',
+      () async {
+    final c = await readyController(backend);
+    await upToRequest(c);
+    await runScenario(c, 'over18');
+
+    backend.failNext = 'verify';
+    await c.runVerify();
+    expect(c.status(FlowStep.verify), StepStatus.error);
+    expect(c.verifyOutcome, isNull);
+    expect(c.verdict, isNull);
+
     await c.runVerify();
     expect(c.verdict, Verdict.verified);
   });

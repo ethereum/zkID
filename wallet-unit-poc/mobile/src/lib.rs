@@ -459,6 +459,8 @@ pub struct FlowExpectedStatement {
     pub show_statement: Vec<String>,
 }
 
+/// `valid` covers proof validity and the statement checks. Whether the policy
+/// holds is reported separately in `expression_result`.
 #[derive(Debug)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct FlowVerifyResult {
@@ -476,8 +478,8 @@ pub struct FlowVerifyResult {
     pub failure: Option<String>,
 }
 
-/// Load the Prepare (JWT) proving key from `path` into the flow session;
-/// returns load time in ms.
+/// Load the Prepare proving key from `path`; returns load time in ms.
+/// Drops any kept Prepare proof, since it was made under the old key.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn load_prepare_key(path: String) -> Result<u64, ZkProofError> {
     flow::load_prepare_key(&path)
@@ -511,7 +513,7 @@ pub fn flow_present(
 }
 
 /// Verify both proofs and their link, then compare the public values with
-/// `expected`. Verifying keys are read from `{documents_path}/keys/` on first use.
+/// `expected`. Missing verifying keys are read from `{documents_path}/keys/`.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn flow_verify(
     documents_path: String,
@@ -902,7 +904,7 @@ mod e2e_tests {
     ///   prove_jwt → reblind_jwt → prove_show → reblind_show →
     ///   verify_jwt → verify_show → comm_W_shared linkage check
     #[test]
-    #[ignore = "Long-running e2e (~5 min); run with: cargo test -- --ignored e2e_full_workflow"]
+    #[ignore = "Long-running e2e (~5 min); needs scripts/prepare-assets.sh first; run with: cargo test -- --ignored e2e_full_workflow"]
     fn e2e_full_workflow() {
         let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -978,7 +980,7 @@ mod e2e_tests {
 
     /// Complete benchmark pipeline — exercises all 9 operations with precise timing.
     #[test]
-    #[ignore = "Long-running e2e (~10 min); run with: cargo test -- --ignored e2e_complete_benchmark"]
+    #[ignore = "Long-running e2e (~10 min); needs scripts/prepare-assets.sh first; run with: cargo test -- --ignored e2e_complete_benchmark"]
     fn e2e_complete_benchmark() {
         let temp = tempfile::tempdir().expect("create temp dir");
         let docs = setup_mobile_docs(temp.path());

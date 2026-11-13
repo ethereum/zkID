@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'flow/flow_models.dart';
 
-/// A generated asset is not in the app bundle. They are not in git; run
-/// `scripts/prepare-assets.sh` to create them.
+/// A generated asset is missing from the app bundle. Generated assets are not
+/// in git; run `scripts/prepare-assets.sh` to create them.
 class MissingAssetsException implements Exception {
   final String asset;
 
@@ -58,8 +58,8 @@ Future<FlowBundle> loadFlowBundle() async {
 ///   {docs}/show_input.json              ← benchmark
 ///   {docs}/manifest.json                ← copy of the bundled manifest
 ///
-/// The manifest is written last. A different or missing one means the files
-/// on disk came from another build, so the r1cs and keys are discarded.
+/// The manifest is written last; if it differs or is missing, the files on disk
+/// came from another build and the r1cs and keys are discarded.
 Future<void> extractAssets(Directory circomDir,
     {AssetLoader load = _loadAsset}) async {
   final bundled =

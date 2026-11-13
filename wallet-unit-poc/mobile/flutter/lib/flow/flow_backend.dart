@@ -79,8 +79,6 @@ class PrepareOutcome {
 }
 
 class Presentation {
-  final String requestId;
-  final DateTime presentedAt;
   final Uint8List prepareProof;
   final Uint8List showProof;
   final String prepareFingerprint;
@@ -93,8 +91,6 @@ class Presentation {
   final int totalMs;
 
   const Presentation({
-    required this.requestId,
-    required this.presentedAt,
     required this.prepareProof,
     required this.showProof,
     required this.prepareFingerprint,

@@ -1,10 +1,4 @@
-// Generates the mobile app's Flow fixtures: the Prepare input, the Show input
-// for request A, and the flow bundle. Output is deterministic: fixed keys,
-// salts, validity window, nonces and reference date, so reruns are
-// byte-identical. Mirrors Prover.precompute() and Prover.present() call for
-// call, then checks the witnesses against the public-value layout the phone
-// verifies.
-//
+// Writes the mobile Flow fixtures deterministically, using the same input builders as precompute() and present().
 // Usage: tsx scripts/gen-mobile-fixtures.ts --circom-build <dir> --out <flutter assets dir>
 
 import { createHash } from "node:crypto";
@@ -198,8 +192,8 @@ async function generate(
     },
   ];
 
-  // Prepare: one normalization serving every request. Taken from request A;
-  // B, C and D read the same slot in the same format, which present() asserts.
+  // One Prepare serves every request, so its normalization comes from request A.
+  // The loop below fails if any other request needs a different one.
   const compiledA = compilePredicateExpression(requests[0]!.policy, credential.claims);
   const birthdayIdx = compiledA.birthdayClaimIndex ?? credential.findBirthdayClaim() ?? 0;
   if (!credential.claims[birthdayIdx]) throw new Error("no birthday claim");
@@ -247,7 +241,6 @@ async function generate(
   const outRequests = [];
   const showInputJsons = new Map<string, string>();
   for (const req of requests) {
-    // present(): sign the nonce, compile the policy, build the Show input.
     const deviceSignature = signDeviceNonce(req.nonce, cred.devicePrivateKeyHex);
     const compiled = compilePredicateExpression(req.policy, credential.claims);
     assertNormalizationSupports(normalization, compiled);

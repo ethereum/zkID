@@ -1,28 +1,32 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "5.0.0",
-  "circuit": {
-    "size": "2k",
-    "jwtR1csSha256": "aa11",
-    "showR1csSha256": "bb22",
-    "sourceCommit": "0123abc"
-  },
   "credential": {
-    "format": "vc+sd-jwt",
-    "jwt": "eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJodHRwczovL2lzc3Vlci5leGFtcGxlLyJ9.c2ln",
-    "disclosures": ["WyJzIiwibmFtZSIsIkFsaWNlIl0", "WyJzMiwicm9jX2JpcnRoZGF5IiwiMDg5MDYxNSJd"],
-    "header": { "alg": "ES256", "typ": "vc+sd-jwt" },
-    "payload": { "iss": "https://issuer.example/", "_sd": ["d1", "d2"] },
     "claims": [
-      { "name": "name", "value": "Alice" },
-      { "name": "roc_birthday", "value": "0890615" }
+      {
+        "name": "name",
+        "value": "Alice"
+      },
+      {
+        "name": "roc_birthday",
+        "value": "0890615"
+      }
     ],
     "issuer": {
       "iss": "https://issuer.example/",
-      "publicKeyJwk": { "kty": "EC", "crv": "P-256", "x": "issuerX", "y": "issuerY" }
+      "publicKeyJwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "issuerX",
+        "y": "issuerY"
+      }
     },
     "deviceKey": {
-      "publicKeyJwk": { "kty": "EC", "crv": "P-256", "x": "deviceX", "y": "deviceY" }
+      "publicKeyJwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "deviceX",
+        "y": "deviceY"
+      }
     }
   },
   "requests": [
@@ -32,9 +36,20 @@
       "title": "Over 18",
       "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
       "nonce": "nonce-aaaaaaaaaaaaaaaa",
-      "showInput": { "nonce": "1" },
-      "expected": { "preparePublicValues": ["11", "22", "33"], "showStatement": ["100", "200"] },
-      "expectedExpressionResult": true
+      "showInput": {
+        "nonce": "1"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "100",
+          "200"
+        ]
+      }
     },
     {
       "id": "B",
@@ -42,9 +57,20 @@
       "title": "Born before 1990",
       "policyText": "roc_birthday <= 0790101 (born on or before 1990-01-01)",
       "nonce": "nonce-bbbbbbbbbbbbbbbb",
-      "showInput": { "nonce": "2" },
-      "expected": { "preparePublicValues": ["11", "22", "33"], "showStatement": ["101", "201"] },
-      "expectedExpressionResult": false
+      "showInput": {
+        "nonce": "2"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "101",
+          "201"
+        ]
+      }
     },
     {
       "id": "C",
@@ -52,9 +78,20 @@
       "title": "Over 18 (new nonce)",
       "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
       "nonce": "nonce-cccccccccccccccc",
-      "showInput": { "nonce": "3" },
-      "expected": { "preparePublicValues": ["11", "22", "33"], "showStatement": ["102", "200"] },
-      "expectedExpressionResult": true
+      "showInput": {
+        "nonce": "3"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "102",
+          "200"
+        ]
+      }
     },
     {
       "id": "D",
@@ -62,15 +99,54 @@
       "title": "Over 18 (other issuer)",
       "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
       "nonce": "nonce-dddddddddddddddd",
-      "showInput": { "nonce": "4" },
-      "expected": { "preparePublicValues": ["99", "88", "33"], "showStatement": ["103", "200"] },
-      "expectedExpressionResult": true
+      "showInput": {
+        "nonce": "4"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "99",
+          "88",
+          "33"
+        ],
+        "showStatement": [
+          "103",
+          "200"
+        ]
+      }
     }
   ],
   "scenarios": [
-    { "id": "over18", "title": "Over 18", "description": "A valid proof for a satisfied policy.", "presentFor": "A", "verifyAgainst": "A", "expect": "accepted" },
-    { "id": "policyFalse", "title": "Born before 1990", "description": "Valid proofs, but the policy is not met.", "presentFor": "B", "verifyAgainst": "B", "expect": "policy_false" },
-    { "id": "replay", "title": "Replayed proof", "description": "A proof made for another nonce.", "presentFor": "A", "verifyAgainst": "C", "expect": "rejected" },
-    { "id": "untrustedIssuer", "title": "Untrusted issuer", "description": "The verifier trusts a different issuer.", "presentFor": "D", "verifyAgainst": "D", "expect": "rejected" }
+    {
+      "id": "over18",
+      "title": "Over 18",
+      "description": "A valid proof for a satisfied policy.",
+      "presentFor": "A",
+      "verifyAgainst": "A",
+      "expect": "accepted"
+    },
+    {
+      "id": "policyFalse",
+      "title": "Born before 1990",
+      "description": "Valid proofs, but the policy is not met.",
+      "presentFor": "B",
+      "verifyAgainst": "B",
+      "expect": "policy_false"
+    },
+    {
+      "id": "replay",
+      "title": "Replayed proof",
+      "description": "A proof made for another nonce.",
+      "presentFor": "A",
+      "verifyAgainst": "C",
+      "expect": "rejected"
+    },
+    {
+      "id": "untrustedIssuer",
+      "title": "Untrusted issuer",
+      "description": "The verifier trusts a different issuer.",
+      "presentFor": "D",
+      "verifyAgainst": "D",
+      "expect": "rejected"
+    }
   ]
 }

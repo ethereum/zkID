@@ -36,7 +36,6 @@ pub fn scalar_to_decimal(s: &Scalar) -> String {
     BigInt::from_bytes_le(Sign::Plus, s.to_repr().as_ref()).to_string()
 }
 
-/// Compares what the proofs expose against what the verifier expects.
 /// `expected_show` is `show_pv[1..]`: the nonce hash, then the policy.
 pub fn check_statement(
     prepare_pv: &[Scalar],

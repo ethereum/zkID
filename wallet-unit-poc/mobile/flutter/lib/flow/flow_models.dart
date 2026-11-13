@@ -1,16 +1,12 @@
 /// Schema 1 of `assets/flow/bundle.json`, written by `scripts/prepare-assets.sh`.
 class FlowBundle {
   final int schemaVersion;
-  final String sdkVersion;
-  final CircuitInfo circuit;
   final FlowCredential credential;
   final List<FlowRequest> requests;
   final List<FlowScenario> scenarios;
 
   const FlowBundle({
     required this.schemaVersion,
-    required this.sdkVersion,
-    required this.circuit,
     required this.credential,
     required this.requests,
     required this.scenarios,
@@ -23,8 +19,6 @@ class FlowBundle {
     }
     final bundle = FlowBundle(
       schemaVersion: version,
-      sdkVersion: json['sdkVersion'] as String,
-      circuit: CircuitInfo.fromJson(json['circuit'] as Map<String, dynamic>),
       credential:
           FlowCredential.fromJson(json['credential'] as Map<String, dynamic>),
       requests: [
@@ -48,27 +42,6 @@ class FlowBundle {
   }
 
   FlowRequest request(String id) => requests.firstWhere((r) => r.id == id);
-}
-
-class CircuitInfo {
-  final String size;
-  final String jwtR1csSha256;
-  final String showR1csSha256;
-  final String sourceCommit;
-
-  const CircuitInfo({
-    required this.size,
-    required this.jwtR1csSha256,
-    required this.showR1csSha256,
-    required this.sourceCommit,
-  });
-
-  factory CircuitInfo.fromJson(Map<String, dynamic> json) => CircuitInfo(
-        size: json['size'] as String,
-        jwtR1csSha256: json['jwtR1csSha256'] as String,
-        showR1csSha256: json['showR1csSha256'] as String,
-        sourceCommit: json['sourceCommit'] as String,
-      );
 }
 
 class PublicJwk {
@@ -100,22 +73,12 @@ class Claim {
 }
 
 class FlowCredential {
-  final String format;
-  final String jwt;
-  final List<String> disclosures;
-  final Map<String, dynamic> header;
-  final Map<String, dynamic> payload;
   final List<Claim> claims;
   final String issuer;
   final PublicJwk issuerKey;
   final PublicJwk deviceKey;
 
   const FlowCredential({
-    required this.format,
-    required this.jwt,
-    required this.disclosures,
-    required this.header,
-    required this.payload,
     required this.claims,
     required this.issuer,
     required this.issuerKey,
@@ -126,11 +89,6 @@ class FlowCredential {
     final issuer = json['issuer'] as Map<String, dynamic>;
     final device = json['deviceKey'] as Map<String, dynamic>;
     return FlowCredential(
-      format: json['format'] as String,
-      jwt: json['jwt'] as String,
-      disclosures: List<String>.from(json['disclosures'] as List),
-      header: json['header'] as Map<String, dynamic>,
-      payload: json['payload'] as Map<String, dynamic>,
       claims: [
         for (final c in json['claims'] as List)
           Claim(
@@ -165,7 +123,6 @@ class FlowRequest {
 
   /// Decimal strings: the nonce hash followed by the policy.
   final List<String> showStatement;
-  final bool expectedExpressionResult;
 
   const FlowRequest({
     required this.id,
@@ -176,7 +133,6 @@ class FlowRequest {
     required this.showInput,
     required this.preparePublicValues,
     required this.showStatement,
-    required this.expectedExpressionResult,
   });
 
   factory FlowRequest.fromJson(Map<String, dynamic> json) {
@@ -191,7 +147,6 @@ class FlowRequest {
       preparePublicValues:
           List<String>.from(expected['preparePublicValues'] as List),
       showStatement: List<String>.from(expected['showStatement'] as List),
-      expectedExpressionResult: json['expectedExpressionResult'] as bool,
     );
   }
 }

@@ -29,9 +29,7 @@ KeySetupPlan planKeySetup(bool Function(String name) exists) => KeySetupPlan(
       show: !_showKeyFiles.every(exists),
     );
 
-/// A failed proving-key load is retried with a fresh setup only if setup has
-/// not already run for that circuit in this call; redoing it would repeat the
-/// same result.
+/// A setup that just ran would only repeat the same failed load.
 bool retryLoadAfterSetup({required bool setupRanThisCall}) => !setupRanThisCall;
 
 /// [FlowBackend] over the generated Rust bindings.
@@ -68,8 +66,7 @@ class RustFlowBackend implements FlowBackend {
             if (!retryLoadAfterSetup(setupRanThisCall: setupRanThisCall)) {
               rethrow;
             }
-            // The key may be truncated from an earlier interrupted setup:
-            // drop it, redo setup once, and load again.
+            // An interrupted setup can leave a truncated key.
             setupRan = true;
             setupWatch
               ..reset()
@@ -134,8 +131,6 @@ class RustFlowBackend implements FlowBackend {
           showInputPath: file.path,
         );
         return Presentation(
-          requestId: request.id,
-          presentedAt: DateTime.now(),
           prepareProof: r.prepareProof,
           showProof: r.showProof,
           prepareFingerprint: r.prepareFingerprint,

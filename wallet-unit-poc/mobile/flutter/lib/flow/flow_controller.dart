@@ -96,15 +96,19 @@ class FlowController extends ChangeNotifier {
   }
 
   Future<void> runPresent() => _run(FlowStep.present, () async {
+        // A failed present must not leave a verdict for the old presentation.
+        verifyOutcome = null;
+        _errors.remove(FlowStep.verify);
+        _status[FlowStep.verify] = StepStatus.disabled;
         final next = await backend.present(presentRequest);
         previousPresentation = presentation;
         presentation = next;
-        verifyOutcome = null;
-        _errors.remove(FlowStep.verify);
         _status[FlowStep.verify] = StepStatus.active;
       });
 
   Future<void> runVerify() => _run(FlowStep.verify, () async {
+        // Cleared first so a failing verify leaves no stale verdict.
+        verifyOutcome = null;
         verifyOutcome = await backend.verify(presentation!, verifyRequest);
       });
 

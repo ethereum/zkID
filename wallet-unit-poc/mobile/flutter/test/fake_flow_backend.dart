@@ -4,13 +4,14 @@ import 'dart:typed_data';
 import 'package:openac/flow/flow_backend.dart';
 import 'package:openac/flow/flow_models.dart';
 
-/// Mimics the Rust checks well enough for the scenarios in the sample bundle:
-/// a proof made for request X only verifies against X, and request D carries
-/// a different trusted issuer.
+/// Mimics the Rust checks for the sample bundle's scenarios.
+/// A proof for request X verifies only against X; request D trusts another issuer.
 class FakeFlowBackend implements FlowBackend {
   final calls = <String>[];
   int unloadCount = 0;
   int _presentations = 0;
+  final presentedFor = <String>[];
+  final _requestOf = <String, String>{};
 
   /// While set, every call waits on it; lets tests observe the busy state.
   Completer<void>? gate;
@@ -54,9 +55,9 @@ class FakeFlowBackend implements FlowBackend {
     await _enter('present');
     final n = ++_presentations;
     final tag = n.toString().padLeft(2, '0');
+    presentedFor.add(request.id);
+    _requestOf['show00000000000$tag'] = request.id;
     return Presentation(
-      requestId: request.id,
-      presentedAt: DateTime(2026, 11, 12, 10, n),
       prepareProof: Uint8List(8),
       showProof: Uint8List(4),
       prepareFingerprint: 'prep00000000000$tag',
@@ -73,18 +74,18 @@ class FakeFlowBackend implements FlowBackend {
   @override
   Future<VerifyOutcome> verify(Presentation p, FlowRequest against) async {
     await _enter('verify');
-    final nonceMatches = p.requestId == against.id;
+    final nonceMatches = _requestOf[p.showFingerprint] == against.id;
     final issuerTrusted = against.id != 'D';
     final valid = nonceMatches && issuerTrusted;
     return VerifyOutcome(
       valid: valid,
-      expressionResult: against.expectedExpressionResult,
+      expressionResult: against.id != 'B',
       proofsLinked: true,
       issuerTrusted: issuerTrusted,
       normalizationMatches: true,
       nonceMatches: nonceMatches,
       policyMatches: nonceMatches,
-      issuerKeyX: '11',
+      issuerKeyX: '1111111111111111111111111',
       issuerKeyY: '22',
       vkLoadMs: 10,
       verifyMs: 20,

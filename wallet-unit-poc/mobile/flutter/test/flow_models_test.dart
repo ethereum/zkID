@@ -10,14 +10,11 @@ FlowBundle parse(String path) => FlowBundle.fromJson(
 void main() {
   test('parses the sample bundle', () {
     final b = parse('test/fixtures/sample_bundle.json');
-    expect(b.sdkVersion, '5.0.0');
-    expect(b.circuit.size, '2k');
     expect(b.credential.issuer, 'https://issuer.example/');
     expect(b.credential.claims.map((c) => c.name), ['name', 'roc_birthday']);
     expect(b.credential.issuerKey.x, 'issuerX');
     expect(b.credential.deviceKey.y, 'deviceY');
     expect(b.requests.map((r) => r.id), ['A', 'B', 'C', 'D']);
-    expect(b.request('B').expectedExpressionResult, isFalse);
     expect(b.request('A').showStatement, ['100', '200']);
     expect(b.scenarios.map((s) => s.expect), [
       ExpectedOutcome.accepted,
@@ -25,6 +22,17 @@ void main() {
       ExpectedOutcome.rejected,
       ExpectedOutcome.rejected,
     ]);
+  });
+
+  test('ignores bundle keys the app does not read', () {
+    final json = jsonDecode(
+            File('test/fixtures/sample_bundle.json').readAsStringSync())
+        as Map<String, dynamic>;
+    json['sdkVersion'] = '5.0.0';
+    json['circuit'] = {'size': '2k'};
+    (json['credential'] as Map)['jwt'] = 'a.b.c';
+    (json['requests'] as List).first['expectedExpressionResult'] = true;
+    expect(FlowBundle.fromJson(json).requests, hasLength(4));
   });
 
   test('rejects an unknown schema version', () {

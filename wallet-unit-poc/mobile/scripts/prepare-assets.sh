@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Generates the circuit assets and flow fixtures the mobile app bundles.
-# Nothing it writes is committed; rerunning produces byte-identical output.
-# Output is staged in a temp directory and moved into place only after every
-# step succeeds. The final moves are not atomic.
+# Builds the circuit assets and Flow fixtures the app bundles; none of them are committed.
+# Usage: bash wallet-unit-poc/mobile/scripts/prepare-assets.sh
 set -euo pipefail
 
 MOBILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

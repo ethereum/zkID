@@ -1,9 +1,5 @@
 //! In-memory Prepare / Present / Verify flow behind the `flow_*` exports.
-//!
-//! Keys are loaded once into `SESSION`; nothing under the documents path is
-//! written. Proving clones the `Arc`s out first so the lock is never held while
-//! a proof runs. Key loads do hold it, so `unload` can't race a load and leave a
-//! key resident.
+//! Proofs run outside the `SESSION` lock; key loads hold it so `unload` can't race them.
 
 use crate::statement::{check_statement, parse_decimal_scalars, scalar_to_decimal};
 use crate::{
@@ -134,8 +130,12 @@ fn load_into(
     Ok(ms)
 }
 
+/// Also drops the kept Prepare proof, which was made under the previous key.
 pub fn load_prepare_key(path: &str) -> Result<u64, ZkProofError> {
-    load_into(path, |s| &mut s.prepare_pk)
+    load_into(path, |s| {
+        s.prepare = None;
+        &mut s.prepare_pk
+    })
 }
 
 pub fn load_show_key(path: &str) -> Result<u64, ZkProofError> {
