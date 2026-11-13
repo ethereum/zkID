@@ -10,7 +10,7 @@ use ecdsa_spartan2::{
         reblind_with_loaded_data, try_verify_circuit, verify_circuit_with_loaded_data,
         verify_linked_paths,
     },
-    save_keys,
+    load_verifying_key, save_keys,
     setup::{setup_circuit_keys, setup_circuit_keys_no_save},
     CircuitSize, PathConfig, PrepareCircuit, ShowCircuit, E,
 };
@@ -50,8 +50,15 @@ pub struct BenchmarkResults {
     pub reblind_jwt_ms: u64,
     pub prove_show_ms: u64,
     pub reblind_show_ms: u64,
+    /// Verifies with the key setup just built in memory.
     pub verify_jwt_ms: u64,
+    /// Verifies with the key setup just built in memory.
     pub verify_show_ms: u64,
+    // Key load and first verify, from the saved key files
+    pub jwt_vk_load_ms: u64,
+    pub show_vk_load_ms: u64,
+    pub verify_jwt_first_ms: u64,
+    pub verify_show_first_ms: u64,
     // Size metrics (bytes)
     pub jwt_proving_key_bytes: u64,
     pub jwt_verifying_key_bytes: u64,
@@ -695,6 +702,34 @@ pub fn run_complete_benchmark(
     verify_circuit_with_loaded_data(&show_proof, &show_vk);
     let verify_show_ms = start.elapsed().as_millis() as u64;
 
+    // Step 10: Load each verifying key from its saved file and time the first
+    // verify on it. The in-memory keys are dropped first so only one copy is resident.
+    drop(jwt_pk);
+    drop(jwt_vk);
+    let start = std::time::Instant::now();
+    let jwt_vk = load_verifying_key(config.key_path(PREPARE_VERIFYING_KEY)).map_err(|e| {
+        ZkProofError::FileNotFound {
+            message: format!("Failed to load jwt verifying key: {}", e),
+        }
+    })?;
+    let jwt_vk_load_ms = start.elapsed().as_millis() as u64;
+    let start = std::time::Instant::now();
+    verify_circuit_with_loaded_data(&jwt_proof, &jwt_vk);
+    let verify_jwt_first_ms = start.elapsed().as_millis() as u64;
+
+    drop(show_pk);
+    drop(show_vk);
+    let start = std::time::Instant::now();
+    let show_vk = load_verifying_key(config.key_path(SHOW_VERIFYING_KEY)).map_err(|e| {
+        ZkProofError::FileNotFound {
+            message: format!("Failed to load show verifying key: {}", e),
+        }
+    })?;
+    let show_vk_load_ms = start.elapsed().as_millis() as u64;
+    let start = std::time::Instant::now();
+    verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    let verify_show_first_ms = start.elapsed().as_millis() as u64;
+
     // Measure file sizes
     let jwt_proving_key_bytes = get_proof_size(&config.key_path(PREPARE_PROVING_KEY))?;
     let jwt_verifying_key_bytes = get_proof_size(&config.key_path(PREPARE_VERIFYING_KEY))?;
@@ -715,6 +750,10 @@ pub fn run_complete_benchmark(
         reblind_show_ms,
         verify_jwt_ms,
         verify_show_ms,
+        jwt_vk_load_ms,
+        show_vk_load_ms,
+        verify_jwt_first_ms,
+        verify_show_first_ms,
         jwt_proving_key_bytes,
         jwt_verifying_key_bytes,
         show_proving_key_bytes,
@@ -985,7 +1024,7 @@ mod e2e_tests {
         let temp = tempfile::tempdir().expect("create temp dir");
         let docs = setup_mobile_docs(temp.path());
 
-        let r = run_complete_benchmark(docs);
+        let r = run_complete_benchmark(docs.clone());
         assert!(r.is_ok(), "run_complete_benchmark failed: {:?}", r.err());
 
         let b = r.unwrap();
@@ -1000,6 +1039,41 @@ mod e2e_tests {
         assert!(b.reblind_show_ms > 0, "reblind_show_ms must be > 0");
         assert!(b.verify_jwt_ms > 0, "verify_jwt_ms must be > 0");
         assert!(b.verify_show_ms > 0, "verify_show_ms must be > 0");
+        assert!(b.verify_jwt_first_ms > 0, "verify_jwt_first_ms must be > 0");
+        assert!(
+            b.verify_show_first_ms > 0,
+            "verify_show_first_ms must be > 0"
+        );
+        // A recomputed digest would make the first verify ~1100 ms against ~60 ms warm.
+        assert!(
+            b.verify_jwt_first_ms < b.verify_jwt_ms * 5 + 200,
+            "first verify on the loaded prepare key too slow: {} ms vs {} ms warm",
+            b.verify_jwt_first_ms,
+            b.verify_jwt_ms
+        );
+        for name in ["prepare_verifying.digest", "show_verifying.digest"] {
+            let len = fs::metadata(Path::new(&docs).join("keys").join(name))
+                .unwrap_or_else(|e| panic!("{} missing: {}", name, e))
+                .len();
+            assert_eq!(len, 32, "{} must be 32 bytes", name);
+        }
+        println!(
+            "setup_ms jwt={} show={}; blinds={}; prove_ms jwt={} show={}; reblind_ms jwt={} show={}; \
+             vk_load_ms jwt={} show={}; verify_first_ms jwt={} show={}; verify_ms jwt={} show={}",
+            b.jwt_setup_ms,
+            b.show_setup_ms,
+            b.generate_blinds_ms,
+            b.prove_jwt_ms,
+            b.prove_show_ms,
+            b.reblind_jwt_ms,
+            b.reblind_show_ms,
+            b.jwt_vk_load_ms,
+            b.show_vk_load_ms,
+            b.verify_jwt_first_ms,
+            b.verify_show_first_ms,
+            b.verify_jwt_ms,
+            b.verify_show_ms
+        );
 
         // All artifacts must be non-empty
         assert!(b.jwt_proof_bytes > 0, "jwt_proof_bytes must be > 0");
