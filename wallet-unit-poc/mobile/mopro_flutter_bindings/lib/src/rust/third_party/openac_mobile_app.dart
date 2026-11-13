@@ -127,7 +127,7 @@ Future<FlowVerifyResult> flowVerify({
 Future<void> flowUnload() => RustLib.instance.api.openacMobileAppFlowUnload();
 
 /// Run complete benchmark pipeline for both JWT and Show circuits
-/// Executes all 9 steps: setup, prove, reblind, and verify for both circuits
+/// Executes every step: setup, prove, reblind, and verify for both circuits
 /// Returns comprehensive timing and size metrics
 Future<BenchmarkResults> runCompleteBenchmark({
   required String documentsPath,
@@ -162,10 +162,10 @@ class BenchmarkResults {
   final BigInt proveShowMs;
   final BigInt reblindShowMs;
 
-  /// Verifies with the key setup just built in memory.
+  /// Verifies with the in-memory keys from setup.
   final BigInt verifyJwtMs;
 
-  /// Verifies with the key setup just built in memory.
+  /// Verifies with the in-memory keys from setup.
   final BigInt verifyShowMs;
   final BigInt jwtVkLoadMs;
   final BigInt showVkLoadMs;
