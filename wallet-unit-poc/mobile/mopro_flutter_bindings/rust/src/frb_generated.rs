@@ -823,6 +823,10 @@ const _: fn() = || {
         let _: u64 = BenchmarkResults.reblind_show_ms;
         let _: u64 = BenchmarkResults.verify_jwt_ms;
         let _: u64 = BenchmarkResults.verify_show_ms;
+        let _: u64 = BenchmarkResults.jwt_vk_load_ms;
+        let _: u64 = BenchmarkResults.show_vk_load_ms;
+        let _: u64 = BenchmarkResults.verify_jwt_first_ms;
+        let _: u64 = BenchmarkResults.verify_show_first_ms;
         let _: u64 = BenchmarkResults.jwt_proving_key_bytes;
         let _: u64 = BenchmarkResults.jwt_verifying_key_bytes;
         let _: u64 = BenchmarkResults.show_proving_key_bytes;
@@ -932,6 +936,10 @@ impl SseDecode for openac_mobile_app::BenchmarkResults {
         let mut var_reblindShowMs = <u64>::sse_decode(deserializer);
         let mut var_verifyJwtMs = <u64>::sse_decode(deserializer);
         let mut var_verifyShowMs = <u64>::sse_decode(deserializer);
+        let mut var_jwtVkLoadMs = <u64>::sse_decode(deserializer);
+        let mut var_showVkLoadMs = <u64>::sse_decode(deserializer);
+        let mut var_verifyJwtFirstMs = <u64>::sse_decode(deserializer);
+        let mut var_verifyShowFirstMs = <u64>::sse_decode(deserializer);
         let mut var_jwtProvingKeyBytes = <u64>::sse_decode(deserializer);
         let mut var_jwtVerifyingKeyBytes = <u64>::sse_decode(deserializer);
         let mut var_showProvingKeyBytes = <u64>::sse_decode(deserializer);
@@ -950,6 +958,10 @@ impl SseDecode for openac_mobile_app::BenchmarkResults {
             reblind_show_ms: var_reblindShowMs,
             verify_jwt_ms: var_verifyJwtMs,
             verify_show_ms: var_verifyShowMs,
+            jwt_vk_load_ms: var_jwtVkLoadMs,
+            show_vk_load_ms: var_showVkLoadMs,
+            verify_jwt_first_ms: var_verifyJwtFirstMs,
+            verify_show_first_ms: var_verifyShowFirstMs,
             jwt_proving_key_bytes: var_jwtProvingKeyBytes,
             jwt_verifying_key_bytes: var_jwtVerifyingKeyBytes,
             show_proving_key_bytes: var_showProvingKeyBytes,
@@ -1233,6 +1245,10 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<openac_mobile_app::BenchmarkRe
             self.0.reblind_show_ms.into_into_dart().into_dart(),
             self.0.verify_jwt_ms.into_into_dart().into_dart(),
             self.0.verify_show_ms.into_into_dart().into_dart(),
+            self.0.jwt_vk_load_ms.into_into_dart().into_dart(),
+            self.0.show_vk_load_ms.into_into_dart().into_dart(),
+            self.0.verify_jwt_first_ms.into_into_dart().into_dart(),
+            self.0.verify_show_first_ms.into_into_dart().into_dart(),
             self.0.jwt_proving_key_bytes.into_into_dart().into_dart(),
             self.0.jwt_verifying_key_bytes.into_into_dart().into_dart(),
             self.0.show_proving_key_bytes.into_into_dart().into_dart(),
@@ -1424,6 +1440,10 @@ impl SseEncode for openac_mobile_app::BenchmarkResults {
         <u64>::sse_encode(self.reblind_show_ms, serializer);
         <u64>::sse_encode(self.verify_jwt_ms, serializer);
         <u64>::sse_encode(self.verify_show_ms, serializer);
+        <u64>::sse_encode(self.jwt_vk_load_ms, serializer);
+        <u64>::sse_encode(self.show_vk_load_ms, serializer);
+        <u64>::sse_encode(self.verify_jwt_first_ms, serializer);
+        <u64>::sse_encode(self.verify_show_first_ms, serializer);
         <u64>::sse_encode(self.jwt_proving_key_bytes, serializer);
         <u64>::sse_encode(self.jwt_verifying_key_bytes, serializer);
         <u64>::sse_encode(self.show_proving_key_bytes, serializer);
