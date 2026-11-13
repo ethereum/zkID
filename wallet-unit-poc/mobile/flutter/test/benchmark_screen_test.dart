@@ -45,8 +45,8 @@ void main() {
     await t.tap(find.text('Run Complete Benchmark'));
     await t.pumpAndSettle();
     for (final row in {
-      'Verify Prepare': '108',
-      'Verify Show': '109',
+      'Verify Prepare (in memory)': '108',
+      'Verify Show (in memory)': '109',
       'Load Prepare VK': '110',
       'Load Show VK': '111',
       'Verify Prepare (first)': '112',
