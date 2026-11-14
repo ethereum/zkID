@@ -21,6 +21,11 @@ use rsa::RsaPrivateKey;
 use sha2::Sha256;
 use std::time::Duration;
 use x509_cert::builder::{Builder, CertificateBuilder, Profile};
+use x509_cert::der::asn1::{BitString, ObjectIdentifier, OctetString};
+use x509_cert::ext::pkix::{AuthorityKeyIdentifier, KeyUsage, KeyUsages, SubjectKeyIdentifier};
+use x509_cert::ext::Extension;
+use const_oid::db::rfc5280::{ID_CE_AUTHORITY_KEY_IDENTIFIER, ID_CE_KEY_USAGE, ID_CE_SUBJECT_KEY_IDENTIFIER};
+use x509_cert::{TbsCertificate, Version};
 use x509_cert::der::asn1::UtcTime;
 use x509_cert::name::Name;
 use x509_cert::serial_number::SerialNumber;
@@ -144,34 +149,94 @@ fn generate_ca_cert(ca_key: &RsaPrivateKey, serial_hex: &str) -> Result<x509_cer
     Ok(builder.build::<rsa::pkcs1v15::Signature>()?)
 }
 
+/// Builds the user certificate by hand rather than through
+/// `CertificateBuilder`, so the extensions follow the order of a real MOICA
+/// end-entity certificate: authorityKeyIdentifier, subjectKeyIdentifier,
+/// keyUsage (critical, digitalSignature only), then the rest. The cert-chain
+/// circuit walks to keyUsage structurally and rejects any other layout.
 fn generate_user_cert(
     user_key: &RsaPrivateKey,
     ca_key: &RsaPrivateKey,
     ca_cert: &x509_cert::Certificate,
     serial_hex: &str,
 ) -> Result<x509_cert::Certificate, BoxErr> {
+    use rsa::signature::{SignatureEncoding as _, Signer as _};
+
     let serial = SerialNumber::new(&hex::decode(serial_hex)?)?;
     let subject: Name = "C=TW,CN=Test User,serialNumber=0000000000000000".parse()?;
-    let issuer_name = ca_cert.tbs_certificate.subject.clone();
 
     let ca_signer = SigningKey::<Sha256>::new(ca_key.clone());
     let user_signer = SigningKey::<Sha256>::new(user_key.clone());
     let user_spki = SubjectPublicKeyInfoOwned::from_key(user_signer.verifying_key())?;
 
-    let builder = CertificateBuilder::new(
-        Profile::Leaf {
-            issuer: issuer_name,
-            enable_key_agreement: false,
-            enable_key_encipherment: false,
-        },
-        serial,
-        fixed_validity()?,
-        subject,
-        user_spki,
-        &ca_signer,
-    )?;
+    let authority_key_id = key_identifier(&ca_cert.tbs_certificate.subject_public_key_info)?;
+    let subject_key_id = key_identifier(&user_spki)?;
 
-    Ok(builder.build::<rsa::pkcs1v15::Signature>()?)
+    let extensions = vec![
+        extension(
+            ID_CE_AUTHORITY_KEY_IDENTIFIER,
+            false,
+            &AuthorityKeyIdentifier {
+                key_identifier: Some(OctetString::new(authority_key_id)?),
+                authority_cert_issuer: None,
+                authority_cert_serial_number: None,
+            },
+        )?,
+        extension(
+            ID_CE_SUBJECT_KEY_IDENTIFIER,
+            false,
+            &SubjectKeyIdentifier(OctetString::new(subject_key_id)?),
+        )?,
+        extension(
+            ID_CE_KEY_USAGE,
+            true,
+            &KeyUsage(KeyUsages::DigitalSignature.into()),
+        )?,
+        // Stands in for the certificatePolicies, subjectDirectoryAttributes,
+        // cRLDistributionPoints and authorityInfoAccess extensions of a real
+        // certificate. Those run to several hundred bytes, which puts the
+        // Extensions length in the two-byte long form the circuit expects.
+        Extension {
+            extn_id: ObjectIdentifier::new_unwrap("1.3.6.1.4.1.99999.1"),
+            critical: false,
+            extn_value: OctetString::new(vec![0xcc; 240])?,
+        },
+    ];
+
+    let tbs = TbsCertificate {
+        version: Version::V3,
+        serial_number: serial,
+        signature: ca_cert.signature_algorithm.clone(),
+        issuer: ca_cert.tbs_certificate.subject.clone(),
+        validity: fixed_validity()?,
+        subject,
+        subject_public_key_info: user_spki,
+        issuer_unique_id: None,
+        subject_unique_id: None,
+        extensions: Some(extensions),
+    };
+
+    let signature: rsa::pkcs1v15::Signature = ca_signer.try_sign(&tbs.to_der()?)?;
+    Ok(x509_cert::Certificate {
+        tbs_certificate: tbs,
+        signature_algorithm: ca_cert.signature_algorithm.clone(),
+        signature: BitString::from_bytes(&signature.to_vec())?,
+    })
+}
+
+fn extension<T: Encode>(oid: ObjectIdentifier, critical: bool, value: &T) -> Result<Extension, BoxErr> {
+    Ok(Extension {
+        extn_id: oid,
+        critical,
+        extn_value: OctetString::new(value.to_der()?)?,
+    })
+}
+
+/// 20-byte key identifier: the leading bytes of SHA-256 over the public key.
+fn key_identifier(spki: &SubjectPublicKeyInfoOwned) -> Result<Vec<u8>, BoxErr> {
+    use sha2::Digest as _;
+    let digest = Sha256::digest(spki.subject_public_key.raw_bytes());
+    Ok(digest[..20].to_vec())
 }
 
 fn sign_test_challenge(user_key: &RsaPrivateKey) -> Result<Vec<u8>, BoxErr> {

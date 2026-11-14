@@ -506,3 +506,71 @@ template LocateModulus() {
 
     modulusTagOffset <== q + 28;
 }
+
+/// @title VerifyKeyUsage
+/// @notice Continues the structural walk past the subject public key and
+///         asserts the certificate's keyUsage is exactly digitalSignature.
+///         MOICA issues each card a signing certificate and an encryption
+///         certificate over separate keys; without this check either one
+///         passes, so one card yields two pkCommit / nullifier chains.
+///
+///         Layout walked from e = modulusTagOffset + 261 (the byte after the
+///         257-byte modulus INTEGER):
+///           e        02 03 01 00 01                     publicExponent 65537
+///           e + 5    a3 82 hh ll                        [3] EXPLICIT Extensions
+///           e + 9    30 82 hh ll                        SEQUENCE OF Extension
+///           e + 13   30 1f 06 03 55 1d 23 04 18 30 16 80 14 <20 bytes>
+///                                                       authorityKeyIdentifier (keyIdentifier only)
+///           e + 46   30 1d 06 03 55 1d 0e 04 16 04 14 <20 bytes>
+///                                                       subjectKeyIdentifier
+///           e + 77   30 0e 06 03 55 1d 0f 01 01 ff 04 04 03 02 07 80
+///                                                       keyUsage, critical, digitalSignature
+///         This is the extension order of MOICA end-entity certificates. A
+///         certificate with a different order, or without issuerUniqueID /
+///         subjectUniqueID absent as assumed here, is rejected.
+///         Caller must ensure tbs[i] are bytes (done by the SHA-256 gadget).
+/// @input tbs               First 1024 bytes of the TBS
+/// @input modulusTagOffset  From LocateModulus (<= 493)
+template VerifyKeyUsage() {
+    signal input tbs[1024];
+    signal input modulusTagOffset;
+
+    // e <= 493 + 261 = 754; e + 93 <= 847 < 1024.
+    signal e <== modulusTagOffset + 261;
+    component tail = VarShiftLeft(1024, 93);
+    for (var i = 0; i < 1024; i++) {
+        tail.in[i] <== tbs[i];
+    }
+    tail.shift <== e;
+
+    var exponent[5] = [0x02, 0x03, 0x01, 0x00, 0x01];
+    for (var i = 0; i < 5; i++) {
+        tail.out[i] === exponent[i];
+    }
+
+    // [3] EXPLICIT Extensions and the SEQUENCE inside it, both with two-byte
+    // long-form lengths (the extensions of a MOICA certificate exceed 255
+    // bytes). The length bytes themselves are not needed.
+    tail.out[5] === 0xa3;
+    tail.out[6] === 0x82;
+    tail.out[9] === 0x30;
+    tail.out[10] === 0x82;
+
+    var aki[13] = [0x30, 0x1f, 0x06, 0x03, 0x55, 0x1d, 0x23, 0x04, 0x18,
+                   0x30, 0x16, 0x80, 0x14];
+    for (var i = 0; i < 13; i++) {
+        tail.out[13 + i] === aki[i];
+    }
+
+    var ski[11] = [0x30, 0x1d, 0x06, 0x03, 0x55, 0x1d, 0x0e, 0x04, 0x16,
+                   0x04, 0x14];
+    for (var i = 0; i < 11; i++) {
+        tail.out[46 + i] === ski[i];
+    }
+
+    var keyUsage[16] = [0x30, 0x0e, 0x06, 0x03, 0x55, 0x1d, 0x0f, 0x01, 0x01,
+                        0xff, 0x04, 0x04, 0x03, 0x02, 0x07, 0x80];
+    for (var i = 0; i < 16; i++) {
+        tail.out[77 + i] === keyUsage[i];
+    }
+}
