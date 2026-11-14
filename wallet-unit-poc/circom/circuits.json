@@ -3,13 +3,13 @@
     "file": "certChain",
     "template": "CertChainRSA256",
     "params": [1536, 121, 17, 2048, 17, 2048, 128, 20],
-    "pubs": ["issuerRsaModulus", "smtRoot"]
+    "pubs": ["issuerRsaModulus", "smtRoot", "currentTime"]
   },
   "certChainRS4096": {
     "file": "certChain",
     "template": "CertChainRSA256",
     "params": [1536, 121, 34, 4096, 17, 2048, 128, 20],
-    "pubs": ["issuerRsaModulus", "smtRoot"]
+    "pubs": ["issuerRsaModulus", "smtRoot", "currentTime"]
   },
   "userSigRS2048": {
     "file": "userSig",

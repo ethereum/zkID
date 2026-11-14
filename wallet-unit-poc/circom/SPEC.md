@@ -33,7 +33,11 @@ Circuit A and Circuit B are linked via `pkCommit`: the verifier checks
    prover-supplied offsets.
 3. **Revocation** — `SMTNonMembershipVerifier` proves `serialNumber` is **not**
    in the revocation tree rooted at `smtRoot`.
-4. **Linking** — `pkCommit = ChunkedPoseidonP256(userRsaExtractedModulus ‖ pkBlind)`,
+4. **Validity period** — `VerifyValidity` walks the head of the TBS
+   (version, serial, signature algorithm, issuer) to the `Validity` field and
+   asserts `notBefore <= currentTime <= notAfter`. The offset is derived from
+   the DER structure; the prover supplies none. See §"Validity period" below.
+5. **Linking** — `pkCommit = ChunkedPoseidonP256(userRsaExtractedModulus ‖ pkBlind)`,
    where `pkBlind` is a per-session uniform 248-bit value sampled by the
    prover. The same value is used in Circuit B; the verifier checks
    `pkCommit_A == pkCommit_B`. See §"Why per-session randomness for `pkBlind`"
@@ -62,11 +66,12 @@ Circuit A and Circuit B are linked via `pkCommit`: the verifier checks
 | ----------------------- | ------------- | ------------------------------------------------------ |
 | `issuerRsaModulus[k]`   | public input  | MOICA's RSA public key (trust anchor)                  |
 | `smtRoot`               | public input  | Revocation SMT root                                    |
+| `currentTime`           | public input  | Verifier's time as the decimal integer `YYMMDDHHMMSS` (UTC) |
 | `pkCommit`              | public output | Links to Circuit B                                     |
 
 Public-value vector layout (in declaration order, outputs first):
-- RS2048: `[pkCommit, issuerRsaModulus[17], smtRoot]` — 19 elements
-- RS4096: `[pkCommit, issuerRsaModulus[34], smtRoot]` — 36 elements
+- RS2048: `[pkCommit, issuerRsaModulus[17], smtRoot, currentTime]` — 20 elements
+- RS4096: `[pkCommit, issuerRsaModulus[34], smtRoot, currentTime]` — 37 elements
 
 ### Circuit B — UserSig
 
@@ -89,6 +94,39 @@ maintained by the
 [`moica-revocation-smt`](https://github.com/privacy-ethereum/moica-revocation-smt)
 service. Circuit A verifies that the cert's `serialNumber` is not present in
 the tree rooted at `smtRoot`.
+
+## Validity period
+
+Revocation alone does not exclude expired certificates: MOICA's CPS keeps a
+revoked certificate on the CRL only until it expires, and the revocation SMT
+mirrors the current CRL. Circuit A therefore checks the validity period itself.
+
+`currentTime` is a public input, the decimal integer `YYMMDDHHMMSS` in UTC —
+the same 12 digits a DER `UTCTime` carries, so the two compare as integers.
+The verifier MUST check `currentTime` against its own clock; the circuit only
+proves `notBefore <= currentTime <= notAfter`.
+
+The offset of `Validity` is derived inside the circuit, never supplied by the
+prover:
+
+| Offset                         | Bytes                                   | Constraint                         |
+| ------------------------------ | --------------------------------------- | ---------------------------------- |
+| 0                              | `30 82 hh ll` outer SEQUENCE            | `30 82` pinned                     |
+| 4                              | `a0 03 02 01 02` version v3             | pinned (v1 TBSes are rejected)     |
+| 9                              | `02 LL` serial INTEGER                  | `1 <= LL <= 20`                    |
+| `p1 = 11 + LL`                 | AlgorithmIdentifier, 15 bytes           | pinned to `sha256WithRSAEncryption` |
+| `p1 + 15`                      | `30 NN` issuer Name                     | short-form length, `NN < 128`      |
+| `p3 = p1 + 17 + NN`            | `30 1e 17 0d <12 digits> 5a 17 0d <12 digits> 5a` | tags pinned, digits range-checked |
+
+`p3 + 32 <= 207`, so every read stays inside the first 256 bytes of the TBS,
+which the `30 82` outer header guarantees to exist.
+
+Limits, all of which fail closed:
+
+- Only `UTCTime` is accepted. A certificate whose `notBefore` or `notAfter` is
+  in 2050 or later uses `GeneralizedTime` and is rejected.
+- An issuer Name longer than 127 content bytes is rejected.
+- A TBS without the explicit v3 version block is rejected.
 
 ## Why per-session randomness for `pkBlind`
 
@@ -114,4 +152,4 @@ whose secrecy rests on the RSA private key never leaving the card.
 - `circuits/components/smtVerifierP256.circom` — SMT verifier with Poseidon-P256 hash
 - `circuits/components/poseidonP256.circom` — Poseidon hash over secq256r1
 - `circuits/components/pkCommit.circom` — `ChunkedPoseidonP256` for `pkCommit`
-- `circuits/utils/utils.circom` — cert parsing helpers (`VerifyTBSinCert`, `VerifySerialNumber`, `ExtractModulus`, `PackBytes`, `PoseidonBytes`)
+- `circuits/utils/utils.circom` — cert parsing helpers (`VerifySerialNumber`, `VerifyValidity`, `ExtractModulus`, `PackBytes`, `PoseidonBytes`)

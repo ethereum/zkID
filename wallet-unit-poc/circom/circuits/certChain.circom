@@ -49,6 +49,10 @@ template CertChainRSA256(
     signal input smtOldValue;
     signal input smtIsOld0;
 
+    // === Validity ===
+    // Verifier-supplied time as the decimal integer YYMMDDHHMMSS (UTC).
+    signal input currentTime;
+
     // === Linking (private; same value used in UserSigRSA256) ===
     signal input pkBlind;
 
@@ -81,30 +85,30 @@ template CertChainRSA256(
     issuerTbs[0] === 0x30;
     issuerTbs[1] === 0x82;
 
-    // Optional [0] EXPLICIT version block at offset 4 — canonical 5 bytes
-    // [0xa0, 0x03, 0x02, 0x01, 0x02]. When present, the serial INTEGER tag
-    // sits at offset 9; otherwise at offset 4.
-    component hasVersion = IsEqual();
-    hasVersion.in[0] <== issuerTbs[4];
-    hasVersion.in[1] <== 0xa0;
-
-    var versionBytes[4] = [0x03, 0x02, 0x01, 0x02];
-    component versionCheck[4];
-    for (var i = 0; i < 4; i++) {
-        versionCheck[i] = ForceEqualIfEnabled();
-        versionCheck[i].enabled <== hasVersion.out;
-        versionCheck[i].in[0] <== issuerTbs[5 + i];
-        versionCheck[i].in[1] <== versionBytes[i];
+    // MOICA issues v3 certs only: pin the [0] EXPLICIT version block
+    // [0xa0, 0x03, 0x02, 0x01, 0x02] at offset 4. The serial INTEGER tag is
+    // then at offset 9 and its value at offset 11.
+    var versionBytes[5] = [0xa0, 0x03, 0x02, 0x01, 0x02];
+    for (var i = 0; i < 5; i++) {
+        issuerTbs[4 + i] === versionBytes[i];
     }
 
-    signal serialTagOff <== 4 + hasVersion.out * 5;
-    signal serialValueOff <== serialTagOff + 2;
+    var serialValueOff = 11;
 
     VerifySerialNumber(maxMessageLength, maxSerialNumberLength)(
         issuerTbs,
         serialValueOff,
         serialNumber
     );
+
+    // Validity: offset derived from the DER structure, no prover input.
+    // Every read stays inside issuerTbs[0..256), which the pinned 0x30 0x82
+    // outer header guarantees to be part of the signed TBS.
+    component validity = VerifyValidity(maxSerialNumberLength);
+    for (var i = 0; i < 256; i++) {
+        validity.tbs[i] <== issuerTbs[i];
+    }
+    validity.currentTime <== currentTime;
 
     // DER prefix for an unsigned 2048-bit RSA modulus INTEGER:
     //   [0x02, 0x82, 0x01, 0x01, 0x00]

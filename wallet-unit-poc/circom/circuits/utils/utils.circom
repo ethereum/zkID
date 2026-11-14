@@ -321,3 +321,120 @@ template PoseidonBytesWithField(N_BYTES) {
 
     out <== hasher.out;
 }
+
+/// @title VerifyValidity
+/// @notice Walks the head of a v3 TBSCertificate to the Validity field and
+///         asserts notBefore <= currentTime <= notAfter.
+///         Layout walked (all offsets derived, none prover-supplied):
+///           [0..4)   outer SEQUENCE header (30 82 hh ll)   - pinned by caller
+///           [4..9)   version a0 03 02 01 02                 - pinned by caller
+///           [9]      serial INTEGER tag, [10] serial length - checked by VerifySerialNumber
+///           p1 = 11 + serialLen:      AlgorithmIdentifier sha256WithRSAEncryption (15 bytes)
+///           p1 + 15:                  issuer Name SEQUENCE, short-form length
+///           p3 = p1 + 17 + issuerLen: Validity = 30 1e 17 0d <12 digits> 5a 17 0d <12 digits> 5a
+///         Only UTCTime is accepted; GeneralizedTime (notAfter >= 2050) fails.
+///         Caller must ensure tbs[i] are bytes (done by the SHA-256 gadget).
+/// @param MAX_SERIAL_LEN  Max serial length in bytes (<= 20)
+/// @input tbs          First 256 bytes of the TBS
+/// @input currentTime  Decimal integer YYMMDDHHMMSS (UTC)
+template VerifyValidity(MAX_SERIAL_LEN) {
+    signal input tbs[256];
+    signal input currentTime;
+
+    assert(MAX_SERIAL_LEN <= 20);
+
+    // Serial length byte. Re-checked here so the bound on p1 does not depend
+    // on the caller.
+    signal serialLen <== tbs[10];
+    component serialLenOk = LessEqThan(8);
+    serialLenOk.in[0] <== serialLen;
+    serialLenOk.in[1] <== MAX_SERIAL_LEN;
+    serialLenOk.out === 1;
+
+    // p1 in [11, 31]; p1 + 17 <= 48 < 64.
+    signal p1 <== 11 + serialLen;
+    component head = VarShiftLeft(64, 17);
+    for (var i = 0; i < 64; i++) {
+        head.in[i] <== tbs[i];
+    }
+    head.shift <== p1;
+
+    // AlgorithmIdentifier { sha256WithRSAEncryption, NULL }
+    var sigAlg[15] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+                      0xf7, 0x0d, 0x01, 0x01, 0x0b, 0x05, 0x00];
+    for (var i = 0; i < 15; i++) {
+        head.out[i] === sigAlg[i];
+    }
+
+    // Issuer Name: SEQUENCE with short-form length (< 128).
+    head.out[15] === 0x30;
+    signal issuerLen <== head.out[16];
+    component issuerLenShort = Num2Bits(7);
+    issuerLenShort.in <== issuerLen;
+
+    // p3 <= 31 + 17 + 127 = 175; p3 + 32 <= 207 < 256.
+    signal p3 <== p1 + 17 + issuerLen;
+    component val = VarShiftLeft(256, 32);
+    for (var i = 0; i < 256; i++) {
+        val.in[i] <== tbs[i];
+    }
+    val.shift <== p3;
+
+    // Validity ::= SEQUENCE { notBefore UTCTime, notAfter UTCTime }
+    val.out[0] === 0x30;
+    val.out[1] === 0x1e;
+    val.out[2] === 0x17;
+    val.out[3] === 0x0d;
+    val.out[16] === 0x5a;
+    val.out[17] === 0x17;
+    val.out[18] === 0x0d;
+    val.out[31] === 0x5a;
+
+    // 12 ASCII digits each -> decimal integer YYMMDDHHMMSS.
+    signal nbDigit[12];
+    signal naDigit[12];
+    component nbBits[12];
+    component naBits[12];
+    component nbLt[12];
+    component naLt[12];
+    var nbAcc = 0;
+    var naAcc = 0;
+    for (var i = 0; i < 12; i++) {
+        nbDigit[i] <== val.out[4 + i] - 48;
+        naDigit[i] <== val.out[19 + i] - 48;
+
+        nbBits[i] = Num2Bits(4);
+        nbBits[i].in <== nbDigit[i];
+        nbLt[i] = LessThan(4);
+        nbLt[i].in[0] <== nbDigit[i];
+        nbLt[i].in[1] <== 10;
+        nbLt[i].out === 1;
+
+        naBits[i] = Num2Bits(4);
+        naBits[i].in <== naDigit[i];
+        naLt[i] = LessThan(4);
+        naLt[i].in[0] <== naDigit[i];
+        naLt[i].in[1] <== 10;
+        naLt[i].out === 1;
+
+        nbAcc = nbAcc * 10 + nbDigit[i];
+        naAcc = naAcc * 10 + naDigit[i];
+    }
+    signal notBefore <== nbAcc;
+    signal notAfter <== naAcc;
+
+    // Both date integers are < 10^12 < 2^40. Range-check currentTime so the
+    // comparators' precondition holds.
+    component ctBits = Num2Bits(40);
+    ctBits.in <== currentTime;
+
+    component afterStart = LessEqThan(40);
+    afterStart.in[0] <== notBefore;
+    afterStart.in[1] <== currentTime;
+    afterStart.out === 1;
+
+    component beforeEnd = LessEqThan(40);
+    beforeEnd.in[0] <== currentTime;
+    beforeEnd.in[1] <== notAfter;
+    beforeEnd.out === 1;
+}

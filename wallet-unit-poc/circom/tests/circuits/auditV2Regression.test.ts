@@ -51,6 +51,7 @@ type ChainInputs = [
   "smtOldKey",
   "smtOldValue",
   "smtIsOld0",
+  "currentTime",
   "pkBlind"
 ];
 
