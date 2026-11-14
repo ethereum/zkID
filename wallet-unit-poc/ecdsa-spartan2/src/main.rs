@@ -274,6 +274,14 @@ fn run_generate_split_input(command_args: &[String]) -> ! {
         info!(pk_blind_prefix = prefix, "Sampled pkBlind");
     }
 
+    // Live runs prove validity at the current time; fixture runs use a fixed
+    // time so the committed input JSONs stay deterministic.
+    let current_time = if pin.is_some() {
+        zkid_input_builder::current_time_utc()
+    } else {
+        ecdsa_spartan2::DEFAULT_CURRENT_TIME.to_string()
+    };
+
     info!("Generating split inputs (cert_chain + user_sig)...");
     let (cert_chain_json, user_sig_json) = generate_split_inputs(
         &user_cert,
@@ -287,6 +295,7 @@ fn run_generate_split_input(command_args: &[String]) -> ! {
         max_cert_length,
         &pk_blind,
         &challenge,
+        &current_time,
     )
     .unwrap_or_else(|e| {
         eprintln!("Error generating split inputs: {}", e);

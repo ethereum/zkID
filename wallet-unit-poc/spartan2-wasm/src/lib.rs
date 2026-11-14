@@ -43,8 +43,8 @@ impl CircuitKind {
     /// NUM_PUBLIC per circuit.
     pub fn num_public(self) -> usize {
         match self {
-            CircuitKind::CertChainRs2048 => 19,
-            CircuitKind::CertChainRs4096 => 36,
+            CircuitKind::CertChainRs2048 => 20,
+            CircuitKind::CertChainRs4096 => 37,
             // pk_commit, nullifier, app_id_packed, challenge.
             CircuitKind::UserSigRs2048 => 4,
         }
@@ -512,8 +512,8 @@ mod tests {
         assert!(parse_witness(&[]).is_err());
     }
     #[test] fn num_public_matches_spec() {
-        assert_eq!(CircuitKind::CertChainRs2048.num_public(), 19);
-        assert_eq!(CircuitKind::CertChainRs4096.num_public(), 36);
+        assert_eq!(CircuitKind::CertChainRs2048.num_public(), 20);
+        assert_eq!(CircuitKind::CertChainRs4096.num_public(), 37);
         assert_eq!(CircuitKind::UserSigRs2048.num_public(), 4);
     }
 

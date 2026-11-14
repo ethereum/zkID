@@ -3,7 +3,6 @@
 //! provers both call through here; `spartan2-wasm/tests/input_builder_drift.rs`
 //! pins the two callers to byte-identical output.
 
-use crate::cert::parse_cert_offsets;
 use crate::encoding::{
     bigint_to_chunks, sha256_pad, sha256_padded_length, smt_fields_from_option,
 };
@@ -16,9 +15,6 @@ use x509_cert::Certificate;
 
 const RSA_N: usize = 121;
 pub const MAX_CERT_CHAIN_LENGTH: usize = 1536;
-// TBSCertificate starts at byte 4 of the outer cert DER (SEQUENCE tag + 0x82 LL LL).
-// All tbs_* offsets fed to the circuit are relative to issuerTbs[0] = user_cert[4].
-const TBS_OFFSET: usize = 4;
 const MAX_MESSAGE_LENGTH: usize = 1536;
 const SMT_DEPTH: usize = 128;
 pub const APP_ID_LEN: usize = 31;
@@ -29,6 +25,10 @@ pub const APP_ID_LEN: usize = 31;
 /// `challenge` is the per-session field element from the verifier's
 /// `/challenge` endpoint, bound into the user-sig proof via a Semaphore-style
 /// dummy square. Both are decimal field-element strings.
+///
+/// `current_time` is the verifier's time as the decimal integer `YYMMDDHHMMSS`
+/// (UTC); the cert-chain circuit asserts it lies within the user cert's
+/// validity period. See [`crate::current_time_utc`].
 pub fn generate_split_inputs(
     user_cert: &Certificate,
     issuer_cert: &Certificate,
@@ -41,6 +41,7 @@ pub fn generate_split_inputs(
     max_cert_length: usize,
     pk_blind: &str,
     challenge: &str,
+    current_time: &str,
 ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn std::error::Error>> {
     if app_id_bytes.len() != APP_ID_LEN {
         return Err(format!(
@@ -49,9 +50,7 @@ pub fn generate_split_inputs(
         )
         .into());
     }
-    let user_cert_der = user_cert.to_der()?;
     let user_cert_tbs_der = user_cert.tbs_certificate.to_der()?;
-    let user_offsets = parse_cert_offsets(&user_cert_der)?;
     let user_spki_der = user_cert
         .tbs_certificate
         .subject_public_key_info
@@ -96,7 +95,6 @@ pub fn generate_split_inputs(
         smt_fields_from_option(smt_inputs, serial_decimal, SMT_DEPTH);
 
     let cert_chain_json = serde_json::json!({
-        "tbsModulusTagOffset": user_offsets.modulus_tag_offset - TBS_OFFSET,
         "issuerTbs": issuer_tbs_padded,
         "issuerTbsLength": issuer_tbs_padded_len,
         "actualIssuerTbsLength": user_cert_tbs_der.len(),
@@ -108,6 +106,7 @@ pub fn generate_split_inputs(
         "smtOldKey": smt_old_key,
         "smtOldValue": smt_old_value,
         "smtIsOld0": smt_is_old0,
+        "currentTime": current_time,
         "pkBlind": pk_blind,
     });
 
