@@ -424,6 +424,17 @@ template VerifyValidity(MAX_SERIAL_LEN) {
     signal notBefore <== nbAcc;
     signal notAfter <== naAcc;
 
+    // UTCTime years 50..99 mean 1950..1999, which would compare as later
+    // than any 20YY date. Require YY < 50 on both.
+    component nbCentury = LessThan(4);
+    nbCentury.in[0] <== nbDigit[0];
+    nbCentury.in[1] <== 5;
+    nbCentury.out === 1;
+    component naCentury = LessThan(4);
+    naCentury.in[0] <== naDigit[0];
+    naCentury.in[1] <== 5;
+    naCentury.out === 1;
+
     // Both date integers are < 10^12 < 2^40. Range-check currentTime so the
     // comparators' precondition holds.
     component ctBits = Num2Bits(40);

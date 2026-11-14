@@ -158,6 +158,10 @@ circuit, never supplied by the prover:
 the first 1024 bytes of `issuerTbs`. The modulus INTEGER and the 93 bytes read
 from `e` are bounded by `actualIssuerTbsLength` through `AssertSliceInTBS`.
 
+`actualIssuerTbsLength` is bound to the length the TBS declares in its own
+outer header (`issuerTbs[2..4]` + 4), so those bounds refer to the signed TBS
+and cannot reach into the SHA-256 padding.
+
 Deriving the modulus offset closes audit v3 Finding 1: the circuit no longer
 relies on the byte pattern `02 82 01 01 00` being unique within a MOICA TBS.
 
@@ -165,6 +169,8 @@ Limits, all of which fail closed:
 
 - Only `UTCTime` is accepted. A certificate whose `notBefore` or `notAfter` is
   in 2050 or later uses `GeneralizedTime` and is rejected.
+- Both years must be below 50. `UTCTime` years 50..99 mean 1950..1999, which
+  the integer comparison would otherwise treat as later than any 20YY date.
 - An issuer Name longer than 127 content bytes is rejected.
 - A subject Name longer than 255 content bytes is rejected.
 - A subject key that is not 2048-bit RSA is rejected.

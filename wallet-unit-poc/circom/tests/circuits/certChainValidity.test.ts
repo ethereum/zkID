@@ -93,6 +93,10 @@ describe("CertChainRSA256 validity period", function () {
       await circuit.expectFail(inputs({ notBefore: "20260101000000Z" }) as any);
     });
 
+    it("a notAfter in 19YY (UTCTime year 50..99)", async function () {
+      await circuit.expectFail(inputs({ notAfter: "991231235959Z" }) as any);
+    });
+
     it("an issuer name of 128 or more content bytes (long-form length)", async function () {
       await circuit.expectFail(inputs({ issuer: name("Test CA", [60, 60, 60]) }) as any);
     });
