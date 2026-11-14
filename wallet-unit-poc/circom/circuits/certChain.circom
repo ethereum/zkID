@@ -114,6 +114,17 @@ template CertChainRSA256(
     signal tbsModulusTagOffset <== locate.modulusTagOffset;
     AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
 
+    // keyUsage must be digitalSignature: rejects the card's encryption
+    // certificate, whose key would otherwise give a second nullifier.
+    component keyUsage = VerifyKeyUsage();
+    for (var i = 0; i < 1024; i++) {
+        keyUsage.tbs[i] <== issuerTbs[i];
+    }
+    keyUsage.modulusTagOffset <== tbsModulusTagOffset;
+    // The 93 bytes VerifyKeyUsage reads must lie inside the signed TBS, not
+    // in the SHA-256 padding after it.
+    AssertSliceInTBS()(tbsModulusTagOffset + 261, 93, actualIssuerTbsLength);
+
     // DER prefix for an unsigned 2048-bit RSA modulus INTEGER:
     //   [0x02, 0x82, 0x01, 0x01, 0x00]
     // = tag + long-form length-of-length + 2-byte length=257 + sign byte.
