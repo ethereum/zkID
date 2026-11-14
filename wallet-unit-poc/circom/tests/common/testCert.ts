@@ -46,11 +46,11 @@ function rdn(oid: number[], stringTag: number, value: string): Buffer {
   );
 }
 
-/** Name with C=TW, an OU padded with `padding` filler bytes, and a CN. */
-export function name(commonName: string, padding = 0): Buffer {
+/** Name with C=TW, one filler OU per entry of `ouLengths` (bytes), and a CN. */
+export function name(commonName: string, ouLengths: number[] = []): Buffer {
   const parts = [rdn(OID_C, 0x13, "TW")];
-  for (let left = padding; left > 0; left -= 60) {
-    parts.push(rdn(OID_OU, 0x0c, "x".repeat(Math.min(left, 60))));
+  for (const length of ouLengths) {
+    parts.push(rdn(OID_OU, 0x0c, "x".repeat(length)));
   }
   parts.push(rdn(OID_CN, 0x0c, commonName));
   return tlv(0x30, Buffer.concat(parts));
@@ -68,10 +68,19 @@ const SIG_ALG_SHA256_RSA = Buffer.from(
 );
 
 // keyUsage: critical, digitalSignature.
-const EXTENSIONS = tlv(
-  0xa3,
-  tlv(0x30, Buffer.from("300e0603551d0f0101ff040403020780", "hex"))
-);
+const KEY_USAGE = Buffer.from("300e0603551d0f0101ff040403020780", "hex");
+
+/** `[3] EXPLICIT Extensions` holding keyUsage plus any `extra` extensions. */
+function extensions(extra: Buffer[] = []): Buffer {
+  return tlv(0xa3, tlv(0x30, Buffer.concat([KEY_USAGE, ...extra])));
+}
+
+/** An extension with a private-arc OID wrapping `value` in its OCTET STRING. */
+export function opaqueExtension(value: Uint8Array): Buffer {
+  // 1.3.6.1.4.1.99999.1
+  const oid = Buffer.from("06092b0601040186 8d1f01".replace(/ /g, ""), "hex");
+  return tlv(0x30, Buffer.concat([oid, tlv(0x04, value)]));
+}
 
 export interface TestCa {
   privateKey: KeyObject;
@@ -108,6 +117,8 @@ export interface TbsOptions {
   notAfter?: string;
   subject?: Buffer;
   spki: Buffer;
+  /** Extensions to add after keyUsage. */
+  extraExtensions?: Buffer[];
 }
 
 export function buildTbs(opts: TbsOptions): Buffer {
@@ -128,7 +139,7 @@ export function buildTbs(opts: TbsOptions): Buffer {
     ),
     opts.subject ?? name("Test User"),
     opts.spki,
-    EXTENSIONS
+    extensions(opts.extraExtensions)
   );
   return tlv(0x30, Buffer.concat(parts));
 }
@@ -151,9 +162,6 @@ export function chainInputs(
   const serialStart = tbs[4] === 0xa0 ? 11 : 6;
   const serial = bytesToBigInt(tbs.subarray(serialStart, serialStart + serialLength));
   return {
-    tbsModulusTagOffset: BigInt(
-      tbs.indexOf(Buffer.from("0282010100", "hex"))
-    ),
     issuerTbs: Array.from(padded).map((b) => BigInt(b)),
     issuerTbsLength: BigInt(paddedLength),
     actualIssuerTbsLength: BigInt(tbs.length),

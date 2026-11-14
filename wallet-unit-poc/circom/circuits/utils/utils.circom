@@ -337,9 +337,13 @@ template PoseidonBytesWithField(N_BYTES) {
 /// @param MAX_SERIAL_LEN  Max serial length in bytes (<= 20)
 /// @input tbs          First 256 bytes of the TBS
 /// @input currentTime  Decimal integer YYMMDDHHMMSS (UTC)
+/// @output subjectOffset  Offset of the subject Name, the field after Validity (<= 207)
+/// @output subjectHeader  The 3 bytes at subjectOffset (tag + up to 2 length bytes)
 template VerifyValidity(MAX_SERIAL_LEN) {
     signal input tbs[256];
     signal input currentTime;
+    signal output subjectOffset;
+    signal output subjectHeader[3];
 
     assert(MAX_SERIAL_LEN <= 20);
 
@@ -372,9 +376,10 @@ template VerifyValidity(MAX_SERIAL_LEN) {
     component issuerLenShort = Num2Bits(7);
     issuerLenShort.in <== issuerLen;
 
-    // p3 <= 31 + 17 + 127 = 175; p3 + 32 <= 207 < 256.
+    // p3 <= 31 + 17 + 127 = 175. Read the 32 bytes of Validity plus the
+    // 3-byte header of the field that follows it; p3 + 35 <= 210 < 256.
     signal p3 <== p1 + 17 + issuerLen;
-    component val = VarShiftLeft(256, 32);
+    component val = VarShiftLeft(256, 35);
     for (var i = 0; i < 256; i++) {
         val.in[i] <== tbs[i];
     }
@@ -437,4 +442,71 @@ template VerifyValidity(MAX_SERIAL_LEN) {
     beforeEnd.in[0] <== currentTime;
     beforeEnd.in[1] <== notAfter;
     beforeEnd.out === 1;
+
+    subjectOffset <== p3 + 32;
+    for (var i = 0; i < 3; i++) {
+        subjectHeader[i] <== val.out[32 + i];
+    }
+}
+
+/// @title LocateModulus
+/// @notice Derives the offset of the subject public key's modulus INTEGER tag
+///         from the DER structure, continuing the walk VerifyValidity started:
+///           subjectOffset:  subject Name SEQUENCE, length in short form
+///                           (< 128) or one-byte long form 0x81 LL (128..255)
+///           q = end of Name: SubjectPublicKeyInfo for a 2048-bit RSA key,
+///                            whose 28 bytes up to the modulus are fixed
+///           q + 28:          modulus INTEGER tag
+///         Subject Names longer than 255 bytes and keys other than RSA-2048
+///         are rejected.
+///         Caller must ensure tbs[i] are bytes (done by the SHA-256 gadget).
+/// @input tbs            First 512 bytes of the TBS
+/// @input subjectOffset  From VerifyValidity (<= 207)
+/// @input subjectHeader  From VerifyValidity
+/// @output modulusTagOffset  Offset of the modulus INTEGER tag (<= 493)
+template LocateModulus() {
+    signal input tbs[512];
+    signal input subjectOffset;
+    signal input subjectHeader[3];
+    signal output modulusTagOffset;
+
+    subjectHeader[0] === 0x30;
+    component b1Bits = Num2Bits(8);
+    b1Bits.in <== subjectHeader[1];
+    component b2Bits = Num2Bits(8);
+    b2Bits.in <== subjectHeader[2];
+
+    component isLong = IsEqual();
+    isLong.in[0] <== subjectHeader[1];
+    isLong.in[1] <== 0x81;
+    // The first length byte has its high bit set iff the form is 0x81, so
+    // 0x80 and 0x82..0xff are rejected.
+    b1Bits.out[7] === isLong.out;
+    // DER minimal encoding: the 0x81 form carries a length >= 128.
+    isLong.out * (1 - b2Bits.out[7]) === 0;
+
+    signal subjectLen <== isLong.out * (subjectHeader[2] - subjectHeader[1]) + subjectHeader[1];
+
+    // q <= 207 + 3 + 255 = 465; q + 28 <= 493 < 512.
+    signal q <== subjectOffset + 2 + isLong.out + subjectLen;
+    component spki = VarShiftLeft(512, 28);
+    for (var i = 0; i < 512; i++) {
+        spki.in[i] <== tbs[i];
+    }
+    spki.shift <== q;
+
+    //   30 82 01 22                                    SubjectPublicKeyInfo (290)
+    //   30 0d 06 09 2a 86 48 86 f7 0d 01 01 01 05 00   rsaEncryption, NULL
+    //   03 82 01 0f 00                                 BIT STRING (271), 0 unused bits
+    //   30 82 01 0a                                    RSAPublicKey (266)
+    var spkiHead[28] = [0x30, 0x82, 0x01, 0x22,
+                        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+                        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00,
+                        0x03, 0x82, 0x01, 0x0f, 0x00,
+                        0x30, 0x82, 0x01, 0x0a];
+    for (var i = 0; i < 28; i++) {
+        spki.out[i] === spkiHead[i];
+    }
+
+    modulusTagOffset <== q + 28;
 }

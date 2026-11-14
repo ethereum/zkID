@@ -39,7 +39,6 @@ const CHAIN_PARAMS = [
 ];
 
 type ChainInputs = [
-  "tbsModulusTagOffset",
   "issuerTbs",
   "issuerTbsLength",
   "actualIssuerTbsLength",
@@ -234,18 +233,7 @@ describe("Audit v2 regression suite", function () {
   });
 
   // Finding 3 (LOW, advisory) — see audit_report_v2.md.
-  describe("[LOW] forged tbsModulusTagOffset is rejected by CertChainRSA256", function () {
-    it("baseline: real (modulusTagOffset, modulusOffset) extracts the real modulus", async function () {
-      this.timeout(900_000);
-      const witness = await chainCircuit.calculateWitness(chainInput as any);
-      await chainCircuit.expectConstraintPass(witness);
-    });
-
-    it("REJECTS forged tbsModulusTagOffset pointing at the RSA exponent INTEGER", async function () {
-      this.timeout(900_000);
-      // tbs[510] = 0x02 (exponent tag), tbs[511] = 0x03 — fails the 0x82 prefix check.
-      const attackInput = { ...chainInput, tbsModulusTagOffset: 510n };
-      await chainCircuit.expectFail(attackInput as any);
-    });
-  });
+  // `tbsModulusTagOffset` is no longer a prover input: CertChainRSA256 derives
+  // it from the DER structure, so there is no offset left to forge. The decoy
+  // scenario is covered in certChainModulusOffset.test.ts.
 });

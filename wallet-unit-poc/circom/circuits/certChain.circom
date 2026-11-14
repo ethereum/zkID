@@ -30,10 +30,6 @@ template CertChainRSA256(
     smtDepth,
     maxSerialNumberLength
 ) {
-    // Prover-supplied byte offset of the user modulus's INTEGER tag inside
-    // issuerTbs. The value offset is derived below.
-    signal input tbsModulusTagOffset;
-
     // === Issuer (cert chain) — sized to kIssuer ===
     signal input issuerTbs[maxMessageLength];
     signal input issuerTbsLength;
@@ -78,8 +74,6 @@ template CertChainRSA256(
 
     var modulusBytes = modulusBitsUser \ 8;  // e.g. 2048/8 = 256
 
-    AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
-
     // MOICA TBSes are always > 256 bytes, so the outer SEQUENCE header is
     // always the 4-byte form [0x30, 0x82, len_hi, len_lo]. Length bytes vary.
     issuerTbs[0] === 0x30;
@@ -109,6 +103,17 @@ template CertChainRSA256(
         validity.tbs[i] <== issuerTbs[i];
     }
     validity.currentTime <== currentTime;
+
+    // Offset of the user modulus's INTEGER tag, derived by continuing the
+    // structural walk past the subject Name. Not a prover input.
+    component locate = LocateModulus();
+    for (var i = 0; i < 512; i++) {
+        locate.tbs[i] <== issuerTbs[i];
+    }
+    locate.subjectOffset <== validity.subjectOffset;
+    locate.subjectHeader <== validity.subjectHeader;
+    signal tbsModulusTagOffset <== locate.modulusTagOffset;
+    AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
 
     // DER prefix for an unsigned 2048-bit RSA modulus INTEGER:
     //   [0x02, 0x82, 0x01, 0x01, 0x00]

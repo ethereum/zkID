@@ -68,7 +68,7 @@ describe("CertChainRSA256 validity period", function () {
 
     it("an issuer name of 127 content bytes", async function () {
       // C (13) + OU (11 + 60) + OU (11 + 14) + CN (11 + 7) = 127.
-      const issuer = name("Test CA", 74);
+      const issuer = name("Test CA", [60, 14]);
       if (issuer.length !== 2 + 127) {
         throw new Error(`unexpected issuer length ${issuer.length}`);
       }
@@ -94,7 +94,7 @@ describe("CertChainRSA256 validity period", function () {
     });
 
     it("an issuer name of 128 or more content bytes (long-form length)", async function () {
-      await circuit.expectFail(inputs({ issuer: name("Test CA", 200) }) as any);
+      await circuit.expectFail(inputs({ issuer: name("Test CA", [60, 60, 60]) }) as any);
     });
 
     it("a TBS without the v3 version block", async function () {
