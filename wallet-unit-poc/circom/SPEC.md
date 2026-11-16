@@ -106,6 +106,30 @@ the same 12 digits a DER `UTCTime` carries, so the two compare as integers.
 The verifier MUST check `currentTime` against its own clock; the circuit only
 proves `notBefore <= currentTime <= notAfter`.
 
+### Verifier time window
+
+The verifier accepts a proof only if, at the moment it verifies,
+
+```
+now - maxAge <= currentTime <= now + maxAhead
+```
+
+where `now` is the verifier's own clock. The two bounds do different jobs:
+
+- `maxAge` is the security-relevant bound. A certificate that expired less
+  than `maxAge` ago still passes, so `maxAge` SHOULD be no longer than the
+  challenge lifetime plus the clock skew the verifier tolerates. Recommended:
+  10 minutes.
+- `maxAhead` can be generous. A `currentTime` in the future makes the expiry
+  check stricter: the certificate must stay valid until then. The cost is on
+  the other end: a certificate whose `notBefore` is still in the future can
+  pass up to `maxAhead` early. Recommended: 24 hours.
+
+`currentTime` is public, so an exact timestamp reveals the prover's clock to
+anyone who sees the proof. A generous `maxAhead` lets the prover use a coarse
+value instead, such as the last second of the current UTC day, which every
+prover on that day shares.
+
 ## Structural walk
 
 The offsets of `Validity` and of the user's RSA modulus are derived inside the
