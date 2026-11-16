@@ -37,12 +37,6 @@ export interface SplitInputs {
 }
 
 /**
- * Returns stringified JSON (not objects) because the circom witness calculator
- * accepts a JSON string; serialising once here avoids a round trip through
- * `JSON.stringify` in the Worker, and lets us `postMessage` without
- * structured-cloning a many-KB object tree.
- */
-/**
  * The current time as the decimal integer `YYMMDDHHMMSS` (UTC). The cert-chain
  * proof checks the certificate's validity period against it, and the verifier
  * checks it against its own clock.
@@ -63,6 +57,12 @@ export function currentTimeUtc(now: Date = new Date()): string {
   );
 }
 
+/**
+ * Returns stringified JSON (not objects) because the circom witness calculator
+ * accepts a JSON string; serialising once here avoids a round trip through
+ * `JSON.stringify` in the Worker, and lets us `postMessage` without
+ * structured-cloning a many-KB object tree.
+ */
 export async function buildInputs(
   params: BuildInputsParams,
 ): Promise<SplitInputs> {

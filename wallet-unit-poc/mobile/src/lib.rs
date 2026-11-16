@@ -163,7 +163,8 @@ pub fn generate_cert_chain_rs4096_input(
 
     let pk_blind = ecdsa_spartan2::random_pk_blind();
     // The cert-chain proof checks the cert's validity period at this time.
-    let current_time = ecdsa_spartan2::current_time_utc();
+    let current_time = ecdsa_spartan2::current_time_utc()
+        .map_err(|msg| ZkProofError::InvalidInput { msg })?;
     let (cert_chain_json, user_sig_json) = generate_split_inputs(
         &user_cert,
         &issuer_cert,

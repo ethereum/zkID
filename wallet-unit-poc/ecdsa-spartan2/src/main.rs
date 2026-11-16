@@ -277,7 +277,10 @@ fn run_generate_split_input(command_args: &[String]) -> ! {
     // Live runs prove validity at the current time; fixture runs use a fixed
     // time so the committed input JSONs stay deterministic.
     let current_time = if pin.is_some() {
-        zkid_input_builder::current_time_utc()
+        zkid_input_builder::current_time_utc().unwrap_or_else(|e| {
+            eprintln!("Error reading the current time: {}", e);
+            process::exit(1);
+        })
     } else {
         ecdsa_spartan2::DEFAULT_CURRENT_TIME.to_string()
     };
@@ -321,7 +324,7 @@ fn run_generate_split_input(command_args: &[String]) -> ! {
 /// Verify both proofs and check `pk_commit_A == pk_commit_B` to bind them to
 /// the same user key.
 ///
-/// CertChain public values: [pk_commit, issuer_modulus..., smtRoot]
+/// CertChain public values: [pk_commit, issuer_modulus..., smtRoot, currentTime]
 /// UserSig public values: [pk_commit, nullifier, app_id_bytes[31]]
 fn run_link_verify(command_args: &[String]) -> ! {
     let rs4096 = command_args.contains(&"--cert-chain-4096".to_string())

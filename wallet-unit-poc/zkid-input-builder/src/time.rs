@@ -37,13 +37,16 @@ pub fn format_current_time(unix_seconds: u64) -> Result<String, String> {
 
 /// The system clock as `YYMMDDHHMMSS` (UTC). Not available on wasm32, where
 /// the caller passes the time in from JS.
+///
+/// Returns an error when the clock is outside 2000..=2049, for example on a
+/// device whose clock was reset to 1970.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn current_time_utc() -> String {
+pub fn current_time_utc() -> Result<String, String> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
+        .map_err(|_| "system clock is before the Unix epoch".to_string())?
         .as_secs();
-    format_current_time(now).expect("system clock is outside 2000..=2049")
+    format_current_time(now)
 }
 
 #[cfg(test)]
@@ -60,6 +63,11 @@ mod tests {
         assert_eq!(format_current_time(1_709_208_000).unwrap(), "240229120000");
         // 2049-12-31 23:59:59 UTC
         assert_eq!(format_current_time(2_524_607_999).unwrap(), "491231235959");
+    }
+
+    #[test]
+    fn rejects_a_clock_reset_to_the_epoch() {
+        assert!(format_current_time(0).is_err()); // 1970-01-01 00:00:00
     }
 
     #[test]

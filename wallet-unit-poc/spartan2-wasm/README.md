@@ -68,7 +68,7 @@ All exports come from the generated `pkg/spartan2_wasm.js`.
   Asserts `pk_commit` equality between a cert-chain and a user-sig proof.
   Inputs are the `public_values` arrays returned by `prove`. Not used in
   production — the server-side verifier performs this check.
-- `build_split_inputs(userCertDer, issuerCertDer, userSignatureB64, appIdBytes, serialHex, smtInputs, kIssuer, kUser, challenge)` →
+- `build_split_inputs(userCertDer, issuerCertDer, userSignatureB64, appIdBytes, serialHex, smtInputs, kIssuer, kUser, challenge, currentTime)` →
   `{ cert_chain, user_sig }`. Builds the cert-chain + user-sig circuit
   input JSON from raw card + SMT data. `appIdBytes` must be exactly 31 bytes —
   the relying-party identifier the cardholder signed. `smtInputs` accepts
@@ -76,6 +76,9 @@ All exports come from the generated `pkg/spartan2_wasm.js`.
   is `17` for RSA-2048 issuers and `34` for RSA-4096. `challenge` is the
   decimal field-element string returned by `go-zkid-verifier`'s `/challenge`
   endpoint, bound into the user-sig proof via a Semaphore-style dummy square.
+  `currentTime` is the decimal string `YYMMDDHHMMSS` (UTC); the cert-chain
+  proof checks the certificate's validity period against it, and the verifier
+  checks it against its own clock.
   `pk_blind` is sampled internally each call via `random_pk_blind()`; callers
   do not pass it. Delegates to the shared
   [`zkid-input-builder`](../zkid-input-builder) crate so the browser produces
