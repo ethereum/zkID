@@ -6,8 +6,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
+
 import 'frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
+
 import 'third_party/openac_mobile_app.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
@@ -30,6 +33,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ZkProofError
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    dynamic raw,
+  );
+
+  @protected
+  ZkProofError
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     dynamic raw,
   );
@@ -44,7 +53,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  FlowExpectedStatement dco_decode_box_autoadd_flow_expected_statement(
+    dynamic raw,
+  );
+
+  @protected
+  FlowExpectedStatement dco_decode_flow_expected_statement(dynamic raw);
+
+  @protected
+  FlowPrepareResult dco_decode_flow_prepare_result(dynamic raw);
+
+  @protected
+  FlowPresentation dco_decode_flow_presentation(dynamic raw);
+
+  @protected
+  FlowVerifyResult dco_decode_flow_verify_result(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
   ProofResult dco_decode_proof_result(dynamic raw);
@@ -69,6 +104,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ZkProofError
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ZkProofError
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     SseDeserializer deserializer,
   );
@@ -83,7 +124,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  FlowExpectedStatement sse_decode_box_autoadd_flow_expected_statement(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlowExpectedStatement sse_decode_flow_expected_statement(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlowPrepareResult sse_decode_flow_prepare_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FlowPresentation sse_decode_flow_presentation(SseDeserializer deserializer);
+
+  @protected
+  FlowVerifyResult sse_decode_flow_verify_result(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   ProofResult sse_decode_proof_result(SseDeserializer deserializer);
@@ -112,6 +183,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
+    ZkProofError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZkProofError(
     ZkProofError self,
     SseSerializer serializer,
@@ -130,10 +208,49 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_flow_expected_statement(
+    FlowExpectedStatement self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flow_expected_statement(
+    FlowExpectedStatement self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flow_prepare_result(
+    FlowPrepareResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flow_presentation(
+    FlowPresentation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flow_verify_result(
+    FlowVerifyResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_proof_result(ProofResult self, SseSerializer serializer);

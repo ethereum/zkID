@@ -1,35 +1,22 @@
 PODS:
   - Flutter (1.0.0)
-  - integration_test (0.0.1):
-    - Flutter
   - mopro_flutter_bindings (0.0.1):
     - Flutter
-  - path_provider_foundation (0.0.1):
-    - Flutter
-    - FlutterMacOS
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - mopro_flutter_bindings (from `.symlinks/plugins/mopro_flutter_bindings/ios`)
-  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  integration_test:
-    :path: ".symlinks/plugins/integration_test/ios"
   mopro_flutter_bindings:
     :path: ".symlinks/plugins/mopro_flutter_bindings/ios"
-  path_provider_foundation:
-    :path: ".symlinks/plugins/path_provider_foundation/darwin"
 
 SPEC CHECKSUMS:
-  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
-  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   mopro_flutter_bindings: 8f83966b4d7fea00976d376d012addf968f3c469
-  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
 
-PODFILE CHECKSUM: e21a66e24e78eeb752b2a94481de1c244c558500
+PODFILE CHECKSUM: b3a6bc3e2db228f742d2dec9e14a2352fd3e44b8
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

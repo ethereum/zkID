@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "credential": {
+    "claims": [
+      {
+        "name": "name",
+        "value": "Alice"
+      },
+      {
+        "name": "roc_birthday",
+        "value": "0890615"
+      }
+    ],
+    "issuer": {
+      "iss": "https://issuer.example/",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "issuerX",
+        "y": "issuerY"
+      }
+    },
+    "deviceKey": {
+      "publicKeyJwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "deviceX",
+        "y": "deviceY"
+      }
+    }
+  },
+  "requests": [
+    {
+      "id": "A",
+      "verifier": "Corner bar",
+      "title": "Over 18",
+      "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
+      "nonce": "nonce-aaaaaaaaaaaaaaaa",
+      "showInput": {
+        "nonce": "1"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "100",
+          "200"
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "verifier": "Wine club",
+      "title": "Born before 1990",
+      "policyText": "roc_birthday <= 0790101 (born on or before 1990-01-01)",
+      "nonce": "nonce-bbbbbbbbbbbbbbbb",
+      "showInput": {
+        "nonce": "2"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "101",
+          "201"
+        ]
+      }
+    },
+    {
+      "id": "C",
+      "verifier": "Corner bar",
+      "title": "Over 18 (new nonce)",
+      "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
+      "nonce": "nonce-cccccccccccccccc",
+      "showInput": {
+        "nonce": "3"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "11",
+          "22",
+          "33"
+        ],
+        "showStatement": [
+          "102",
+          "200"
+        ]
+      }
+    },
+    {
+      "id": "D",
+      "verifier": "Other bar",
+      "title": "Over 18 (other issuer)",
+      "policyText": "roc_birthday <= 0961112 (born on or before 2007-11-12)",
+      "nonce": "nonce-dddddddddddddddd",
+      "showInput": {
+        "nonce": "4"
+      },
+      "expected": {
+        "preparePublicValues": [
+          "99",
+          "88",
+          "33"
+        ],
+        "showStatement": [
+          "103",
+          "200"
+        ]
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "over18",
+      "title": "Over 18",
+      "description": "A valid proof for a satisfied policy.",
+      "presentFor": "A",
+      "verifyAgainst": "A",
+      "expect": "accepted"
+    },
+    {
+      "id": "policyFalse",
+      "title": "Born before 1990",
+      "description": "Valid proofs, but the policy is not met.",
+      "presentFor": "B",
+      "verifyAgainst": "B",
+      "expect": "policy_false"
+    },
+    {
+      "id": "replay",
+      "title": "Replayed proof",
+      "description": "A proof made for another nonce.",
+      "presentFor": "A",
+      "verifyAgainst": "C",
+      "expect": "rejected"
+    },
+    {
+      "id": "untrustedIssuer",
+      "title": "Untrusted issuer",
+      "description": "The verifier trusts a different issuer.",
+      "presentFor": "D",
+      "verifyAgainst": "D",
+      "expect": "rejected"
+    }
+  ]
+}
