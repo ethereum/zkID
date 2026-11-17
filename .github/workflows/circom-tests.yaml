@@ -34,8 +34,10 @@ jobs:
 
             - name: Download Circom Binary ${{ env.CIRCOM_VERSION }}
               run: |
-                  sudo wget -O ~/.cargo/bin/circom https://github.com/iden3/circom/releases/download/${{ env.CIRCOM_VERSION }}/circom-macos-amd64
-                  sudo chmod +x ~/.cargo/bin/circom
+                  mkdir -p "$HOME/bin"
+                  wget -O "$HOME/bin/circom" https://github.com/iden3/circom/releases/download/${{ env.CIRCOM_VERSION }}/circom-macos-amd64
+                  chmod +x "$HOME/bin/circom"
+                  echo "$HOME/bin" >> "$GITHUB_PATH"
 
             - name: Install JS dependencies
               run: cd wallet-unit-poc/circom && yarn
