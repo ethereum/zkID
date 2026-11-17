@@ -89,9 +89,8 @@ template CertChainRSA256(
 
     var serialValueOff = 11;
 
-    VerifySerialNumber(maxMessageLength, maxSerialNumberLength)(
+    VerifySerialNumber(maxMessageLength, maxSerialNumberLength, serialValueOff)(
         issuerTbs,
-        serialValueOff,
         serialNumber
     );
 

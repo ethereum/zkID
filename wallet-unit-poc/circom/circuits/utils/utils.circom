@@ -52,30 +52,26 @@ template VerifySubjectDN(MAX_CERT_LEN, MAX_SUBJECT_LEN) {
 
 /// Validates ASN.1 INTEGER tag+length, extracts serial bytes, and reconstructs
 /// a big-endian integer to assert it equals `target`.
-template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN) {
+///
+/// `OFFSET` is the position of the first serial value byte. It is a template
+/// parameter because the caller pins the bytes before the serial, so the
+/// position is known at compile time; the tag and length bytes are read
+/// directly instead of through a selector.
+template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN, OFFSET) {
+    assert(OFFSET >= 2);
+    assert(OFFSET + MAX_SERIAL_LEN <= MAX_CERT_LEN);
+
     signal input cert[MAX_CERT_LEN];
-    signal input offset;
     signal input target;  // single big-endian integer
 
     // -----------------------------------------------------------------------
-    // Step 0: Extract tag byte at (offset-2) and length byte at (offset-1)
+    // Step 0: Tag byte at (OFFSET-2) and length byte at (OFFSET-1)
     // -----------------------------------------------------------------------
-    component tagSel = ItemAtIndex(MAX_CERT_LEN);
-    tagSel.in <== cert;
-    tagSel.index <== offset - 2;
-
     // Enforce ASN.1 INTEGER tag == 0x02
-    component tagCheck = IsEqual();
-    tagCheck.in[0] <== tagSel.out;
-    tagCheck.in[1] <== 2;
-    tagCheck.out === 1;
-
-    component lenSel = ItemAtIndex(MAX_CERT_LEN);
-    lenSel.in <== cert;
-    lenSel.index <== offset - 1;
+    cert[OFFSET - 2] === 2;
 
     signal actual_len;
-    actual_len <== lenSel.out;
+    actual_len <== cert[OFFSET - 1];
 
     component lenGtZero = GreaterThan(8);
     lenGtZero.in[0] <== actual_len;
@@ -92,7 +88,7 @@ template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN) {
     // -----------------------------------------------------------------------
     component serialSel = SelectSubArray(MAX_CERT_LEN, MAX_SERIAL_LEN);
     serialSel.in <== cert;
-    serialSel.startIndex <== offset;
+    serialSel.startIndex <== OFFSET;
     serialSel.length <== actual_len;
 
     // -----------------------------------------------------------------------
