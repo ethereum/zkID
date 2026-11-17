@@ -28,13 +28,13 @@ export interface SmtAssetManifest {
 export const CIRCUITS: Record<CircuitKind, CircuitManifest> = {
   certChainRS2048: {
     kind: "certChainRS2048",
-    numPublic: 19,
+    numPublic: 20,
     pkUrl: "/keys/cert_chain_rs2048_proving.key.gz",
     witnessWasmUrl: "/keys/certChainRS2048.wasm.gz",
   },
   certChainRS4096: {
     kind: "certChainRS4096",
-    numPublic: 36,
+    numPublic: 37,
     pkUrl: "/keys/cert_chain_rs4096_proving.key.gz",
     witnessWasmUrl: "/keys/certChainRS4096.wasm.gz",
   },

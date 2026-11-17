@@ -3,4 +3,4 @@ pragma circom 2.2.3;
 
 include "../certChain.circom";
 
-component main {public[issuerRsaModulus, smtRoot]} = CertChainRSA256(1536, 121, 34, 4096, 17, 2048, 128, 20);
+component main {public[issuerRsaModulus, smtRoot, currentTime]} = CertChainRSA256(1536, 121, 34, 4096, 17, 2048, 128, 20);

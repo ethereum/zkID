@@ -52,30 +52,26 @@ template VerifySubjectDN(MAX_CERT_LEN, MAX_SUBJECT_LEN) {
 
 /// Validates ASN.1 INTEGER tag+length, extracts serial bytes, and reconstructs
 /// a big-endian integer to assert it equals `target`.
-template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN) {
+///
+/// `OFFSET` is the position of the first serial value byte. It is a template
+/// parameter because the caller pins the bytes before the serial, so the
+/// position is known at compile time; the tag and length bytes are read
+/// directly instead of through a selector.
+template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN, OFFSET) {
+    assert(OFFSET >= 2);
+    assert(OFFSET + MAX_SERIAL_LEN <= MAX_CERT_LEN);
+
     signal input cert[MAX_CERT_LEN];
-    signal input offset;
     signal input target;  // single big-endian integer
 
     // -----------------------------------------------------------------------
-    // Step 0: Extract tag byte at (offset-2) and length byte at (offset-1)
+    // Step 0: Tag byte at (OFFSET-2) and length byte at (OFFSET-1)
     // -----------------------------------------------------------------------
-    component tagSel = ItemAtIndex(MAX_CERT_LEN);
-    tagSel.in <== cert;
-    tagSel.index <== offset - 2;
-
     // Enforce ASN.1 INTEGER tag == 0x02
-    component tagCheck = IsEqual();
-    tagCheck.in[0] <== tagSel.out;
-    tagCheck.in[1] <== 2;
-    tagCheck.out === 1;
-
-    component lenSel = ItemAtIndex(MAX_CERT_LEN);
-    lenSel.in <== cert;
-    lenSel.index <== offset - 1;
+    cert[OFFSET - 2] === 2;
 
     signal actual_len;
-    actual_len <== lenSel.out;
+    actual_len <== cert[OFFSET - 1];
 
     component lenGtZero = GreaterThan(8);
     lenGtZero.in[0] <== actual_len;
@@ -92,7 +88,7 @@ template VerifySerialNumber(MAX_CERT_LEN, MAX_SERIAL_LEN) {
     // -----------------------------------------------------------------------
     component serialSel = SelectSubArray(MAX_CERT_LEN, MAX_SERIAL_LEN);
     serialSel.in <== cert;
-    serialSel.startIndex <== offset;
+    serialSel.startIndex <== OFFSET;
     serialSel.length <== actual_len;
 
     // -----------------------------------------------------------------------
@@ -320,4 +316,193 @@ template PoseidonBytesWithField(N_BYTES) {
     hasher.inputs[N_FIELDS] <== extra;
 
     out <== hasher.out;
+}
+
+/// @title VerifyValidity
+/// @notice Walks the head of a v3 TBSCertificate to the Validity field and
+///         asserts notBefore <= currentTime <= notAfter.
+///         Layout walked (all offsets derived, none prover-supplied):
+///           [0..4)   outer SEQUENCE header (30 82 hh ll)   - pinned by caller
+///           [4..9)   version a0 03 02 01 02                 - pinned by caller
+///           [9]      serial INTEGER tag, [10] serial length - checked by VerifySerialNumber
+///           p1 = 11 + serialLen:      AlgorithmIdentifier sha256WithRSAEncryption (15 bytes)
+///           p1 + 15:                  issuer Name SEQUENCE, short-form length
+///           p3 = p1 + 17 + issuerLen: Validity = 30 1e 17 0d <12 digits> 5a 17 0d <12 digits> 5a
+///         Only UTCTime is accepted; GeneralizedTime (notAfter >= 2050) fails.
+///         Caller must ensure tbs[i] are bytes (done by the SHA-256 gadget).
+/// @param MAX_SERIAL_LEN  Max serial length in bytes (<= 20)
+/// @input tbs          First 256 bytes of the TBS
+/// @input currentTime  Decimal integer YYMMDDHHMMSS (UTC)
+/// @output subjectOffset  Offset of the subject Name, the field after Validity (<= 207)
+/// @output subjectHeader  The 3 bytes at subjectOffset (tag + up to 2 length bytes)
+template VerifyValidity(MAX_SERIAL_LEN) {
+    signal input tbs[256];
+    signal input currentTime;
+    signal output subjectOffset;
+    signal output subjectHeader[3];
+
+    assert(MAX_SERIAL_LEN <= 20);
+
+    // Serial length byte. Re-checked here so the bound on p1 does not depend
+    // on the caller.
+    signal serialLen <== tbs[10];
+    component serialLenOk = LessEqThan(8);
+    serialLenOk.in[0] <== serialLen;
+    serialLenOk.in[1] <== MAX_SERIAL_LEN;
+    serialLenOk.out === 1;
+
+    // p1 in [11, 31]; p1 + 17 <= 48 < 64.
+    signal p1 <== 11 + serialLen;
+    component head = VarShiftLeft(64, 17);
+    for (var i = 0; i < 64; i++) {
+        head.in[i] <== tbs[i];
+    }
+    head.shift <== p1;
+
+    // AlgorithmIdentifier { sha256WithRSAEncryption, NULL }
+    var sigAlg[15] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+                      0xf7, 0x0d, 0x01, 0x01, 0x0b, 0x05, 0x00];
+    for (var i = 0; i < 15; i++) {
+        head.out[i] === sigAlg[i];
+    }
+
+    // Issuer Name: SEQUENCE with short-form length (< 128).
+    head.out[15] === 0x30;
+    signal issuerLen <== head.out[16];
+    component issuerLenShort = Num2Bits(7);
+    issuerLenShort.in <== issuerLen;
+
+    // p3 <= 31 + 17 + 127 = 175. Read the 32 bytes of Validity plus the
+    // 3-byte header of the field that follows it; p3 + 35 <= 210 < 256.
+    signal p3 <== p1 + 17 + issuerLen;
+    component val = VarShiftLeft(256, 35);
+    for (var i = 0; i < 256; i++) {
+        val.in[i] <== tbs[i];
+    }
+    val.shift <== p3;
+
+    // Validity ::= SEQUENCE { notBefore UTCTime, notAfter UTCTime }
+    val.out[0] === 0x30;
+    val.out[1] === 0x1e;
+    val.out[2] === 0x17;
+    val.out[3] === 0x0d;
+    val.out[16] === 0x5a;
+    val.out[17] === 0x17;
+    val.out[18] === 0x0d;
+    val.out[31] === 0x5a;
+
+    // 12 ASCII digits each -> decimal integer YYMMDDHHMMSS.
+    signal nbDigit[12];
+    signal naDigit[12];
+    component nbBits[12];
+    component naBits[12];
+    component nbLt[12];
+    component naLt[12];
+    var nbAcc = 0;
+    var naAcc = 0;
+    for (var i = 0; i < 12; i++) {
+        nbDigit[i] <== val.out[4 + i] - 48;
+        naDigit[i] <== val.out[19 + i] - 48;
+
+        nbBits[i] = Num2Bits(4);
+        nbBits[i].in <== nbDigit[i];
+        nbLt[i] = LessThan(4);
+        nbLt[i].in[0] <== nbDigit[i];
+        nbLt[i].in[1] <== 10;
+        nbLt[i].out === 1;
+
+        naBits[i] = Num2Bits(4);
+        naBits[i].in <== naDigit[i];
+        naLt[i] = LessThan(4);
+        naLt[i].in[0] <== naDigit[i];
+        naLt[i].in[1] <== 10;
+        naLt[i].out === 1;
+
+        nbAcc = nbAcc * 10 + nbDigit[i];
+        naAcc = naAcc * 10 + naDigit[i];
+    }
+    signal notBefore <== nbAcc;
+    signal notAfter <== naAcc;
+
+    // Both date integers are < 10^12 < 2^40. Range-check currentTime so the
+    // comparators' precondition holds.
+    component ctBits = Num2Bits(40);
+    ctBits.in <== currentTime;
+
+    component afterStart = LessEqThan(40);
+    afterStart.in[0] <== notBefore;
+    afterStart.in[1] <== currentTime;
+    afterStart.out === 1;
+
+    component beforeEnd = LessEqThan(40);
+    beforeEnd.in[0] <== currentTime;
+    beforeEnd.in[1] <== notAfter;
+    beforeEnd.out === 1;
+
+    subjectOffset <== p3 + 32;
+    for (var i = 0; i < 3; i++) {
+        subjectHeader[i] <== val.out[32 + i];
+    }
+}
+
+/// @title LocateModulus
+/// @notice Derives the offset of the subject public key's modulus INTEGER tag
+///         from the DER structure, continuing the walk VerifyValidity started:
+///           subjectOffset:  subject Name SEQUENCE, length in short form
+///                           (< 128) or one-byte long form 0x81 LL (128..255)
+///           q = end of Name: SubjectPublicKeyInfo for a 2048-bit RSA key,
+///                            whose 28 bytes up to the modulus are fixed
+///           q + 28:          modulus INTEGER tag
+///         Subject Names longer than 255 bytes and keys other than RSA-2048
+///         are rejected.
+///         Caller must ensure tbs[i] are bytes (done by the SHA-256 gadget).
+/// @input tbs            First 512 bytes of the TBS
+/// @input subjectOffset  From VerifyValidity (<= 207)
+/// @input subjectHeader  From VerifyValidity
+/// @output modulusTagOffset  Offset of the modulus INTEGER tag (<= 493)
+template LocateModulus() {
+    signal input tbs[512];
+    signal input subjectOffset;
+    signal input subjectHeader[3];
+    signal output modulusTagOffset;
+
+    subjectHeader[0] === 0x30;
+    component b1Bits = Num2Bits(8);
+    b1Bits.in <== subjectHeader[1];
+    component b2Bits = Num2Bits(8);
+    b2Bits.in <== subjectHeader[2];
+
+    component isLong = IsEqual();
+    isLong.in[0] <== subjectHeader[1];
+    isLong.in[1] <== 0x81;
+    // The first length byte has its high bit set iff the form is 0x81, so
+    // 0x80 and 0x82..0xff are rejected.
+    b1Bits.out[7] === isLong.out;
+    // DER minimal encoding: the 0x81 form carries a length >= 128.
+    isLong.out * (1 - b2Bits.out[7]) === 0;
+
+    signal subjectLen <== isLong.out * (subjectHeader[2] - subjectHeader[1]) + subjectHeader[1];
+
+    // q <= 207 + 3 + 255 = 465; q + 28 <= 493 < 512.
+    signal q <== subjectOffset + 2 + isLong.out + subjectLen;
+    component spki = VarShiftLeft(512, 28);
+    for (var i = 0; i < 512; i++) {
+        spki.in[i] <== tbs[i];
+    }
+    spki.shift <== q;
+
+    //   30 82 01 22                                    SubjectPublicKeyInfo (290)
+    //   30 0d 06 09 2a 86 48 86 f7 0d 01 01 01 05 00   rsaEncryption, NULL
+    //   03 82 01 0f 00                                 BIT STRING (271), 0 unused bits
+    //   30 82 01 0a                                    RSAPublicKey (266)
+    var spkiHead[28] = [0x30, 0x82, 0x01, 0x22,
+                        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+                        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00,
+                        0x03, 0x82, 0x01, 0x0f, 0x00,
+                        0x30, 0x82, 0x01, 0x0a];
+    for (var i = 0; i < 28; i++) {
+        spki.out[i] === spkiHead[i];
+    }
+
+    modulusTagOffset <== q + 28;
 }

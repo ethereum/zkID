@@ -50,8 +50,8 @@ Witness order (after the implicit constant-1 wire):
 
 | Circuit              | Signals | Order                                                               |
 |----------------------|---------|---------------------------------------------------------------------|
-| `certChainRS2048`  | 19      | `[pkCommit, issuerRsaModulus[17], smtRoot]`                         |
-| `certChainRS4096`  | 36      | `[pkCommit, issuerRsaModulus[34], smtRoot]`                         |
+| `certChainRS2048`  | 20      | `[pkCommit, issuerRsaModulus[17], smtRoot, currentTime]`            |
+| `certChainRS4096`  | 37      | `[pkCommit, issuerRsaModulus[34], smtRoot, currentTime]`            |
 | `userSigRS2048`  |  4      | `[pkCommit, nullifier, appIdPacked, challenge]`                     |
 
 `appIdPacked` is `tbs[0..31]` packed little-endian into one field element;

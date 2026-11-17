@@ -11,7 +11,11 @@ pub mod cert;
 pub mod encoding;
 pub mod random;
 pub mod split_inputs;
+pub mod time;
 pub mod types;
 
 pub use random::random_pk_blind;
 pub use split_inputs::{generate_split_inputs, APP_ID_LEN, MAX_CERT_CHAIN_LENGTH};
+#[cfg(not(target_arch = "wasm32"))]
+pub use time::current_time_utc;
+pub use time::format_current_time;

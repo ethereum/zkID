@@ -9,7 +9,7 @@ use ecdsa_spartan2::{
         cert::{extract_issuer_cert, generate_user_cert_from_certb64, serial_bytes_to_hex_trimmed},
         types::{CardSignResponse, Pkcs11InfoResponse, Rs4096SignResponse, SmtCircuitInputs},
     },
-    generate_split_inputs, DEFAULT_CHALLENGE, DEFAULT_TBS, MAX_CERT_CHAIN_LENGTH,
+    generate_split_inputs, DEFAULT_CHALLENGE, DEFAULT_CURRENT_TIME, DEFAULT_TBS, MAX_CERT_CHAIN_LENGTH,
 };
 use spartan2_wasm::inputs::build_split_inputs_native_for_test;
 use x509_cert::{
@@ -90,14 +90,14 @@ fn assert_split_inputs_match(
     let (native_cert, native_user_sig) = generate_split_inputs(
         &user_cert, &issuer_cert, sig_b64, DEFAULT_TBS, serial_hex,
         smt_inputs, k_issuer, 17, MAX_CERT_CHAIN_LENGTH,
-        TEST_PK_BLIND, DEFAULT_CHALLENGE,
+        TEST_PK_BLIND, DEFAULT_CHALLENGE, DEFAULT_CURRENT_TIME,
     )
     .expect("native generate_split_inputs");
 
     let wasm_out = build_split_inputs_native_for_test(
         user_der, issuer_der, sig_b64, DEFAULT_TBS, serial_hex,
         smt_inputs, k_issuer, 17, MAX_CERT_CHAIN_LENGTH,
-        TEST_PK_BLIND, DEFAULT_CHALLENGE,
+        TEST_PK_BLIND, DEFAULT_CHALLENGE, DEFAULT_CURRENT_TIME,
     )
     .expect("wasm crate build_split_inputs");
 

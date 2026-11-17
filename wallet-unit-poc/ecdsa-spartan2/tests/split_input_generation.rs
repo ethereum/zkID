@@ -5,7 +5,7 @@
 use ecdsa_spartan2::{
     generate_split_inputs,
     circuits::types::{CardSignResponse, Pkcs11InfoResponse},
-    CertChainCircuit, CertChainRs4096Circuit, DEFAULT_CHALLENGE, DEFAULT_TBS,
+    CertChainCircuit, CertChainRs4096Circuit, DEFAULT_CHALLENGE, DEFAULT_CURRENT_TIME, DEFAULT_TBS,
     MAX_CERT_CHAIN_LENGTH,
 };
 
@@ -70,12 +70,12 @@ fn split_inputs_have_expected_structure() {
         MAX_CERT_CHAIN_LENGTH,
         TEST_PK_BLIND,
         DEFAULT_CHALLENGE,
+        DEFAULT_CURRENT_TIME,
     )
     .expect("generate_split_inputs failed");
 
     // cert_chain JSON must have all expected keys
     for key in [
-        "tbsModulusTagOffset",
         "issuerTbs",
         "issuerTbsLength",
         "actualIssuerTbsLength",
@@ -87,6 +87,7 @@ fn split_inputs_have_expected_structure() {
         "smtOldKey",
         "smtOldValue",
         "smtIsOld0",
+        "currentTime",
         "pkBlind",
     ] {
         assert!(
@@ -163,6 +164,7 @@ fn split_inputs_reject_wrong_length_app_id() {
         MAX_CERT_CHAIN_LENGTH,
         TEST_PK_BLIND,
         DEFAULT_CHALLENGE,
+        DEFAULT_CURRENT_TIME,
     );
     assert!(result.is_err(), "30-byte app_id should be rejected");
 }
@@ -183,6 +185,7 @@ fn split_inputs_share_pk_blind() {
         MAX_CERT_CHAIN_LENGTH,
         TEST_PK_BLIND,
         DEFAULT_CHALLENGE,
+        DEFAULT_CURRENT_TIME,
     )
     .expect("generate_split_inputs failed");
 
@@ -210,12 +213,12 @@ fn split_inputs_rs4096_have_expected_structure() {
         MAX_CERT_CHAIN_LENGTH,
         TEST_PK_BLIND,
         DEFAULT_CHALLENGE,
+        DEFAULT_CURRENT_TIME,
     )
     .expect("generate_split_inputs failed for RS4096");
 
     // cert_chain JSON must have all expected keys
     for key in [
-        "tbsModulusTagOffset",
         "issuerTbs",
         "issuerTbsLength",
         "actualIssuerTbsLength",
@@ -227,6 +230,7 @@ fn split_inputs_rs4096_have_expected_structure() {
         "smtOldKey",
         "smtOldValue",
         "smtIsOld0",
+        "currentTime",
         "pkBlind",
     ] {
         assert!(
@@ -301,6 +305,7 @@ fn split_inputs_rs4096_share_pk_blind() {
         MAX_CERT_CHAIN_LENGTH,
         TEST_PK_BLIND,
         DEFAULT_CHALLENGE,
+        DEFAULT_CURRENT_TIME,
     )
     .expect("generate_split_inputs failed for RS4096");
 
