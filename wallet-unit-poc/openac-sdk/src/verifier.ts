@@ -1,19 +1,18 @@
 import { WasmBridge } from "./wasm-bridge.js";
 import { deserializeProofBundle } from "./prover.js";
-import { buildShowStatementPublicValues } from "./inputs/show-statement.js";
 import {
-  extractIssuerKeyFromPreparePublicValues,
-  extractClaimNormalizationFromPreparePublicValues,
-} from "./inputs/prepare-public-io.js";
+  buildShowStatementPublicValues,
+  showNumOutputs,
+} from "./inputs/show-statement.js";
+import { extractClaimNormalizationFromPreparePublicValues } from "./inputs/prepare-public-io.js";
 import { checkNormalizationSupports } from "./predicates.js";
-import { bigintToBase64url } from "./utils.js";
+import { fromLimbs } from "./limbs.js";
 import { DEFAULT_SHOW_PARAMS } from "./types.js";
 import type {
   VerificationResult,
   VerifyingKeys,
   SerializedProof,
   ExpectedStatement,
-  ProvenIssuerKey,
 } from "./types.js";
 
 /**
@@ -32,32 +31,6 @@ function parseScalar(value: string): bigint {
   return 0n;
 }
 
-/**
- * Read the issuer key out of the Prepare proof's public values, in both forms a
- * trust store is likely to hold: curve coordinates, and the canonical P-256 JWK
- * (32-byte big-endian base64url), which compares field by field against a stored
- * `EcdsaPublicKey` without further conversion.
- */
-function provenIssuerKey(
-  preparePublicValues: bigint[],
-  expectedClaimCount: number,
-): ProvenIssuerKey {
-  const { x, y } = extractIssuerKeyFromPreparePublicValues(
-    preparePublicValues,
-    expectedClaimCount,
-  );
-  return {
-    x,
-    y,
-    jwk: {
-      kty: "EC",
-      crv: "P-256",
-      x: bigintToBase64url(x),
-      y: bigintToBase64url(y),
-    },
-  };
-}
-
 export class Verifier {
   private bridge: WasmBridge;
 
@@ -69,7 +42,8 @@ export class Verifier {
       valid: false,
       expressionResult: null,
       deviceKey: null,
-      issuerKey: null,
+      issuerRoot: null,
+      revocationRoot: null,
       verifyMs: performance.now() - startTime,
       error,
     };
@@ -146,10 +120,10 @@ export class Verifier {
    * same predicate over the same slot means different things under different
    * normalization.
    *
-   * Issuer identity is reported, not decided: the key the circuit ran its ES256
-   * check against is read out of the Prepare public IO and returned as
-   * `issuerKey`, leaving the trust decision to the caller. See
-   * `VerificationResult.issuerKey`.
+   * The issuer is hidden: Show outputs the issuer registry root and the
+   * revocation root, which `expected.isValidIssuerRoot` and
+   * `expected.isValidRevocationRoot` must accept. A check that throws fails the
+   * verification rather than propagating.
    */
   private async verifyInternal(
     runVerify: () => Promise<{
@@ -190,18 +164,15 @@ export class Verifier {
       );
     }
 
-    // The Prepare proof's public IO carries the (pubKeyX, pubKeyY) the ES256
-    // check inside the circuit ran against, and the decodeFlags/claimFormats the
+    // The Prepare proof's public IO carries the decodeFlags/claimFormats the
     // claim values were normalized under.
     const preparePublicValues = result.preparePublicValues.map(parseScalar);
-    let issuerKey;
     let claimNormalization;
     try {
       // Cross-check the Prepare public-IO length against the claim-slot count
       // the verifier expects (Item 10): the vector length is prover-controlled,
       // so a forked prover could truncate it to a different valid shape.
       const expectedClaimCount = DEFAULT_SHOW_PARAMS.nClaims;
-      issuerKey = provenIssuerKey(preparePublicValues, expectedClaimCount);
       claimNormalization = extractClaimNormalizationFromPreparePublicValues(
         preparePublicValues,
         expectedClaimCount,
@@ -211,17 +182,6 @@ export class Verifier {
         e instanceof Error ? e.message : String(e),
         startTime,
       );
-    }
-
-    // Item 13: if the verifier pinned a trusted-issuer set, the credential's
-    // issuer key (recovered above, SNARK-authenticated) must be one of them.
-    if (expected.trustedIssuers && expected.trustedIssuers.length > 0) {
-      const trusted = expected.trustedIssuers.some(
-        (k) => issuerKey.jwk.x === k.x && issuerKey.jwk.y === k.y,
-      );
-      if (!trusted) {
-        return Verifier.failure("Issuer key is not in the trusted set", startTime);
-      }
     }
 
     // The normalization is checked here rather than reported, because the
@@ -259,12 +219,13 @@ export class Verifier {
       }
     }
 
-    // Public IO layout: index 0 = expressionResult, indices 1.. = the bound
-    // verifier statement (messageHash + predicate program).
+    // Public IO layout: [0] expressionResult, [1..3] issuerRoot [hi, lo],
+    // [3..5] revocationRoot [hi, lo], then the bound verifier statement
+    // (messageHash + predicate program).
     const publicValues = result.showPublicValues.map(parseScalar);
     const expressionResult = (publicValues[0] ?? 0n) !== 0n;
 
-    const boundValues = publicValues.slice(1);
+    const boundValues = publicValues.slice(showNumOutputs(DEFAULT_SHOW_PARAMS));
     if (boundValues.length !== expectedStatementValues.length) {
       return Verifier.failure(
         `Statement binding size mismatch: proof exposes ${boundValues.length} bound values, expected ${expectedStatementValues.length}`,
@@ -284,11 +245,49 @@ export class Verifier {
       }
     }
 
+    let issuerRoot: bigint;
+    let revocationRoot: bigint;
+    try {
+      issuerRoot = fromLimbs(publicValues[1] ?? 0n, publicValues[2] ?? 0n);
+      revocationRoot = fromLimbs(publicValues[3] ?? 0n, publicValues[4] ?? 0n);
+    } catch (e) {
+      return Verifier.failure(e instanceof Error ? e.message : String(e), startTime);
+    }
+    let issuerRootAccepted: boolean;
+    try {
+      issuerRootAccepted = await expected.isValidIssuerRoot(issuerRoot);
+    } catch (e) {
+      return Verifier.failure(
+        `Issuer root check failed: ${e instanceof Error ? e.message : String(e)}`,
+        startTime,
+      );
+    }
+    if (issuerRootAccepted !== true) {
+      return Verifier.failure("Issuer root is not accepted", startTime);
+    }
+
+    let rootAccepted: boolean;
+    try {
+      rootAccepted = await expected.isValidRevocationRoot(revocationRoot);
+    } catch (e) {
+      return Verifier.failure(
+        `Revocation root check failed: ${e instanceof Error ? e.message : String(e)}`,
+        startTime,
+      );
+    }
+    if (rootAccepted !== true) {
+      return Verifier.failure(
+        "Revocation root is not accepted: the registry state is stale or unknown",
+        startTime,
+      );
+    }
+
     return {
       valid: true,
       expressionResult,
       deviceKey: null,
-      issuerKey,
+      issuerRoot,
+      revocationRoot,
       verifyMs: performance.now() - startTime,
     };
   }

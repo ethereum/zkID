@@ -2,10 +2,7 @@
 // credential circuits use as `pubKeyX` / `pubKeyY`.
 //
 // issuerPublicKeyToPoint() converts a JWK or PEM key to the coordinates the
-// prover puts in its witness. The reverse direction, reading the coordinates
-// back out of a proof, lives in prepare-public-io.js and is re-exported here so
-// callers comparing a proof against a trust store find both together: convert
-// the stored key with issuerPublicKeyToPoint(), then compare.
+// prover puts in its witness. Proofs never reveal them (issuer hiding).
 
 import { p256 } from "@noble/curves/nist.js";
 
@@ -22,9 +19,10 @@ import type {
   PemPublicKey,
   IssuerPublicKey,
 } from "../types.js";
-import type { IssuerKeyPoint } from "./prepare-public-io.js";
-
-export type { IssuerKeyPoint };
+export interface IssuerKeyPoint {
+  x: bigint;
+  y: bigint;
+}
 
 /**
  * Convert a PEM-encoded ECDSA P-256 public key to JWK format.
@@ -122,4 +120,3 @@ export function issuerPublicKeyToPoint(key: IssuerPublicKey): IssuerKeyPoint {
   return { x, y };
 }
 
-export { extractIssuerKeyFromPreparePublicValues } from "./prepare-public-io.js";

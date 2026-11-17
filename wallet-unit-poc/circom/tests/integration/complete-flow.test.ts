@@ -3,8 +3,15 @@ import { circomkit } from "../common/index.ts";
 import { generateMockData } from "../../src/mock-vc-generator.ts";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce } from "../../src/show.ts";
 import { bindPredicateName } from "../common/claim-identity.ts";
+import { witnessIndices } from "../common/witness-signals.ts";
+import { buildRevocationWitness, createRevocationRegistry, toLimbs, bytesToBigInt } from "../../src/revocation.ts";
+import { DEFAULT_TEST_ISSUER, buildIssuerRegistry, generateIssuerMembershipInputs } from "../../src/issuer-hiding.ts";
+import { base64urlToBigInt } from "../../src/utils.ts";
+import { randomBytes } from "crypto";
 import assert from "assert";
 import { p256 } from "@noble/curves/nist.js";
+
+const REVOCATION_MAX_DEPTH = 4;
 
 describe("Complete Flow: Register (JWT) → Show Circuit", () => {
   let jwtCircuit: WitnessTester<
@@ -60,7 +67,7 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
     showCircuit = await circomkit.WitnessTester(`Show`, {
       file: "show",
       template: "Show",
-      params: [2, 2, 8, 64],
+      params: [2, 2, 8, 64, 8, REVOCATION_MAX_DEPTH],
       recompile: RECOMPILE,
     });
     console.log("Show Circuit #constraints:", await showCircuit.getConstraintCount());
@@ -80,6 +87,13 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
       const verifierNonce = "full-flow-predicate-check";
       const deviceSignature = signDeviceNonce(verifierNonce, mockData.devicePrivateKey);
       const showParams = generateShowCircuitParams(mockData.circuitParams);
+      // Issuer hiding: Show proves the credential's issuer is in a registry of
+      // several issuers and outputs only that registry's root.
+      const issuer = {
+        x: base64urlToBigInt(mockData.issuerKey.x),
+        y: base64urlToBigInt(mockData.issuerKey.y),
+      };
+      const issuerRegistry = buildIssuerRegistry([DEFAULT_TEST_ISSUER, issuer]);
       const showInputs = generateShowInputs(
         showParams,
         verifierNonce,
@@ -87,7 +101,9 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
         mockData.deviceKey,
         [],
         [],
-        normalizedClaimValues
+        normalizedClaimValues,
+        undefined,
+        generateIssuerMembershipInputs(issuer, issuerRegistry),
       );
 
       showInputs.predicateLen = 1n;
@@ -99,7 +115,29 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
       showInputs.exprLen = 1n;
       await bindPredicateName(showInputs, 0, 0, "roc_birthday");
 
-      await showCircuit.expectPass(showInputs, { expressionResult: 1n });
+      // The commitment Show proves against is the one the JWT circuit extracted.
+      const [hi, lo] = await witnessIndices(jwtCircuit, [
+        "main.RevocationCommitment[0]",
+        "main.RevocationCommitment[1]",
+      ]);
+      const registry = createRevocationRegistry(Array.from({ length: 5 }, () => bytesToBigInt(randomBytes(32))));
+      const revocation = buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH);
+      revocation.revocationCommitment = [jwtWitness[hi], jwtWitness[lo]];
+
+      // The Show .sym is too large for circomkit's output check, so read the outputs by index.
+      const showWitness = await showCircuit.calculateWitness({ ...showInputs, ...revocation });
+      await showCircuit.expectConstraintPass(showWitness);
+      const outputs = await witnessIndices(showCircuit, [
+        "main.expressionResult",
+        "main.issuerRoot[0]",
+        "main.issuerRoot[1]",
+        "main.revocationRoot[0]",
+        "main.revocationRoot[1]",
+      ]);
+      assert.deepStrictEqual(
+        outputs.map((i) => showWitness[i]),
+        [1n, ...toLimbs(issuerRegistry.root), ...toLimbs(registry.root)],
+      );
     });
 
     // it("should complete full flow: JWT circuit extracts device key → Show circuit verifies device signature", async () => {
@@ -166,6 +204,7 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
         maxPredicates: 2,
         maxLogicTokens: 8,
         valueBits: 64,
+        maxIssuerDepth: 8,
       };
 
       assert.throws(

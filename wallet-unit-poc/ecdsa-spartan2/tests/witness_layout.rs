@@ -19,7 +19,8 @@ use ecdsa_spartan2::{
     circuit_size::CircuitSize,
     utils::{
         calculate_jwt_output_indices, calculate_mdoc_output_indices,
-        calculate_show_witness_indices, MDOC_CLAIM_VALUES_WITNESS_START,
+        calculate_show_witness_indices, ShowVariant, MDOC_CLAIM_VALUES_WITNESS_START,
+        SHOW_ISSUER_ROOT_INDEX,
     },
 };
 
@@ -81,7 +82,12 @@ fn jwt_claim_value_offsets_match_sym() {
         let layout = calculate_jwt_output_indices(size);
         let wanted: Vec<String> = (0..layout.claim_values_len)
             .map(|i| format!("main.normalizedClaimValues[{i}]"))
-            .chain(["main.KeyBindingX".into(), "main.KeyBindingY".into()])
+            .chain([
+                "main.KeyBindingX".into(),
+                "main.KeyBindingY".into(),
+                "main.RevocationCommitment[0]".into(),
+                "main.RevocationCommitment[1]".into(),
+            ])
             .collect();
 
         let Some(actual) = witness_indices(size.circuit_name(), &wanted) else {
@@ -92,7 +98,12 @@ fn jwt_claim_value_offsets_match_sym() {
 
         let expected: Vec<usize> = layout
             .claim_values_range()
-            .chain([layout.keybinding_x_index, layout.keybinding_y_index])
+            .chain([
+                layout.keybinding_x_index,
+                layout.keybinding_y_index,
+                layout.revocation_commitment_index,
+                layout.revocation_commitment_index + 1,
+            ])
             .collect();
 
         assert_eq!(
@@ -103,20 +114,15 @@ fn jwt_claim_value_offsets_match_sym() {
              CLAIM_VALUES_WITNESS_START in openac-sdk/src/sizing.ts)."
         );
 
-        // The two leaks this change exists to close. The circuit publishes the
-        // issuer key and the normalization flags (2n + 2 public inputs, no public
-        // outputs), but never claim values -- which would reveal the exact
-        // attribute -- nor the device key, a constant identifier that survives
-        // reblinding and lets a verifier recognize a returning holder.
+        // Only the normalization flags are public (2n inputs, no outputs): claim
+        // values would reveal the attribute, the device key would link
+        // presentations and the issuer key would reveal the issuer.
         assert_eq!(
             layout.num_public(),
-            2 * layout.claim_values_len + 2,
-            "{size}: JWT public IO must be exactly issuer key + decodeFlags + claimFormats"
+            2 * layout.claim_values_len,
+            "{size}: JWT public IO must be exactly decodeFlags + claimFormats"
         );
-        for idx in layout
-            .claim_values_range()
-            .chain([layout.keybinding_x_index, layout.keybinding_y_index])
-        {
+        for idx in layout.shared_witness_indices() {
             assert!(
                 idx > layout.num_public(),
                 "{size}: witness[{idx}] is inside the public IO"
@@ -180,40 +186,101 @@ fn mdoc_claim_value_offsets_match_sym() {
 #[test]
 fn show_claim_value_offsets_match_sym() {
     let n_claims = CircuitSize::default().n_claims();
-    let layout = calculate_show_witness_indices(n_claims);
-    let wanted: Vec<String> = (0..n_claims)
-        .map(|i| format!("main.claimValues[{i}]"))
-        .chain([
-            "main.expressionResult".into(),
-            "main.deviceKeyX".into(),
-            "main.deviceKeyY".into(),
-        ])
-        .collect();
 
-    let Some(actual) = witness_indices("show", &wanted) else {
-        eprintln!("skipping show: circuit not compiled");
-        return;
-    };
+    for variant in [ShowVariant::Jwt, ShowVariant::Mdoc] {
+        let layout = calculate_show_witness_indices(n_claims, variant);
+        let mut wanted: Vec<String> = (0..n_claims)
+            .map(|i| format!("main.claimValues[{i}]"))
+            .chain([
+                "main.expressionResult".into(),
+                "main.deviceKeyX".into(),
+                "main.deviceKeyY".into(),
+            ])
+            .collect();
+        let mut expected: Vec<usize> = layout
+            .claim_values_range()
+            .chain([
+                layout.expression_result_index,
+                layout.device_key_x_index,
+                layout.device_key_y_index,
+            ])
+            .collect();
+        if let Some(i) = layout.revocation_commitment_index {
+            wanted.extend([
+                "main.revocationCommitment[0]".into(),
+                "main.revocationCommitment[1]".into(),
+            ]);
+            expected.extend([i, i + 1]);
+        }
 
-    let expected: Vec<usize> = layout
-        .claim_values_range()
-        .chain([
-            layout.expression_result_index,
-            layout.device_key_x_index,
-            layout.device_key_y_index,
-        ])
-        .collect();
+        let Some(actual) = witness_indices(variant.circuit_name(), &wanted) else {
+            eprintln!("skipping {}: circuit not compiled", variant.circuit_name());
+            continue;
+        };
 
-    assert_eq!(
-        actual, expected,
-        "show witness layout drifted from the compiled circuit; \
-         calculate_show_witness_indices is stale (is build/show/ up to date?)"
-    );
-
-    for idx in layout.claim_values_range() {
-        assert!(
-            idx > layout.num_public(),
-            "show: claimValues[..] is inside the public IO"
+        assert_eq!(
+            actual, expected,
+            "{} witness layout drifted from the compiled circuit; \
+             calculate_show_witness_indices is stale",
+            variant.circuit_name()
         );
+
+        for idx in layout.shared_witness_indices() {
+            assert!(
+                idx > layout.num_public(),
+                "{}: a shared signal is inside the public IO",
+                variant.circuit_name()
+            );
+        }
     }
+}
+
+/// Issuer hiding: the issuer key is private in every credential circuit and
+/// travels to Show through the shared segment, and Show outputs the root.
+#[test]
+fn issuer_hiding_offsets_match_sym() {
+    let key = |x: usize| vec![x, x + 1];
+    let names = || vec!["main.pubKeyX".to_string(), "main.pubKeyY".to_string()];
+    let mut checked = 0;
+
+    for size in CircuitSize::ALL {
+        let layout = calculate_jwt_output_indices(size);
+        if let Some(actual) = witness_indices(size.circuit_name(), &names()) {
+            assert_eq!(actual, key(layout.issuer_key_x_index), "{size}: issuer key moved");
+            assert!(layout.issuer_key_x_index > layout.num_public());
+            checked += 1;
+        }
+    }
+
+    let mdoc = calculate_mdoc_output_indices(MDOC_MAX_CLAIMS);
+    if let Some(actual) = witness_indices("mdoc", &names()) {
+        assert_eq!(actual, key(mdoc.issuer_key_x_index), "mdoc: issuer key moved");
+        assert!(mdoc.issuer_key_x_index > mdoc.num_public());
+        checked += 1;
+    }
+
+    for variant in [ShowVariant::Jwt, ShowVariant::Mdoc] {
+        let show = calculate_show_witness_indices(CircuitSize::default().n_claims(), variant);
+        let wanted: Vec<String> = [
+            "main.issuerRoot[0]",
+            "main.issuerRoot[1]",
+            "main.issuerKeyX",
+            "main.issuerKeyY",
+        ]
+        .map(String::from)
+        .to_vec();
+        if let Some(actual) = witness_indices(variant.circuit_name(), &wanted) {
+            let mut expected = key(SHOW_ISSUER_ROOT_INDEX);
+            expected.extend(key(show.issuer_key_x_index));
+            assert_eq!(
+                actual,
+                expected,
+                "{}: issuer root/key moved",
+                variant.circuit_name()
+            );
+            checked += 1;
+        }
+    }
+
+    assert!(checked > 0, "no circuits compiled; nothing verified");
 }

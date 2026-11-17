@@ -9,6 +9,7 @@ import type { JwkEcdsaPublicKey } from "./es256.ts";
 import { generateJwtCircuitParams, generateJwtInputs } from "./jwt.ts";
 import type { JwtCircuitParams } from "./jwt.ts";
 import { base64ToBigInt, base64urlToBase64, bigintToBase64url, pointToJwk, generateDidKey } from "./utils.ts";
+import { computeRevocationCommitment, encodeRevocationCommitment } from "./revocation.ts";
 
 interface PublicKeyConfig {
   kty: string;
@@ -101,6 +102,8 @@ export interface MockDataOptions {
   kid?: string;
   targetPayloadLength?: number;
   claimFormats?: number[];
+  /** 32-byte holder secret; the payload carries sha256 of it. Random by default. */
+  revocationSecret?: Uint8Array;
 }
 
 export interface MockDataResult {
@@ -113,6 +116,8 @@ export interface MockDataResult {
   devicePrivateKey: Uint8Array;
   circuitParams: JwtCircuitParams;
   circuitInputs: any;
+  revocationSecret: Uint8Array;
+  revocationCommitment: bigint;
 }
 
 export async function generateMockData(options: MockDataOptions = {}): Promise<MockDataResult> {
@@ -145,6 +150,9 @@ export async function generateMockData(options: MockDataOptions = {}): Promise<M
     alg: "ES256",
   };
 
+  const revocationSecret = options.revocationSecret ?? new Uint8Array(nodeCrypto.randomBytes(32));
+  const revocationCommitment = computeRevocationCommitment(revocationSecret);
+
   const issuerDid = options.issuer || generateDidKey(issuerKeyData.publicKey);
   const subjectDid = options.subject || generateDidKey(deviceKey);
 
@@ -153,6 +161,7 @@ export async function generateMockData(options: MockDataOptions = {}): Promise<M
     nbf: Math.floor(Date.now() / 1000),
     iss: issuerDid,
     cnf: { jwk: deviceKey },
+    revocation_commitment: encodeRevocationCommitment(revocationCommitment),
     exp: Math.floor(Date.now() / 1000) + 3600,
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
@@ -250,5 +259,7 @@ export async function generateMockData(options: MockDataOptions = {}): Promise<M
     devicePrivateKey,
     circuitParams,
     circuitInputs,
+    revocationSecret,
+    revocationCommitment,
   };
 }

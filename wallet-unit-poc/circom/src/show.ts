@@ -5,6 +5,11 @@ import { strict as assert } from "assert";
 import type { JwkEcdsaPublicKey } from "./es256.ts";
 import type { JwtCircuitParams } from "./jwt.ts";
 import { base64urlToBigInt, base64urlToBase64, bufferToBigInt } from "./utils.ts";
+import {
+  DEFAULT_TEST_ISSUER,
+  generateIssuerMembershipInputs,
+  type IssuerMembershipInputs,
+} from "./issuer-hiding.ts";
 
 export const LogicToken = {
   AND: 2,
@@ -34,15 +39,16 @@ export interface ShowCircuitParams {
   maxPredicates: number;
   maxLogicTokens: number;
   valueBits: number;
+  maxIssuerDepth: number;
 }
 
 export function generateShowCircuitParams(params: number[] | JwtCircuitParams): ShowCircuitParams {
   const nClaims = Array.isArray(params) ? Math.max(1, (params[2] || 2) - 2) : Math.max(1, (params.maxMatches || 2) - 2);
-  const maxPredicates = Array.isArray(params) ? (params[5] || 2) : 2;
-  const maxLogicTokens = Array.isArray(params) ? (params[6] || 8) : 8;
+  const maxPredicates = 2;
+  const maxLogicTokens = 8;
   const valueBits = 64;
 
-  return { nClaims, maxPredicates, maxLogicTokens, valueBits };
+  return { nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth: 8 };
 }
 
 export function signDeviceNonce(message: string, privateKey: Uint8Array | string): string {
@@ -97,8 +103,10 @@ export function generateShowInputs(
   normalizedClaimValues: bigint[] = [],
   // Default 0 leaves the binding vacuous for flows with no attribute names (JWT);
   // mdoc callers pass real hashes.
-  claimIdentifierHashes: bigint[] = []
-): {
+  claimIdentifierHashes: bigint[] = [],
+  // Must carry the credential's real issuer key when linked to a Prepare proof.
+  issuer?: IssuerMembershipInputs
+): IssuerMembershipInputs & {
   deviceKeyX: bigint;
   deviceKeyY: bigint;
   sig_r: bigint;
@@ -264,5 +272,6 @@ export function generateShowInputs(
     tokenTypes,
     tokenValues,
     exprLen,
+    ...(issuer ?? generateIssuerMembershipInputs(DEFAULT_TEST_ISSUER, undefined, params.maxIssuerDepth)),
   };
 }

@@ -104,6 +104,21 @@ pub fn bind_shared<F: PrimeField, CS: ConstraintSystem<F>>(
     Ok(())
 }
 
+/// Allocate the issuer key `[x, y]` (witness indices `x_index`, `x_index + 1`),
+/// the trailing pair of every shared segment. Zero during setup.
+pub fn alloc_shared_issuer_key<F: PrimeField, CS: ConstraintSystem<F>>(
+    cs: &mut CS,
+    witness: Option<&[F]>,
+    x_index: usize,
+) -> Result<[AllocatedNum<F>; 2], SynthesisError> {
+    let value = |i: usize| witness.map(|w| w[i]).unwrap_or(F::ZERO);
+    let (x, y) = (value(x_index), value(x_index + 1));
+    Ok([
+        AllocatedNum::alloc(cs.namespace(|| "IssuerKeyX"), || Ok(x))?,
+        AllocatedNum::alloc(cs.namespace(|| "IssuerKeyY"), || Ok(y))?,
+    ])
+}
+
 /// Allocate witness variables without adding constraints.
 ///
 /// During proving, Spartan2 only reads witness values from the constraint system;

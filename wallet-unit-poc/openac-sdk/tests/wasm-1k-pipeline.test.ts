@@ -11,9 +11,17 @@ import {
   Credential,
   DEFAULT_SHOW_PARAMS,
   circuitInputsToJson,
-  extractIssuerKeyFromPreparePublicValues,
   issuerPublicKeyToPoint,
+  buildRevocationWitness,
+  computeRevocationCommitment,
+  createRevocationRegistry,
+  encodeRevocationCommitment,
+  buildIssuerMembershipInputs,
+  createIssuerRegistry,
+  issuerCommitment,
+  fromLimbs,
 } from "../src/index.js";
+import { CLAIM_IDENTITY_WITNESS_START, CLAIM_VALUES_WITNESS_START } from "../src/sizing.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
   buildShowCircuitInputs,
@@ -26,6 +34,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const KEYS_DIR = join(__dirname, "..", "..", "ecdsa-spartan2", "keys");
 const WASM_PKG_DIR = join(__dirname, "..", "wasm", "pkg");
 const ASSETS_DIR = join(__dirname, "..", "assets");
+
+const REVOCATION_SECRET_HEX =
+  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+const REVOCATION_COMMITMENT = computeRevocationCommitment(REVOCATION_SECRET_HEX);
+
+// Witness index of the private issuer `main.pubKeyX` in jwt_1k (pubKeyY follows).
+// Mirrors CircuitSize::issuer_key_witness_start in ecdsa-spartan2.
+const JWT_1K_ISSUER_KEY_START = 1288;
 
 // 1k circuit params: must match circom/circuits.json "jwt_1k" params
 const JWT_PARAMS_1K: JwtCircuitParams = {
@@ -160,6 +176,7 @@ function generateTestJwt(): TestJwtData {
     nbf: 1700000000,
     exp: 1800000000,
     cnf: { jwk: DEVICE_PUBLIC_KEY },
+    revocation_commitment: encodeRevocationCommitment(REVOCATION_COMMITMENT),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],
@@ -224,7 +241,7 @@ function checkArtifactsExist(): boolean {
     join(KEYS_DIR, "1k_show_verifying.key"),
     join(WASM_PKG_DIR, "openac_wasm.js"),
     join(WASM_PKG_DIR, "openac_wasm_bg.wasm"),
-    join(ASSETS_DIR, "jwt_1k", "jwt_1k.wasm"),
+    join(ASSETS_DIR, "jwt_1k.wasm"),
     join(ASSETS_DIR, "show.wasm"),
     join(__dirname, "..", "assets", "witness_calculator.js"),
   ];
@@ -278,7 +295,7 @@ describe.skipIf(!checkArtifactsExist())(
 
       const witnessCalcJs = join(ASSETS_DIR, "witness_calculator.js");
       jwtWitnessCalc = await createWitnessCalculator(
-        join(ASSETS_DIR, "jwt_1k", "jwt_1k.wasm"),
+        join(ASSETS_DIR, "jwt_1k.wasm"),
         witnessCalcJs,
       );
       showWitnessCalc = await createWitnessCalculator(
@@ -338,26 +355,44 @@ describe.skipIf(!checkArtifactsExist())(
     const prepareResult = await bridge.precomputeFromWitness(
       preparePk,
       jwtWitnessWtns,
+      "1k",
     );
     expect(prepareResult.proof.length).toBeGreaterThan(0);
     expect(prepareResult.instance.length).toBeGreaterThan(0);
     expect(prepareResult.witness.length).toBeGreaterThan(0);
 
-    // Extract normalizedClaimValues from JWT witness to pass to Show circuit.
-    // JWT 1k (maxMatches=4, maxClaims=2): w[1..2] = normalizedClaimValues
+    // Shared values Show must repeat, read from the private JWT witness.
     const maxClaims = JWT_PARAMS_1K.maxMatches - 2;
-    const normalizedClaimValues = jwtWitness.slice(1, 1 + maxClaims);
+    const valuesStart = CLAIM_VALUES_WITNESS_START["1k"];
+    const identityStart = CLAIM_IDENTITY_WITNESS_START["1k"];
+    const normalizedClaimValues = jwtWitness.slice(valuesStart, valuesStart + maxClaims);
+    const claimIdentifierHashes = jwtWitness.slice(identityStart, identityStart + maxClaims);
+    const revocationRegistry = createRevocationRegistry([1n, 2n, 3n]);
 
     const deviceSignature = signDeviceNonce(
       VERIFIER_NONCE,
       data.devicePrivateKeyHex,
     );
+    const issuerRegistry = createIssuerRegistry([ISSUER_PUBLIC_KEY]);
     const showInputs = buildShowCircuitInputs(
       DEFAULT_SHOW_PARAMS,
       VERIFIER_NONCE,
       deviceSignature,
       data.devicePublicKey,
-      { normalizedClaimValues },
+      {
+        normalizedClaimValues,
+        claimIdentifierHashes,
+        predicates: [],
+        revocation: buildRevocationWitness(
+          REVOCATION_SECRET_HEX,
+          REVOCATION_COMMITMENT,
+          revocationRegistry,
+        ),
+        issuer: buildIssuerMembershipInputs(
+          issuerPublicKeyToPoint(ISSUER_PUBLIC_KEY),
+          issuerRegistry.generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
+        ),
+      },
     );
 
     const showInputsJson = circuitInputsToJson(showInputs);
@@ -378,11 +413,17 @@ describe.skipIf(!checkArtifactsExist())(
     );
     expect(showResult.proof.length).toBeGreaterThan(0);
 
-    // JWT 1k (maxMatches=4, maxClaims=2): w[3]=KeyBindingX, w[4]=KeyBindingY.
-    // In the Show witness the verifier statement now occupies the public prefix
-    // (w[1..=28]), so the device key sits at w[29]=deviceKeyX, w[30]=deviceKeyY.
-    expect(jwtWitness[3]).toBe(showWitness[29]);
-    expect(jwtWitness[4]).toBe(showWitness[30]);
+    // Shared values match across circuits, in SHARED_LAYOUT order. JWT 1k:
+    // KeyBindingX/Y and RevocationCommitment[2] follow claimIdentifierHashes, and
+    // the private issuer key sits at w[JWT_1K_ISSUER_KEY_START..]. Show: deviceKeyX/Y
+    // at w[161..=162], issuerKeyX/Y at w[169..=170], revocationCommitment[2] at
+    // w[173..=174] (after issuerTreeDepth/Index; the siblings are optimized out).
+    const keyStart = identityStart + maxClaims;
+    expect(jwtWitness.slice(keyStart, keyStart + 2)).toEqual(showWitness.slice(161, 163));
+    expect(
+      jwtWitness.slice(JWT_1K_ISSUER_KEY_START, JWT_1K_ISSUER_KEY_START + 2),
+    ).toEqual(showWitness.slice(169, 171));
+    expect(jwtWitness.slice(keyStart + 2, keyStart + 4)).toEqual(showWitness.slice(173, 175));
 
     const presentResult = await bridge.present(
       preparePk,
@@ -408,18 +449,15 @@ describe.skipIf(!checkArtifactsExist())(
 
     expect(verifyResult.valid).toBe(true);
     expect(verifyResult.error).toBeUndefined();
-    // Show circuit public IO: expressionResult (1) + the bound verifier statement
-    // (messageHash + predicate program) = 28 values. The device key remains in
-    // the shared witness commitment, not a public output.
-    expect(verifyResult.showPublicValues.length).toBe(28);
-    // Prepare public IO is 2n + 2 for n = 2 claim slots: the issuer key
-    // (pubKeyX, pubKeyY) then decodeFlags and claimFormats. Claim values and the
-    // device key are private -- they used to hand the verifier the exact claim.
-    expect(verifyResult.preparePublicValues.length).toBe(6);
-    const provenIssuer = extractIssuerKeyFromPreparePublicValues(
-      verifyResult.preparePublicValues.map(parseScalar),
-    );
-    expect(provenIssuer).toEqual(issuerPublicKeyToPoint(ISSUER_PUBLIC_KEY));
+    // Show public IO: expressionResult, issuerRoot[2], revocationRoot[2], then the
+    // 155-value verifier statement. The device key, issuer key and revocation
+    // commitment stay in comm_W_shared.
+    expect(verifyResult.showPublicValues.length).toBe(160);
+    const showPv = verifyResult.showPublicValues.map(parseScalar);
+    expect(fromLimbs(showPv[1]!, showPv[2]!)).toBe(issuerRegistry.root);
+    expect(fromLimbs(showPv[3]!, showPv[4]!)).toBe(revocationRegistry.root);
+    // Prepare public IO is decodeFlags + claimFormats (2n); the issuer key is private.
+    expect(verifyResult.preparePublicValues.length).toBe(4);
   }, 900_000);
 },
 );

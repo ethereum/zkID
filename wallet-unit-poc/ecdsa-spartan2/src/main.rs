@@ -23,15 +23,18 @@ use ecdsa_spartan2::{
     paths::keys::{
         MDOC_INSTANCE, MDOC_PROOF, MDOC_PROVING_KEY, MDOC_VERIFYING_KEY, MDOC_WITNESS,
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
-        PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
-        SHOW_VERIFYING_KEY, SHOW_WITNESS,
+        PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_MDOC_PROVING_KEY,
+        SHOW_MDOC_VERIFYING_KEY, SHOW_PROOF, SHOW_PROVING_KEY, SHOW_VERIFYING_KEY, SHOW_WITNESS,
     },
     prove_circuit, prove_circuit_with_pk, reblind, reblind_with_loaded_data, run_circuit,
     save_keys, setup_circuit_keys, setup_circuit_keys_no_save, verify_circuit,
     verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
     E,
 };
-use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
+use ecdsa_spartan2::utils::{
+    calculate_jwt_output_indices, calculate_mdoc_output_indices,
+    issuer_root_from_show_public_values, revocation_root_from_show_public_values, ShowVariant,
+};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
 use tracing::info;
@@ -256,22 +259,10 @@ fn print_comparison_table(results: &[BenchmarkResults]) {
 /// `public_values[i]` is `witness[i + 1]`, so the 1-based layout indices are
 /// shifted by one here.
 ///
-/// Printed rather than checked: this pipeline has no trust store or policy to
-/// compare against. Applications that do have one can use
-/// `utils::check_issuer_key_binding` and compare the normalization against the
-/// formats their predicates expect.
-fn print_public_statement(
-    public_values: &[Scalar],
-    issuer_key_x_index: usize,
-    flags: Range<usize>,
-    formats: Range<usize>,
-) {
+/// Printed rather than checked: this pipeline has no policy to compare against.
+/// The issuer is hidden; see [`print_issuer_root`].
+fn print_public_statement(public_values: &[Scalar], flags: Range<usize>, formats: Range<usize>) {
     let at = |i: usize| public_values.get(i.wrapping_sub(1));
-
-    match (at(issuer_key_x_index), at(issuer_key_x_index + 1)) {
-        (Some(x), Some(y)) => println!("  issuer key: x={x:?}\n              y={y:?}"),
-        _ => println!("  issuer key: <unavailable: proof exposed too few public values>"),
-    }
 
     // Flags and format codes are small integers; print the trailing hex digits
     // of each scalar rather than all 64.
@@ -292,6 +283,25 @@ fn print_public_statement(
         render(flags),
         render(formats),
     );
+}
+
+/// Print the issuer registry root the Show proof was built against. A verifier
+/// must check it is accepted on chain (`OpenACIssuerRegistry.isValidRoot`).
+fn print_issuer_root(show_public_values: &[Scalar]) {
+    match issuer_root_from_show_public_values(show_public_values) {
+        Ok(root) => println!("  issuer root: 0x{}", root.to_str_radix(16)),
+        Err(e) => println!("  issuer root: <unavailable: {e}>"),
+    }
+}
+
+/// Print the revocation registry root the `show` proof was built against. A
+/// verifier must check it is accepted on chain (`OpenACRevocationRegistry.isValidRoot`).
+/// There is one registry for all issuers, so the root does not reveal the issuer.
+fn print_revocation_root(show_public_values: &[Scalar]) {
+    match revocation_root_from_show_public_values(show_public_values) {
+        Ok(root) => println!("  revocation root: 0x{}", root.to_str_radix(16)),
+        Err(e) => println!("  revocation root: <unavailable: {e}>"),
+    }
 }
 
 /// Prove + reblind + verify pipeline using pre-existing keys on disk.
@@ -428,7 +438,6 @@ fn run_prove_pipeline(
     let jwt_layout = calculate_jwt_output_indices(size);
     print_public_statement(
         &prepare_public_values,
-        jwt_layout.issuer_key_x_index,
         jwt_layout.decode_flags_range(),
         jwt_layout.claim_formats_range(),
     );
@@ -439,6 +448,8 @@ fn run_prove_pipeline(
     info!("Verifying Show proof...");
     let t0 = Instant::now();
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    print_issuer_root(&show_public_values);
+    print_revocation_root(&show_public_values);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
     if !show_public_values.is_empty() {
@@ -527,16 +538,16 @@ fn run_mdoc_prove_pipeline(
 
     let mdoc_pk_path = path_config.key_path(MDOC_PROVING_KEY);
     let mdoc_vk_path = path_config.key_path(MDOC_VERIFYING_KEY);
-    let show_pk_path = path_config.key_path(SHOW_PROVING_KEY);
-    let show_vk_path = path_config.key_path(SHOW_VERIFYING_KEY);
+    let show_pk_path = path_config.key_path(SHOW_MDOC_PROVING_KEY);
+    let show_vk_path = path_config.key_path(SHOW_MDOC_VERIFYING_KEY);
 
     if !mdoc_pk_path.exists() || !mdoc_vk_path.exists() {
         return Err("MDOC keys not found. Run: cargo run --release -- mdoc setup".into());
     }
     if !show_pk_path.exists() || !show_vk_path.exists() {
         return Err(format!(
-            "Show keys not found for size {size}.\n\
-             Run:  cargo run --release -- show setup --size {size}"
+            "show_mdoc keys not found for size {size}.\n\
+             Run:  cargo run --release -- mdoc setup --size {size}"
         ));
     }
 
@@ -591,7 +602,8 @@ fn run_mdoc_prove_pipeline(
 
     info!("Proving Show circuit (mdoc flow)...");
     let t0 = Instant::now();
-    let show_circuit = ShowCircuit::new(path_config.clone(), Some(show_mdoc_input.clone()));
+    let show_circuit = ShowCircuit::new(path_config.clone(), Some(show_mdoc_input.clone()))
+        .with_variant(ShowVariant::Mdoc);
     prove_circuit_with_pk(
         show_circuit,
         &show_pk,
@@ -632,7 +644,6 @@ fn run_mdoc_prove_pipeline(
         calculate_mdoc_output_indices(ecdsa_spartan2::circuits::mdoc_circuit::MDOC_MAX_CLAIMS);
     print_public_statement(
         &mdoc_public_values,
-        mdoc_layout.issuer_key_x_index,
         mdoc_layout.value_types_range(),
         mdoc_layout.claim_flags_range(),
     );
@@ -642,6 +653,7 @@ fn run_mdoc_prove_pipeline(
     info!("Verifying Show proof...");
     let t0 = Instant::now();
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    print_issuer_root(&show_public_values);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
     if !show_public_values.is_empty() {
@@ -926,6 +938,16 @@ fn execute_mdoc(action: CircuitAction, options: CommandOptions) {
                 path_config.key_path(MDOC_PROVING_KEY),
                 path_config.key_path(MDOC_VERIFYING_KEY),
             );
+            if path_config.r1cs_path(ShowVariant::Mdoc.circuit_name()).exists() {
+                info!("Setting up keys for show_mdoc");
+                setup_circuit_keys(
+                    ShowCircuit::new(path_config.clone(), None).with_variant(ShowVariant::Mdoc),
+                    path_config.key_path(SHOW_MDOC_PROVING_KEY),
+                    path_config.key_path(SHOW_MDOC_VERIFYING_KEY),
+                );
+            } else {
+                eprintln!("show_mdoc not compiled; skipping its keys (run `yarn compile:show:mdoc`).");
+            }
         }
         CircuitAction::Run => {
             let circuit = MdocCircuit::new(path_config, options.input.clone());

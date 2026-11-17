@@ -17,10 +17,16 @@ import {
   OpenAC,
   compilePredicateExpression,
   requiredNormalization,
+  createIssuerRegistry,
+  issuerCommitment,
 } from "openac-sdk";
 
 const openac = await OpenAC.init();
 const keys = await openac.loadKeysFromUrl("1k");
+const issuerPublicKey = { kty: "EC", crv: "P-256", x: "...", y: "..." } as const;
+// The holder's revocation secret and the shared revocation registry, synced and
+// checked against the published root (see "Revocation" below).
+const revocation = { secret: revocationSecret, registry: revocationRegistry };
 
 const predicate = {
   claim: "roc_birthday",
@@ -32,16 +38,23 @@ const predicate = {
 const precomputed = await openac.precompute({
   jwt: sdJwtToken,
   disclosures: ["WyJzYWx0...", "..."],
-  issuerPublicKey: { kty: "EC", crv: "P-256", x: "...", y: "..." },
+  issuerPublicKey,
   keys,
   predicates: predicate,
 });
+
+// Issuer hiding: prove the issuer is in the registry, not which one it is.
+// Mirror the on-chain OpenACIssuerRegistry (see ../solidity), then check its root.
+const issuerRegistry = createIssuerRegistry(approvedIssuerKeys);
+const issuerProof = issuerRegistry.generateProof(issuerCommitment(issuerPublicKey));
 
 // Present per verifier session.
 const proof = await openac.present({
   precomputed,
   verifierNonce: "challenge-123",
   devicePrivateKey: "0xabcdef...",
+  issuerProof,
+  revocation,
   keys,
   predicates: predicate,
 });
@@ -56,12 +69,13 @@ const result = await openac.verify(proof, keys.verifyingKeys(), {
   predicates: compiled.predicates,
   logicExpression: compiled.logicExpression,
   claimNormalization: requiredNormalization(compiled),
+  // The issuer is hidden; only the registry root is public. Accept it on chain.
+  isValidIssuerRoot: (root) => issuerRegistryContract.read.isValidRoot([root]),
+  // One revocation registry for all issuers; accept its root on chain too.
+  isValidRevocationRoot: (root) => revocationRegistryContract.read.isValidRoot([root]),
 });
 
-// verify() reports the issuer key rather than judging it, so check it against
-// the issuers you trust. See "Verifier" below.
-if (!result.valid || !result.issuerKey) throw new Error(result.error);
-if (!myTrustStore.isTrustedIssuer(result.issuerKey.jwk)) throw new Error("untrusted issuer");
+if (!result.valid) throw new Error(result.error);
 
 console.log(result.expressionResult);
 ```
@@ -111,6 +125,40 @@ The prover chooses this normalization, so it is part of what a verifier must che
 
 Reuse a `PrecomputedCredential` across sessions only for predicates over the same claims in the same formats; otherwise call `precompute()` again. If your verifiers use varying policies, pass the union of the claims and formats you expect to serve to `precompute()`. Each extra decoded claim costs constraints, so precompute for the policies you serve rather than for the whole credential.
 
+## Revocation
+
+The credential carries `revocation_commitment`: `C = sha256(r)` as 32 bytes base64url, where `r` is a 32-byte secret only the holder knows. `present()` proves `sha256(r) = C` and that `C` is not revoked, and the proof outputs the registry root it was built against (`0` for an empty registry).
+
+There is a single revocation registry shared by all issuers. With one registry per issuer, the revocation root in a proof would name the issuer and undo [issuer hiding](#issuer-hiding).
+
+```typescript
+import {
+  generateRevocationSecret,
+  computeRevocationCommitment,
+  encodeRevocationCommitment,
+  revocationRegistryFromLeaves,
+  acceptRevocationRoots,
+} from "openac-sdk";
+
+// Holder, at issuance: keep r private, send C to the issuer.
+const secret = generateRevocationSecret();
+const commitment = computeRevocationCommitment(secret);
+
+// Issuer: sign it into the payload, revoke by inserting C into the shared registry.
+payload.revocation_commitment = encodeRevocationCommitment(commitment);
+
+// Holder, at presentation: rebuild the registry (e.g. from the contract's getLeaf).
+const registry = revocationRegistryFromLeaves(leaves);
+if (registry.root !== publishedRoot) throw new Error("stale registry");
+await openac.present({ ...request, revocation: { secret, registry } });
+
+// Verifier: accept only roots of the shared registry, e.g. OpenACRevocationRegistry.isValidRoot
+// on chain, or a fixed set of known roots.
+const expected = { ...statement, isValidRevocationRoot: acceptRevocationRoots([publishedRoot]) };
+```
+
+The registry is [`@coordination-network/revocation-registry`](https://www.npmjs.com/package/@coordination-network/revocation-registry) with its `sha256Scheme`, exported here as `revocationSha256Scheme` (`createRevocationRegistry`), matching the [`solidity`](../solidity/README.md) contracts. `present()` throws `CREDENTIAL_REVOKED` for a revoked commitment. Max tree depth is 10.
+
 ## Verifier
 
 A verifier only needs the two verifying keys, not the proving keys.
@@ -138,45 +186,33 @@ const result = await openac.verify(
     predicates: compiled.predicates,
     logicExpression: compiled.logicExpression,
     claimNormalization: requiredNormalization(compiled),
+    isValidIssuerRoot,                        // (root): root valid in the issuer registry
+    isValidRevocationRoot,                    // (root): root valid in the shared revocation registry
   },
 );
-// result.valid            proofs verified, bound to this nonce and policy
+// result.valid            proofs verified, bound to this nonce, policy and accepted roots
 // result.expressionResult  boolean output of the predicate expression
-// result.issuerKey         the key the credential was signed under; check it
+// result.issuerRoot        the issuer registry root the proof was built against
+// result.revocationRoot    the accepted revocation root
 // result.deviceKey         always null; binding flows through comm_W_shared
 ```
 
 `verify` passes when all of these hold:
 
-1. **Shared commitment**: byte-equality of `comm_W_shared` between the Prepare and Show instances, tying both proofs to the same underlying credential.
+1. **Shared commitment**: byte-equality of `comm_W_shared` between the Prepare and Show instances, tying both proofs to the same underlying credential (including its issuer key).
 2. **Both SNARKs verify** against the supplied verifying keys.
 3. **Statement binding**: the Show proof's public values must equal what the verifier recomputes from its own `nonce` (freshness/replay) and compiled policy (no policy swap).
 4. **Claim normalization**: the `decodeFlags` and `claimFormats` in the Prepare proof's public IO must match what the policy requires, so the policy was evaluated over the credential's claim values in the formats it compares against rather than over `0` or a differently normalized value.
+5. **Issuer root**: `isValidIssuerRoot(issuerRoot)` returns true. It is required: without it, `valid` would only mean "signed by some P-256 key", since a holder can build a registry of their own key.
+6. **Revocation**: `isValidRevocationRoot(revocationRoot)` returns true. There is one revocation registry for all issuers, so the root does not identify the issuer.
 
-### Issuer trust is yours to enforce
+## Issuer hiding
 
-Note what the list above does **not** include: who issued the credential.
+The issuer key never appears in a proof. Show derives the leaf `sha256(be32(x) || be32(y))` from the issuer key it shares with Prepare, proves it is in a SHA-256 [LeanIMT](https://zkkit.pse.dev/classes/_zk_kit_lean_imt.LeanIMT.html) of approved issuers (max depth 8) and outputs only the root, as `[hi, lo]` 128-bit limbs (`root = hi * 2^128 + lo`).
 
-The circuit verifies the credential signature against whatever issuer key was supplied at proving time. A holder can generate their own P-256 key, sign a credential with any claim values they want, and produce a presentation that verifies with `valid: true` and `expressionResult: true`.
-
-`result.issuerKey` is the key the proof was built under. It is read out of the Prepare proof's public IO, so a prover cannot report one key while proving under another. The SDK reports it and leaves the decision to you, so you can resolve trust however your deployment needs:
-
-```typescript
-const result = await openac.verify(proof, vks, expected);
-if (!result.valid || !result.issuerKey) return reject(result.error);
-
-// issuerKey is given in both forms; use whichever matches your trust store.
-// It is non-null whenever valid is true; the check above narrows the type.
-const { x, y, jwk } = result.issuerKey;   // bigint coords + canonical P-256 JWK
-
-const issuer = await myTrustStore.lookup(jwk);   // your logic, async is fine
-if (!issuer || issuer.revoked) return reject("untrusted issuer");
-
-// Only now is expressionResult meaningful.
-return result.expressionResult;
-```
-
-Resolve the expected issuer from your own configuration, by expected `iss`/`kid`/credential type, rather than from anything the holder sent alongside the proof.
+- **Registry**: [`OpenACIssuerRegistry`](../solidity) on chain; `createIssuerRegistry` (a [`@coordination-network/issuer-registry`](https://www.npmjs.com/package/@coordination-network/issuer-registry) `IssuerRegistry` with its `sha256Scheme`, exported here as `issuerSha256Scheme`) off chain. Compare the mirror's `root` with the contract's `getIssuerRoot()` before building proofs.
+- **Holder**: pass `issuerProof` to `present()`. It must be for the credential's issuer.
+- **Verifier**: pass `isValidIssuerRoot` to `verify()` (required), e.g. the contract's `isValidRoot`, or `acceptIssuerRoots([...])` for fixed roots. A holder can build a registry of their own key, so this check is what makes the issuer trusted.
 
 ## Configuration
 
@@ -200,7 +236,8 @@ const cred = generateDummyCredential({
     { key: "roc_max", value: "0950101" },
   ],
 });
-// cred.jwt, cred.disclosures, cred.issuerPublicKey, cred.devicePrivateKeyHex
+// cred.jwt, cred.disclosures, cred.issuerPublicKey, cred.devicePrivateKeyHex,
+// cred.revocationSecretHex, cred.revocationCommitment
 ```
 
 Deterministic keys; JWT is sized to fit the chosen circuit slot.
@@ -217,7 +254,7 @@ Deterministic keys; JWT is sized to fit the chosen circuit slot.
 | `openac.verify(proof, vks, expected)` | `Promise<VerificationResult>` |
 | `openac.verifyProof(serialized, vks, expected)` | `Promise<VerificationResult>` |
 
-`expected` is an `ExpectedStatement`: `{ nonce, predicates, logicExpression, claimNormalization }`. All four come from `compilePredicateExpression` plus your own nonce. Every verify call returns `issuerKey` for the caller to check. See [Issuer trust is yours to enforce](#issuer-trust-is-yours-to-enforce).
+`expected` is an `ExpectedStatement`: `{ nonce, predicates, logicExpression, claimNormalization, isValidIssuerRoot, isValidRevocationRoot }`. The first four come from `compilePredicateExpression` plus your own nonce; the root checks come from your deployment (e.g. the registry contracts, or `acceptIssuerRoots` / `acceptRevocationRoots` for fixed roots). A root check that returns false or throws fails verification. See [Issuer hiding](#issuer-hiding) and [Revocation](#revocation).
 
 `size` is `"1k" | "2k" | "4k" | "8k"`. `precompute` auto-picks the smallest size that fits the JWT.
 

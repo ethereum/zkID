@@ -7,9 +7,23 @@ This PoC currently supports the following credential formats:
 | **SD-JWT** (ES256) | Implemented | [openac-sdk](./openac-sdk/README.md) |
 | **mDOC / mDL** (ISO 18013-5) | Implemented | [circom/docs/mdoc-spec.md](./circom/docs/mdoc-spec.md) |
 
+### Issuer Hiding
+
+Presentations never reveal the issuer. Show proves the issuer key is in a SHA-256 LeanIMT of approved issuers and outputs only its root, which a verifier checks on chain with `OpenACIssuerRegistry.isValidRoot` ([solidity](./solidity/README.md)). See [openac-sdk](./openac-sdk/README.md#issuer-hiding).
+
 ### Call for Feedback
 
 We're actively scoping support for additional credential formats (e.g. W3C VC-JWT, BBS+, EUDI ARF profiles). If your use case needs a format not listed above, please open an issue at [privacy-ethereum/zkID/issues](https://github.com/privacy-ethereum/zkID/issues)
+
+## Revocation
+
+SD-JWT credentials carry `revocation_commitment`: `C = sha256(r)` (base64url, 32 bytes), where `r` is a 32-byte secret only the holder knows. The issuer signs `C` into the credential and revokes it by inserting `C` into a SHA-256 [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs) registry. There is one registry for all issuers: with one per issuer, the revocation root in a presentation would identify the issuer and undo issuer hiding.
+
+- The JWT circuit extracts the signed `C` and shares it with Show through `comm_W_shared`.
+- The Show circuit proves `sha256(r) = C` and that `C` is not in the tree, and outputs the root (`0` for an empty registry). Max tree depth is 10.
+- The verifier accepts the proof only if the root is valid, e.g. `OpenACRevocationRegistry.isValidRoot` on the [registry contract](./solidity/README.md).
+
+MDOC keeps a Show variant without revocation (`show_mdoc`), which still proves issuer hiding. See the [SDK](./openac-sdk/README.md#revocation) for usage.
 
 ## Setup
 

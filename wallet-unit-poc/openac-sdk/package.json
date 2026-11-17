@@ -34,6 +34,8 @@
     "prepublishOnly": "npm run build:all"
   },
   "dependencies": {
+    "@coordination-network/issuer-registry": "0.3.0",
+    "@coordination-network/revocation-registry": "0.3.0",
     "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.7.1"
   },

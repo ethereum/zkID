@@ -5,6 +5,8 @@ import { Field } from "@noble/curves/abstract/modular";
 import { base64urlToBigInt } from "../utils.js";
 import { InputError } from "../errors.js";
 import { buildShowStatementFields } from "./show-statement.js";
+import type { RevocationWitness } from "../revocation.js";
+import type { IssuerMembershipInputs } from "../issuer-hiding.js";
 import type {
   ShowCircuitParams,
   ShowCircuitInputs,
@@ -69,6 +71,10 @@ export interface ShowInputOptions {
   predicates?: PredicateSpec[];
   /** Postfix logic expression as [tokenType, tokenValue] pairs. Defaults to REF(0). */
   logicExpression?: Array<{ type: number; value: number }>;
+  /** Issuer registry membership, from `buildIssuerMembershipInputs`. Required. */
+  issuer?: IssuerMembershipInputs;
+  /** Revocation inputs, from `buildRevocationWitness`. Required when revocation is compiled in. */
+  revocation?: RevocationWitness;
 }
 
 export function buildShowCircuitInputs(
@@ -148,7 +154,15 @@ export function buildShowCircuitInputs(
     logicExpr,
   );
 
+  if (!options.issuer) {
+    throw new InputError("MISSING_ISSUER_INPUTS", "The Show circuit requires issuer membership inputs");
+  }
+  if (params.revocationMaxDepth > 0 && !options.revocation) {
+    throw new InputError("MISSING_REVOCATION_INPUTS", "The Show circuit requires revocation inputs");
+  }
+
   return {
+    ...(params.revocationMaxDepth > 0 ? options.revocation : {}),
     deviceKeyX,
     deviceKeyY,
     sig_r: sigDecoded.r,
@@ -168,6 +182,7 @@ export function buildShowCircuitInputs(
     tokenTypes: statement.tokenTypes,
     tokenValues: statement.tokenValues,
     exprLen: statement.exprLen,
+    ...options.issuer,
   };
 }
 

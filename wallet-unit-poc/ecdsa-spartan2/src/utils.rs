@@ -1,5 +1,6 @@
 use bellpepper_core::SynthesisError;
-use num_bigint::BigInt;
+use ff::PrimeField;
+use num_bigint::{BigInt, Sign};
 use serde_json::Value;
 use std::{collections::HashMap, ops::Range, str::FromStr};
 
@@ -62,6 +63,7 @@ pub fn parse_jwt_inputs(
         ("messageLength", FieldParser::U64Scalar),
         ("periodIndex", FieldParser::U64Scalar),
         ("matchesCount", FieldParser::U64Scalar),
+        ("revocationCommitmentIndex", FieldParser::U64Scalar),
         // Array fields
         ("message", FieldParser::BigIntArray),
         ("matchIndex", FieldParser::U64Array),
@@ -79,8 +81,10 @@ pub fn parse_jwt_inputs(
 
 /// Parse Show circuit inputs from JSON.
 ///
-/// Matches the current `Show(nClaims, maxPredicates, maxLogicTokens, valueBits)`
-/// template: predicates + RPN logic expression replaced the old
+/// Matches the current
+/// `Show(nClaims, maxPredicates, maxLogicTokens, valueBits, revocationMaxDepth)`
+/// template. The revocation inputs are parsed when present (`show`) and absent
+/// for `show_mdoc`. Predicates + an RPN logic expression replaced the old
 /// `claim/currentYear/currentMonth/currentDay` interface.
 ///
 /// Predicate RHS encoding uses a single `predicateRhsValues[]` array:
@@ -117,9 +121,28 @@ pub fn parse_show_inputs(
         ("predicateRhsClaimNameLens", FieldParser::BigIntArray),
         ("tokenTypes", FieldParser::BigIntArray),
         ("tokenValues", FieldParser::BigIntArray),
+        // Issuer hiding: key shared from Prepare, plus its LeanIMT membership proof.
+        ("issuerKeyX", FieldParser::BigIntScalar),
+        ("issuerKeyY", FieldParser::BigIntScalar),
+        ("issuerTreeDepth", FieldParser::BigIntScalar),
+        ("issuerTreeIndex", FieldParser::BigIntScalar),
+        ("issuerTreeSiblings", FieldParser::BigInt2DArray),
+    ];
+    let revocation_defs: &[(&str, FieldParser)] = &[
+        ("revocationCommitment", FieldParser::BigIntArray),
+        ("revocationSecret", FieldParser::BigIntArray),
+        ("revocationLeafValue", FieldParser::BigIntArray),
+        ("revocationLeafNextValue", FieldParser::BigIntArray),
+        ("revocationLeafIndex", FieldParser::BigIntScalar),
+        ("revocationDepth", FieldParser::BigIntScalar),
+        ("revocationSiblings", FieldParser::BigInt2DArray),
     ];
 
-    parse_inputs(json_value, field_defs)
+    let mut inputs = parse_inputs(json_value, field_defs)?;
+    if json_value.get("revocationCommitment").is_some() {
+        inputs.extend(parse_inputs(json_value, revocation_defs)?);
+    }
+    Ok(inputs)
 }
 
 /// Convert a single BigInt to Scalar
@@ -387,21 +410,18 @@ fn parse_2d_bigint_array(json: &Value, key: &str) -> Result<Vec<BigInt>, String>
 /// 1. `normalizedClaimValues[n_claims]` where `n_claims = maxMatches - 2`
 /// 2. `KeyBindingX`
 /// 3. `KeyBindingY`
-/// 4. `pubKeyX`, `pubKeyY`, the issuer key the ES256 check ran against
-/// 5. `decodeFlags[n_claims]`, `claimFormats[n_claims]`, which say how each
+/// 4. `decodeFlags[n_claims]`, `claimFormats[n_claims]`, which say how each
 ///    entry of `normalizedClaimValues` was produced
 ///
 /// all declared public in `circom/circuits/main/jwt*.circom`.
 ///
-/// The circuit has no public *outputs*: claim values would reveal the attribute
-/// and the device key would link every presentation, so both travel privately
-/// via `comm_W_shared`. Public inputs therefore start at witness[1]:
-///   witness[1] = main.pubKeyX
-///   witness[2] = main.pubKeyY
-///   witness[3..3+n]   = main.decodeFlags[..]
-///   witness[3+n..3+2n] = main.claimFormats[..]
-/// with normalizedClaimValues and KeyBindingX/Y in the private region at
-/// `CircuitSize::claim_values_witness_start`.
+/// The circuit has no public *outputs*: claim values would reveal the attribute,
+/// the device key would link every presentation and the issuer key would reveal
+/// the issuer, so all three travel privately via `comm_W_shared`:
+///   witness[1..1+n]    = main.decodeFlags[..]
+///   witness[1+n..1+2n] = main.claimFormats[..]
+/// with pubKeyX/Y at `CircuitSize::issuer_key_witness_start` and
+/// normalizedClaimValues and KeyBindingX/Y at `CircuitSize::claim_values_witness_start`.
 ///
 /// Offsets re-derived by `tests/witness_layout.rs`.
 #[derive(Debug, Clone, Copy)]
@@ -417,9 +437,11 @@ pub struct JwtOutputLayout {
     pub claim_identifier_hashes_start: usize,
     pub keybinding_x_index: usize,
     pub keybinding_y_index: usize,
-    /// Witness index of the public issuer key coordinate `pubKeyX`.
+    /// Witness index of `RevocationCommitment[0]` (hi limb); the lo limb follows.
+    pub revocation_commitment_index: usize,
+    /// Witness index of the private issuer key coordinate `pubKeyX` (shared).
     pub issuer_key_x_index: usize,
-    /// Witness index of the public issuer key coordinate `pubKeyY`.
+    /// Witness index of the private issuer key coordinate `pubKeyY` (shared).
     pub issuer_key_y_index: usize,
     /// Witness index of `decodeFlags[0]`. The array is `claim_values_len` long.
     pub decode_flags_start: usize,
@@ -445,22 +467,25 @@ impl JwtOutputLayout {
         self.claim_formats_start..self.claim_formats_start + self.claim_values_len
     }
 
-    /// Public IO: issuer pubKeyX/Y + decodeFlags + claimFormats.
+    /// Public IO: decodeFlags + claimFormats.
     ///
-    /// Claim values and the device key are deliberately absent: the former would
-    /// reveal the attribute, the latter would link every presentation made from
-    /// this credential. Both travel privately via `comm_W_shared`.
+    /// Claim values, the device key and the issuer key are deliberately absent
+    /// and travel privately via `comm_W_shared`.
     pub fn num_public(&self) -> usize {
-        2 * self.claim_values_len + 2
+        2 * self.claim_values_len
     }
 
     /// Witness indices the shared partition must equal, in the order
-    /// `PrepareCircuit::shared` pushes them:
-    /// [KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes..].
+    /// `PrepareCircuit::shared` pushes them (see [`SHARED_LAYOUT`]).
     pub fn shared_witness_indices(&self) -> Vec<usize> {
         let mut idx = vec![self.keybinding_x_index, self.keybinding_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
+        idx.extend([self.issuer_key_x_index, self.issuer_key_y_index]);
+        idx.extend([
+            self.revocation_commitment_index,
+            self.revocation_commitment_index + 1,
+        ]);
         idx
     }
 }
@@ -475,10 +500,12 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
     let claim_identifier_hashes_start = size.claim_identifier_hashes_witness_start();
     let keybinding_x_index = claim_identifier_hashes_start + claim_values_len;
     let keybinding_y_index = keybinding_x_index + 1;
+    // Declared right after KeyBindingY in jwt.circom.
+    let revocation_commitment_index = keybinding_y_index + 1;
+    let issuer_key_x_index = size.issuer_key_witness_start();
+    let issuer_key_y_index = issuer_key_x_index + 1;
     // No public outputs, so the public inputs occupy witness[1..] directly.
-    let issuer_key_x_index = 1;
-    let issuer_key_y_index = 2;
-    let decode_flags_start = 3;
+    let decode_flags_start = 1;
     let claim_formats_start = decode_flags_start + claim_values_len;
 
     JwtOutputLayout {
@@ -487,6 +514,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
         claim_identifier_hashes_start,
         keybinding_x_index,
         keybinding_y_index,
+        revocation_commitment_index,
         issuer_key_x_index,
         issuer_key_y_index,
         decode_flags_start,
@@ -494,113 +522,148 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
     }
 }
 
-/// Compare the issuer key in a credential proof's public values (JWT or MDOC)
-/// against the one the caller expects.
-///
-/// `public_values[i]` is `witness[i + 1]`, so the caller passes the layout's
-/// `issuer_key_x_index` and the key is read from there. The key is not at a
-/// fixed offset from the end: `decodeFlags`/`claimFormats` (JWT) and
-/// `valueTypes`/`claimFlags` (MDOC) are public inputs declared after it.
-///
-/// Verifying applications call this to establish issuer identity, which proof
-/// verification alone does not: the circuit checks the credential signature
-/// against whatever key was supplied at proving time.
-///
-/// Returns an error when the proof carries a key other than `expected`.
-pub fn check_issuer_key_binding(
+/// Order of the shared witness segment, identical in Prepare/MDOC and Show:
+/// `[KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes.., issuerKeyX, issuerKeyY,
+///   RevocationCommitment[0], RevocationCommitment[1]]`. The revocation commitment is
+/// present only in the JWT flow (`show`); MDOC pairs with `show_mdoc`, which has none.
+pub const SHARED_LAYOUT: &str = "KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes.., \
+     issuerKeyX, issuerKeyY, RevocationCommitment[0..2] (JWT only)";
+
+/// Recombine a `[hi, lo]` pair of 128-bit limbs from a Show proof's public values,
+/// starting at witness index `witness_index`, into the 256-bit root (`hi * 2^128 + lo`).
+fn root_from_show_public_values(
     public_values: &[Scalar],
-    issuer_key_x_index: usize,
-    expected_x: BigInt,
-    expected_y: BigInt,
-) -> Result<(), String> {
-    let start = issuer_key_x_index
-        .checked_sub(1)
-        .ok_or_else(|| "issuer key index must be a 1-based witness index".to_string())?;
-
-    if public_values.len() < start + 2 {
-        return Err(format!(
-            "proof exposes {} public values, expected at least {} (issuer pubKeyX, pubKeyY at \
-             witness index {})",
-            public_values.len(),
-            start + 2,
-            issuer_key_x_index,
-        ));
-    }
-
-    let expected = [expected_x, expected_y]
-        .into_iter()
-        .map(|v| bigint_to_scalar(v).map_err(|e| format!("invalid expected issuer key: {e:?}")))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let proven = &public_values[start..start + 2];
-    if proven != expected.as_slice() {
-        return Err(
-            "untrusted issuer: the credential was signed by a key that is not the expected \
-             issuer key"
-                .to_string(),
-        );
-    }
-    Ok(())
+    witness_index: usize,
+    what: &str,
+) -> Result<BigInt, String> {
+    let limb = |i: usize| -> Result<BigInt, String> {
+        let v = public_values
+            .get(i)
+            .ok_or_else(|| format!("show proof exposes {} public values", public_values.len()))?;
+        let limb = BigInt::from_bytes_le(Sign::Plus, v.to_repr().as_ref());
+        if limb.bits() > 128 {
+            return Err(format!("{what} limb exceeds 128 bits"));
+        }
+        Ok(limb)
+    };
+    // public_values[i] is witness[i + 1].
+    let hi = limb(witness_index - 1)?;
+    let lo = limb(witness_index)?;
+    Ok((hi << 128) + lo)
 }
 
-/// Show circuit template parameters (`Show(nClaims, maxPredicates, maxLogicTokens, valueBits)`).
-/// Fixed across all VC sizes: the Show circuit is always `Show(2, 2, 8, 64)`
-/// (see `circom/circuits.json`), so only `nClaims` varies with the JWT circuit
-/// and it is always `2` because every JWT size uses `maxMatches = 4`.
+/// Recombine the Show proof's `issuerRoot[hi, lo]` limbs into the 256-bit
+/// issuer registry root (`hi * 2^128 + lo`), as stored on chain.
+pub fn issuer_root_from_show_public_values(public_values: &[Scalar]) -> Result<BigInt, String> {
+    root_from_show_public_values(public_values, SHOW_ISSUER_ROOT_INDEX, "issuer root")
+}
+
+/// Recombine the `show` proof's `revocationRoot[hi, lo]` limbs into the 256-bit
+/// revocation registry root (`0` for an empty registry).
+pub fn revocation_root_from_show_public_values(public_values: &[Scalar]) -> Result<BigInt, String> {
+    root_from_show_public_values(public_values, SHOW_REVOCATION_ROOT_INDEX, "revocation root")
+}
+
+/// Show circuit template parameters
+/// (`Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth, revocationMaxDepth)`),
+/// fixed across all VC sizes (see `circom/circuits.json`): `show` is
+/// `Show(2, 2, 8, 64, 8, 10)` and `show_mdoc` is `Show(2, 2, 8, 64, 8, 0)`. `nClaims`
+/// is always `2` because every JWT size uses `maxMatches = 4`.
 pub const SHOW_MAX_PREDICATES: usize = 2;
 pub const SHOW_MAX_LOGIC_TOKENS: usize = 8;
 /// Fixed byte width an attribute name is hashed over (Show NAME_ID_LEN in show.circom).
 pub const SHOW_NAME_ID_LEN: usize = 31;
+/// Max issuer registry depth (Show `maxIssuerDepth`), at most 2^8 issuers.
+pub const SHOW_MAX_ISSUER_DEPTH: usize = 8;
+/// Max LeanIMT+ depth of the revocation tree in the `show` circuit.
+pub const SHOW_REVOCATION_MAX_DEPTH: usize = 10;
+/// Witness index of `issuerRoot[0]` (hi limb); `issuerRoot[1]` (lo) follows.
+pub const SHOW_ISSUER_ROOT_INDEX: usize = 2;
+/// Witness index of `revocationRoot[0]` (hi limb) in `show`; `revocationRoot[1]` follows.
+pub const SHOW_REVOCATION_ROOT_INDEX: usize = 4;
 
-/// Number of public IO signals of the Show circuit.
-///
-/// The verifier statement is bound into the proof's public IO (see
-/// `circom/circuits/main/show.circom`). Circom lays the public signals out as a
-/// contiguous witness prefix `witness[1..=SHOW_NUM_PUBLIC]`, in declaration order:
-///   [0] expressionResult (output)
-///   [1] messageHash
-///   [2] predicateLen
-///   [3..]  predicateClaimRefs[maxPredicates]
-///          predicateOps[maxPredicates]
-///          predicateRhsIsRef[maxPredicates]
-///          predicateRhsValues[maxPredicates]
-///          predicateClaimNames[maxPredicates][NAME_ID_LEN]
-///          predicateClaimNameLens[maxPredicates]
-///          predicateRhsClaimNames[maxPredicates][NAME_ID_LEN]
-///          predicateRhsClaimNameLens[maxPredicates]
-///          tokenTypes[maxLogicTokens]
-///          tokenValues[maxLogicTokens]
-///          exprLen
-/// = 4 + 6*maxPredicates + 2*maxPredicates*NAME_ID_LEN + 2*maxLogicTokens
-///   (maxPredicates=2, maxLogicTokens=8, NAME_ID_LEN=31: 4 + 12 + 124 + 16 = 156).
+/// Number of public inputs of the Show circuit: the verifier statement
+/// (messageHash + predicate program), in declaration order:
+///   messageHash, predicateLen,
+///   predicateClaimRefs[maxPredicates], predicateOps[maxPredicates],
+///   predicateRhsIsRef[maxPredicates], predicateRhsValues[maxPredicates],
+///   predicateClaimNames[maxPredicates][NAME_ID_LEN], predicateClaimNameLens[maxPredicates],
+///   predicateRhsClaimNames[maxPredicates][NAME_ID_LEN], predicateRhsClaimNameLens[maxPredicates],
+///   tokenTypes[maxLogicTokens], tokenValues[maxLogicTokens], exprLen
 ///
 /// The attribute names are public so the verifier sees (and pins) which attribute
 /// each predicate operand was bound to; the circuit hashes them to the identity.
-pub const SHOW_NUM_PUBLIC: usize = 4
+pub const SHOW_STATEMENT_LEN: usize = 3
     + 6 * SHOW_MAX_PREDICATES
     + 2 * SHOW_MAX_PREDICATES * SHOW_NAME_ID_LEN
     + 2 * SHOW_MAX_LOGIC_TOKENS;
 
+/// Number of public IO signals of the `show` circuit (with revocation):
+/// `expressionResult`, `issuerRoot[2]`, `revocationRoot[2]`, then the verifier
+/// statement (5 + 155 = 160).
+pub const SHOW_NUM_PUBLIC: usize = 5 + SHOW_STATEMENT_LEN;
+
+/// Which compiled Show circuit to use. The SD-JWT flow proves revocation
+/// (`show`); the MDOC flow has no revocation commitment (`show_mdoc`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShowVariant {
+    #[default]
+    Jwt,
+    Mdoc,
+}
+
+impl ShowVariant {
+    pub fn circuit_name(self) -> &'static str {
+        match self {
+            ShowVariant::Jwt => "show",
+            ShowVariant::Mdoc => "show_mdoc",
+        }
+    }
+
+    pub fn has_revocation(self) -> bool {
+        self == ShowVariant::Jwt
+    }
+
+    /// Public outputs: `expressionResult` and `issuerRoot[2]`, plus
+    /// `revocationRoot[2]` with revocation.
+    pub fn num_outputs(self) -> usize {
+        if self.has_revocation() {
+            5
+        } else {
+            3
+        }
+    }
+
+    pub fn num_public(self) -> usize {
+        self.num_outputs() + SHOW_STATEMENT_LEN
+    }
+}
+
 /// Layout of the Show circuit's witness vector.
 ///
-/// Verified against `build/show/show.sym` (`Show(2, 2, 8, 64)`), with the
-/// verifier statement made public (`SHOW_NUM_PUBLIC = 30`):
-///   witness[1]        = main.expressionResult (public output)
-///   witness[2..=30]   = messageHash + predicate program (public inputs)
-///   witness[31]       = main.deviceKeyX       (private, shared via comm_W_shared)
-///   witness[32]       = main.deviceKeyY       (private, shared)
-///   witness[33]       = main.sig_r            (private)
-///   witness[34]       = main.sig_s_inverse    (private)
-///   witness[35..35+n_claims] = main.claimValues[..] (private, shared)
-///   witness[35+n_claims..]   = main.claimIdentifierHashes[..] (private, shared)
+/// Verified against `build/show/show.sym` and `build/show_mdoc/show_mdoc.sym`:
+///   witness[1]                  = main.expressionResult (public output)
+///   witness[2..=3]              = main.issuerRoot[hi, lo] (public output)
+///   witness[4..=5]              = main.revocationRoot[hi, lo] (public output, `show` only)
+///   witness[..=num_public]      = messageHash + predicate program (public inputs)
+///   then private: deviceKeyX, deviceKeyY, sig_r, sig_s_inverse,
+///   claimValues[n], claimIdentifierHashes[n], issuerKeyX, issuerKeyY,
+///   issuerTreeDepth, issuerTreeIndex, revocationCommitment[2] (`show` only).
+/// The tree siblings are linear in the constraints, so the optimizer substitutes
+/// them out of the witness and the revocation commitment directly follows
+/// `issuerTreeIndex`.
 #[derive(Debug, Clone, Copy)]
 pub struct ShowWitnessLayout {
+    pub variant: ShowVariant,
     pub expression_result_index: usize,
     pub device_key_x_index: usize,
     pub device_key_y_index: usize,
     pub claim_values_start: usize,
     pub claim_values_len: usize,
     pub claim_identifier_hashes_start: usize,
+    pub issuer_key_x_index: usize,
+    /// Witness index of `revocationCommitment[0]`; `None` without revocation.
+    pub revocation_commitment_index: Option<usize>,
 }
 
 impl ShowWitnessLayout {
@@ -613,36 +676,45 @@ impl ShowWitnessLayout {
             ..self.claim_identifier_hashes_start + self.claim_values_len
     }
 
-    /// Number of public IO signals (`expressionResult` + bound statement).
     pub fn num_public(&self) -> usize {
-        SHOW_NUM_PUBLIC
+        self.variant.num_public()
     }
 
-    /// Witness indices the shared partition must equal, in the order
-    /// `ShowCircuit::shared` pushes them.
+    /// Witness indices the shared partition must equal (see [`SHARED_LAYOUT`]).
     pub fn shared_witness_indices(&self) -> Vec<usize> {
         let mut idx = vec![self.device_key_x_index, self.device_key_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
+        idx.extend([self.issuer_key_x_index, self.issuer_key_x_index + 1]);
+        if let Some(i) = self.revocation_commitment_index {
+            idx.extend([i, i + 1]);
+        }
         idx
     }
 }
 
-/// Calculate Show circuit witness layout for the given `n_claims` template parameter.
-///
-/// `n_claims` must equal the JWT circuit's `maxMatches - 2` (see [`CircuitSize::n_claims`]).
-pub fn calculate_show_witness_indices(n_claims: usize) -> ShowWitnessLayout {
+/// Calculate the Show witness layout for `n_claims` (the JWT circuit's
+/// `maxMatches - 2`, see [`CircuitSize::n_claims`]) and the circuit variant.
+pub fn calculate_show_witness_indices(n_claims: usize, variant: ShowVariant) -> ShowWitnessLayout {
     // Private signals follow the public prefix: deviceKeyX, deviceKeyY, sig_r,
-    // sig_s_inverse, then claimValues[..].
-    let device_key_x_index = SHOW_NUM_PUBLIC + 1;
+    // sig_s_inverse, claimValues[..], claimIdentifierHashes[..], issuerKeyX,
+    // issuerKeyY, issuerTreeDepth, issuerTreeIndex, then the revocation inputs.
+    let device_key_x_index = variant.num_public() + 1;
     let claim_values_start = device_key_x_index + 4;
+    let claim_identifier_hashes_start = claim_values_start + n_claims;
+    let issuer_key_x_index = claim_identifier_hashes_start + n_claims;
     ShowWitnessLayout {
+        variant,
         expression_result_index: 1,
         device_key_x_index,
         device_key_y_index: device_key_x_index + 1,
         claim_values_start,
         claim_values_len: n_claims,
-        claim_identifier_hashes_start: claim_values_start + n_claims,
+        claim_identifier_hashes_start,
+        issuer_key_x_index,
+        revocation_commitment_index: variant
+            .has_revocation()
+            .then_some(issuer_key_x_index + 4),
     }
 }
 
@@ -651,12 +723,11 @@ pub fn calculate_show_witness_indices(n_claims: usize) -> ShowWitnessLayout {
 /// Circom lays public IO out as outputs first, then public inputs (in template
 /// declaration order), so for the MDOC circuit the public prefix is:
 /// 1. `validUntilDate`, the only output
-/// 2. `pubKeyX`, `pubKeyY`, the issuer key the ES256 check ran against
-/// 3. `valueTypes[maxClaims]`, `claimFlags[maxClaims]`, which say how each entry
+/// 2. `valueTypes[maxClaims]`, `claimFlags[maxClaims]`, which say how each entry
 ///    of `normalizedClaimValues` was produced
 ///
-/// declared public in `circom/circuits/main/mdoc.circom`. `normalizedClaimValues`
-/// and `deviceKeyX`/`deviceKeyY` are private and reach Show through the shared
+/// declared public in `circom/circuits/main/mdoc.circom`. `normalizedClaimValues`,
+/// `deviceKeyX`/`deviceKeyY` and the issuer `pubKeyX`/`pubKeyY` are private and reach Show through the shared
 /// witness segment; their indices are hardcoded constants below because nothing
 /// about the public prefix implies them.
 #[derive(Debug, Clone, Copy)]
@@ -667,9 +738,9 @@ pub struct MdocOutputLayout {
     pub claim_identifier_hashes_start: usize,
     pub device_key_x_index: usize,
     pub device_key_y_index: usize,
-    /// Witness index of the public issuer key coordinate `pubKeyX`.
+    /// Witness index of the private issuer key coordinate `pubKeyX` (shared).
     pub issuer_key_x_index: usize,
-    /// Witness index of the public issuer key coordinate `pubKeyY`.
+    /// Witness index of the private issuer key coordinate `pubKeyY` (shared).
     pub issuer_key_y_index: usize,
     /// Witness index of `valueTypes[0]`. The array is `claim_values_len` long.
     pub value_types_start: usize,
@@ -690,11 +761,11 @@ impl MdocOutputLayout {
         self.claim_flags_start..self.claim_flags_start + self.claim_values_len
     }
 
-    /// Public IO: the validUntilDate output, then issuer pubKeyX/Y + valueTypes +
-    /// claimFlags inputs. Claim values and the device key are private — see
+    /// Public IO: the validUntilDate output, then valueTypes + claimFlags inputs.
+    /// Claim values, the device key and the issuer key are private: see
     /// [`JwtOutputLayout::num_public`].
     pub fn num_public(&self) -> usize {
-        2 * self.claim_values_len + 3
+        2 * self.claim_values_len + 1
     }
 
     /// Witness indices the shared partition must equal, in the order
@@ -706,6 +777,7 @@ impl MdocOutputLayout {
             self.claim_identifier_hashes_start
                 ..self.claim_identifier_hashes_start + shared_claims,
         );
+        idx.extend([self.issuer_key_x_index, self.issuer_key_y_index]);
         idx
     }
 }
@@ -714,15 +786,16 @@ impl MdocOutputLayout {
 ///
 /// Verified against `build/mdoc/mdoc.sym` (`MDOC(1792, 256, 4, 32, 64)`):
 ///   witness[1]    = main.validUntilDate  (public output)
-///   witness[2]    = main.pubKeyX         (public input)
-///   witness[2974] = main.normalizedClaimValues[0] (private, shared)
-///   witness[2978] = main.claimIdentifierHashes[0]  (private, shared)
-///   witness[2982] = main.deviceKeyX      (private, shared)
+///   witness[2]    = main.valueTypes[0]   (public input)
+///   witness[1802] = main.pubKeyX         (private, shared)
+///   witness[2966] = main.normalizedClaimValues[0] (private, shared)
+///   witness[2970] = main.claimIdentifierHashes[0]  (private, shared)
+///   witness[2974] = main.deviceKeyX      (private, shared)
 pub fn calculate_mdoc_output_indices(max_claims: usize) -> MdocOutputLayout {
+    let issuer_key_x_index = MDOC_ISSUER_KEY_WITNESS_START;
+    let issuer_key_y_index = issuer_key_x_index + 1;
     // The lone public output occupies witness[1]; the public inputs follow.
-    let issuer_key_x_index = 2;
-    let issuer_key_y_index = 3;
-    let value_types_start = 4;
+    let value_types_start = 2;
     let claim_flags_start = value_types_start + max_claims;
 
 
@@ -742,17 +815,21 @@ pub fn calculate_mdoc_output_indices(max_claims: usize) -> MdocOutputLayout {
 
 /// Witness index of `main.normalizedClaimValues[0]` in the compiled MDOC circuit.
 /// Re-derived from `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_CLAIM_VALUES_WITNESS_START: usize = 2974;
+pub const MDOC_CLAIM_VALUES_WITNESS_START: usize = 2966;
 
 /// Witness index of `main.claimIdentifierHashes[0]` in the compiled MDOC circuit.
 /// Re-derived from `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START: usize = 2978;
+pub const MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START: usize = 2970;
 
 /// Witness index of `main.deviceKeyX` in the compiled MDOC circuit; `deviceKeyY`
 /// follows it. Private since the unlinkability fix, so the index is no longer
 /// implied by the public prefix and must be re-derived from
 /// `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_DEVICE_KEY_WITNESS_START: usize = 2982;
+pub const MDOC_DEVICE_KEY_WITNESS_START: usize = 2974;
+
+/// Witness index of the private issuer `main.pubKeyX`; `pubKeyY` follows.
+/// Re-derived from `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
+pub const MDOC_ISSUER_KEY_WITNESS_START: usize = 1802;
 
 /// Parse MDOC circuit inputs from JSON.
 ///
@@ -842,156 +919,133 @@ pub fn mdoc_hashmap_to_json_string(
 mod show_witness_indices_tests {
     use super::*;
 
-    /// Catches witness-layout drift between show.sym and calculate_show_witness_indices,
-    /// which would silently break the Prepare<->Show commitment binding.
+    /// Catches witness-layout drift between the Show `.sym` files and
+    /// calculate_show_witness_indices, which would silently break the
+    /// Prepare<->Show commitment binding.
     #[test]
     fn witness_indices_match_show_sym() {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let sym_path = std::path::Path::new(manifest_dir)
-            .join("../circom/build/show/show.sym");
-        if !sym_path.exists() {
-            eprintln!(
-                "show.sym not found at {}; skipping (run `bash ../circom/scripts/compile.sh show`).",
-                sym_path.display()
-            );
-            return;
-        }
-
-        let contents = std::fs::read_to_string(&sym_path).expect("read show.sym");
-        let idx_of = |name: &str| -> Option<usize> {
-            for line in contents.lines() {
-                let mut parts = line.split(',');
-                let _ = parts.next();
-                let witness_idx = parts.next()?;
-                let _ = parts.next();
-                let signal = parts.next()?.trim();
-                if signal == name {
-                    let parsed: i64 = witness_idx.parse().ok()?;
-                    if parsed < 0 {
-                        return None;
-                    }
-                    return Some(parsed as usize);
-                }
+        for variant in [ShowVariant::Jwt, ShowVariant::Mdoc] {
+            let name = variant.circuit_name();
+            let sym_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../circom/build/{name}/{name}.sym"));
+            if !sym_path.exists() {
+                eprintln!("{} not found; skipping.", sym_path.display());
+                continue;
             }
-            None
-        };
 
-        let expression_result = idx_of("main.expressionResult")
-            .expect("main.expressionResult missing from show.sym");
-        let device_key_x =
-            idx_of("main.deviceKeyX").expect("main.deviceKeyX missing from show.sym");
-        let device_key_y =
-            idx_of("main.deviceKeyY").expect("main.deviceKeyY missing from show.sym");
-        let claim0 =
-            idx_of("main.claimValues[0]").expect("main.claimValues[0] missing from show.sym");
+            let contents = std::fs::read_to_string(&sym_path).expect("read show sym");
+            let idx_of = |signal: &str| -> Option<usize> {
+                contents.lines().find_map(|line| {
+                    let mut parts = line.split(',');
+                    let _ = parts.next();
+                    let witness_idx = parts.next()?;
+                    let _ = parts.next();
+                    (parts.next()?.trim() == signal)
+                        .then(|| witness_idx.parse::<i64>().ok().filter(|i| *i >= 0))
+                        .flatten()
+                        .map(|i| i as usize)
+                })
+            };
 
-        let layout = calculate_show_witness_indices(2);
-        assert_eq!(
-            layout.expression_result_index, expression_result,
-            "expressionResult witness index mismatch with show.sym"
-        );
-        assert_eq!(
-            layout.device_key_x_index, device_key_x,
-            "deviceKeyX witness index mismatch with show.sym (recompile show and update utils.rs)"
-        );
-        assert_eq!(
-            layout.device_key_y_index, device_key_y,
-            "deviceKeyY witness index mismatch with show.sym (recompile show and update utils.rs)"
-        );
-        assert_eq!(
-            layout.claim_values_start, claim0,
-            "claimValues[0] witness index mismatch with show.sym"
-        );
+            let layout = calculate_show_witness_indices(2, variant);
+            let mut expected = vec![
+                ("main.expressionResult", Some(layout.expression_result_index)),
+                ("main.deviceKeyX", Some(layout.device_key_x_index)),
+                ("main.deviceKeyY", Some(layout.device_key_y_index)),
+                ("main.claimValues[0]", Some(layout.claim_values_start)),
+                ("main.claimIdentifierHashes[0]", Some(layout.claim_identifier_hashes_start)),
+                ("main.exprLen", Some(layout.num_public())),
+                ("main.issuerRoot[0]", Some(SHOW_ISSUER_ROOT_INDEX)),
+                ("main.issuerRoot[1]", Some(SHOW_ISSUER_ROOT_INDEX + 1)),
+                ("main.issuerKeyX", Some(layout.issuer_key_x_index)),
+                ("main.issuerKeyY", Some(layout.issuer_key_x_index + 1)),
+            ];
+            if let Some(i) = layout.revocation_commitment_index {
+                expected.push(("main.revocationRoot[0]", Some(SHOW_REVOCATION_ROOT_INDEX)));
+                expected.push(("main.revocationRoot[1]", Some(SHOW_REVOCATION_ROOT_INDEX + 1)));
+                expected.push(("main.revocationCommitment[0]", Some(i)));
+                expected.push(("main.revocationCommitment[1]", Some(i + 1)));
+            }
+
+            for (signal, index) in expected {
+                assert_eq!(idx_of(signal), index, "{signal} index drifted from {name}.sym");
+            }
+        }
     }
 }
 
 #[cfg(test)]
-mod issuer_key_binding_tests {
+mod issuer_root_tests {
     use super::*;
+    use ff::Field;
 
-    fn scalars(values: &[u64]) -> Vec<Scalar> {
-        values
-            .iter()
-            .map(|v| bigint_to_scalar(BigInt::from(*v)).unwrap())
-            .collect()
+    /// `[expressionResult, issuerRoot[hi, lo], revocationRoot[hi, lo]]`.
+    fn show_public_values(hi: BigInt, lo: BigInt) -> Vec<Scalar> {
+        let mut v = vec![Scalar::ONE];
+        v.push(bigint_to_scalar(hi).unwrap());
+        v.push(bigint_to_scalar(lo).unwrap());
+        v.push(bigint_to_scalar(BigInt::from(7u8)).unwrap());
+        v.push(bigint_to_scalar(BigInt::from(9u8)).unwrap());
+        v
     }
 
-    /// A JWT public-IO vector: the issuer key, then decodeFlags and
-    /// claimFormats. Claim values and the device key are private.
-    fn jwt_public_values(key_x: u64, key_y: u64) -> Vec<Scalar> {
-        scalars(&[key_x, key_y, 1, 1, 1, 3])
-    }
-
-    const JWT_KEY_INDEX: usize = 1;
-
-    /// A proof carrying the expected key at the layout's index is accepted,
-    /// whatever surrounds it (claim outputs, device key, normalization).
     #[test]
-    fn accepts_the_expected_issuer_key() {
-        assert!(check_issuer_key_binding(
-            &jwt_public_values(42, 43),
-            JWT_KEY_INDEX,
-            BigInt::from(42),
-            BigInt::from(43),
-        )
-        .is_ok());
+    fn recombines_root_limbs() {
+        let hi = BigInt::from(0xabcdu64);
+        let lo: BigInt = (BigInt::from(1u8) << 128) - 1;
+        let root = issuer_root_from_show_public_values(&show_public_values(hi.clone(), lo.clone()))
+            .unwrap();
+        assert_eq!(root, (hi << 128) + lo);
     }
 
-    /// A proof built under a different issuer key is rejected. This is the case
-    /// the check exists for: such a proof verifies normally, so only the key
-    /// comparison distinguishes it.
     #[test]
-    fn rejects_a_different_issuer_key() {
-        let err = check_issuer_key_binding(
-            &jwt_public_values(999, 1000),
-            JWT_KEY_INDEX,
-            BigInt::from(42),
-            BigInt::from(43),
-        )
-        .expect_err("proof under an unexpected issuer key must be rejected");
-        assert!(err.contains("untrusted issuer"), "unexpected error: {err}");
+    fn reads_the_revocation_root_after_the_issuer_root() {
+        let values = show_public_values(BigInt::from(1u8), BigInt::from(2u8));
+        let root = revocation_root_from_show_public_values(&values).unwrap();
+        assert_eq!(root, (BigInt::from(7u8) << 128) + 9);
     }
 
-    /// Half a match is still a mismatch: both coordinates must agree.
     #[test]
-    fn rejects_a_partial_key_match() {
-        assert!(check_issuer_key_binding(
-            &jwt_public_values(42, 1000),
-            JWT_KEY_INDEX,
-            BigInt::from(42),
-            BigInt::from(43),
-        )
-        .is_err());
+    fn rejects_an_oversized_limb() {
+        let values = show_public_values(BigInt::from(1u8) << 128, BigInt::from(0u8));
+        assert!(issuer_root_from_show_public_values(&values).is_err());
     }
 
-    /// A truncated public-IO vector fails closed rather than panicking.
     #[test]
-    fn rejects_a_short_public_value_vector() {
-        let public_values = scalars(&[42]);
-        let err = check_issuer_key_binding(
-            &public_values,
-            JWT_KEY_INDEX,
-            BigInt::from(42),
-            BigInt::from(43),
-        )
-        .expect_err("a vector shorter than the issuer key must be rejected");
-        assert!(err.contains("expected at least 2"), "unexpected error: {err}");
+    fn rejects_a_short_vector() {
+        assert!(issuer_root_from_show_public_values(&[Scalar::ONE]).is_err());
     }
 
-    /// The issuer key sits in the middle of the public IO, not at its end:
-    /// `decodeFlags`/`claimFormats` are public inputs declared after it. Pins
-    /// the property that makes locating it by index necessary.
+    /// The issuer key is private everywhere and shared after the claims; the
+    /// JWT flow then shares the revocation commitment.
     #[test]
-    fn issuer_key_is_not_the_trailing_public_pair() {
+    fn issuer_key_is_private_and_shared() {
         let jwt = calculate_jwt_output_indices(CircuitSize::Kb1);
-        assert_eq!(jwt.issuer_key_x_index, JWT_KEY_INDEX);
-        assert!(
-            jwt.issuer_key_y_index < jwt.num_public(),
-            "public inputs follow the issuer key, so it is not the trailing pair"
+        assert!(jwt.issuer_key_x_index > jwt.num_public());
+        let jwt_shared = jwt.shared_witness_indices();
+        assert_eq!(
+            jwt_shared[jwt_shared.len() - 4..],
+            [
+                jwt.issuer_key_x_index,
+                jwt.issuer_key_y_index,
+                jwt.revocation_commitment_index,
+                jwt.revocation_commitment_index + 1,
+            ]
         );
+        let show = calculate_show_witness_indices(2, ShowVariant::Jwt);
+        assert_eq!(jwt_shared.len(), show.shared_witness_indices().len());
 
         let mdoc = calculate_mdoc_output_indices(4);
-        assert!(mdoc.issuer_key_y_index < mdoc.num_public());
+        assert!(mdoc.issuer_key_x_index > mdoc.num_public());
+        assert_eq!(
+            mdoc.shared_witness_indices(2).last(),
+            Some(&mdoc.issuer_key_y_index)
+        );
+        let show_mdoc = calculate_show_witness_indices(2, ShowVariant::Mdoc);
+        assert_eq!(
+            mdoc.shared_witness_indices(2).len(),
+            show_mdoc.shared_witness_indices().len()
+        );
     }
 }
 

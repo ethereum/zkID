@@ -11,6 +11,13 @@ import {
   base64urlToBigInt,
   DEFAULT_JWT_PARAMS,
   DEFAULT_SHOW_PARAMS,
+  buildRevocationWitness,
+  computeRevocationCommitment,
+  createRevocationRegistry,
+  encodeRevocationCommitment,
+  buildIssuerMembershipInputs,
+  createIssuerRegistry,
+  issuerCommitment,
 } from "../src/index.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
@@ -20,6 +27,16 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ASSETS_DIR = join(__dirname, "..", "assets");
+
+const REVOCATION_SECRET_HEX =
+  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+const REVOCATION_COMMITMENT = computeRevocationCommitment(REVOCATION_SECRET_HEX);
+// Non-revocation inputs against an empty registry (root 0).
+const REVOCATION = buildRevocationWitness(
+  REVOCATION_SECRET_HEX,
+  REVOCATION_COMMITMENT,
+  createRevocationRegistry(),
+);
 
 function derivePublicKey(privateKeyBytes: Uint8Array) {
   let hex = "";
@@ -38,6 +55,12 @@ const ISSUER_PUBLIC_KEY = {
   x: bytesToBase64url(bigintToBytes(ISSUER_POINT.x, 32)),
   y: bytesToBase64url(bigintToBytes(ISSUER_POINT.y, 32)),
 };
+
+// Show issuer inputs: the issuer above in a registry of just itself.
+const ISSUER_MEMBERSHIP = buildIssuerMembershipInputs(
+  { x: ISSUER_POINT.x, y: ISSUER_POINT.y },
+  createIssuerRegistry([ISSUER_PUBLIC_KEY]).generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
+);
 
 // Fixed device key pair (deterministic for tests)
 const DEVICE_PRIVATE_KEY_HEX =
@@ -120,6 +143,7 @@ function generateTestJwt(): TestJwtData {
     nbf: 1700000000,
     exp: 1800000000,
     cnf: { jwk: DEVICE_PUBLIC_KEY },
+    revocation_commitment: encodeRevocationCommitment(REVOCATION_COMMITMENT),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],
@@ -231,6 +255,15 @@ describe("Credential Parsing via SDK", () => {
 });
 
 describe("Input Builders via SDK", () => {
+  it("buildShowCircuitInputs rejects missing issuer inputs", () => {
+    const signature = signDeviceNonce(VERIFIER_NONCE, DEVICE_PRIVATE_KEY_HEX);
+    expect(() =>
+      buildShowCircuitInputs(DEFAULT_SHOW_PARAMS, VERIFIER_NONCE, signature, DEVICE_PUBLIC_KEY, {
+        revocation: REVOCATION,
+      }),
+    ).toThrow(expect.objectContaining({ code: "MISSING_ISSUER_INPUTS" }));
+  });
+
   it("buildShowCircuitInputs creates valid circuit inputs", () => {
     // Derive the correct public key from the device private key
     const deviceKey = DEVICE_PUBLIC_KEY;
@@ -241,6 +274,7 @@ describe("Input Builders via SDK", () => {
       VERIFIER_NONCE,
       signature,
       deviceKey,
+      { revocation: REVOCATION, issuer: ISSUER_MEMBERSHIP },
     );
 
     expect(inputs.deviceKeyX).toBeDefined();
@@ -322,7 +356,12 @@ describe("Show Circuit via SDK", () => {
       VERIFIER_NONCE,
       signature,
       data.devicePublicKey,
-      { normalizedClaimValues: [42n], predicates: [] },
+      {
+        normalizedClaimValues: [42n],
+        predicates: [],
+        revocation: REVOCATION,
+        issuer: ISSUER_MEMBERSHIP,
+      },
     );
 
     // Calculate witness via SDK WitnessCalculator
@@ -330,13 +369,13 @@ describe("Show Circuit via SDK", () => {
 
     // Witness sanity checks
     expect(witness[0]).toBe(1n); // valid constraint system
-    // Witness layout: w[1] = expressionResult, w[2..=156] = messageHash +
-    // predicate program + verifier attribute names (156 public signals now that
-    // names replaced the scalar identifier), then private signals: w[157] =
-    // deviceKeyX, w[158] = deviceKeyY (they stay in comm_W_shared with Prepare).
-    expect(witness[2]).toBe(showInputs.messageHash); // messageHash (public)
-    expect(witness[157]).toBe(base64urlToBigInt(data.devicePublicKey.x)); // deviceKeyX
-    expect(witness[158]).toBe(base64urlToBigInt(data.devicePublicKey.y)); // deviceKeyY
+    // Witness layout: w[1] = expressionResult, w[2..=3] = issuerRoot[hi, lo],
+    // w[4..=5] = revocationRoot (0 for an empty registry), w[6..=160] = messageHash
+    // + predicate program, then private signals: w[161..=162] = deviceKeyX/Y.
+    expect([witness[4], witness[5]]).toEqual([0n, 0n]); // revocationRoot
+    expect(witness[6]).toBe(showInputs.messageHash); // messageHash (public)
+    expect(witness[161]).toBe(base64urlToBigInt(data.devicePublicKey.x)); // deviceKeyX
+    expect(witness[162]).toBe(base64urlToBigInt(data.devicePublicKey.y)); // deviceKeyY
   }, 30_000);
 
   it("proves and verifies via NativeBackend", async () => {
@@ -400,7 +439,7 @@ describe("JWT (Prepare) Circuit via SDK", () => {
     // whenever the constraint system changes. Re-derive after any circuit edit:
     //   grep -m1 'main.claimIdentifierHashes\[0\]' circom/build/jwt/jwt.sym
     // (field 2 of that line is the witness index).
-    const identifierStart = 3871;
+    const identifierStart = 3872;
     const maxClaims = DEFAULT_JWT_PARAMS.maxMatches - 2;
     expect(witness.length).toBeGreaterThan(identifierStart + maxClaims + 1);
 
@@ -409,6 +448,10 @@ describe("JWT (Prepare) Circuit via SDK", () => {
     );
     expect(witness[identifierStart + maxClaims + 1]).toBe(
       base64urlToBigInt(data.devicePublicKey.y),
+    );
+    // RevocationCommitment [hi, lo] follows the device key.
+    expect(witness.slice(identifierStart + maxClaims + 2, identifierStart + maxClaims + 4)).toEqual(
+      REVOCATION.revocationCommitment,
     );
   }, 120_000);
 
@@ -484,7 +527,11 @@ describe("Full Pipeline via SDK (Prepare + Show with Shared Blinds)", () => {
       VERIFIER_NONCE,
       deviceSignature,
       data.devicePublicKey,
-      { normalizedClaimValues },
+      {
+        normalizedClaimValues,
+        revocation: REVOCATION,
+        issuer: ISSUER_MEMBERSHIP,
+      },
     );
 
     // Step 6: Calculate Show witness and prove Show circuit

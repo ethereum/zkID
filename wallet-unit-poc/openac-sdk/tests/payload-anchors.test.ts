@@ -7,6 +7,9 @@ import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import { JWT_PARAMS_BY_SIZE } from "../src/sizing.js";
 import { generateDummyCredential } from "../src/testing/dummy-credential.js";
 import { base64urlEncode } from "../src/utils.js";
+import { encodeRevocationCommitment } from "../src/revocation.js";
+
+const REVOCATION_COMMITMENT = encodeRevocationCommitment(123456789n);
 
 const DEVICE_JWK = {
   kty: "EC" as const,
@@ -35,6 +38,7 @@ function credentialWith(
   const header = { alg: "ES256", typ: "vc+sd-jwt" };
   const payload = {
     iss: "did:key:issuer",
+    revocation_commitment: REVOCATION_COMMITMENT,
     ...payloadExtras,
     cnf: { jwk: DEVICE_JWK },
     vc: { credentialSubject: { _sd: sd, _sd_alg: "sha-256" } },
@@ -67,6 +71,24 @@ describe("assertUnambiguousPayload", () => {
     expect(() =>
       assertUnambiguousPayload(cred, cred.decodedPayload, [digest]),
     ).toThrow(/occurs 2 times/);
+  });
+
+  it("rejects a payload without a revocation commitment", () => {
+    const cred = credentialWith({ revocation_commitment: undefined }, [digest], [raw]);
+    expect(() =>
+      assertUnambiguousPayload(cred, cred.decodedPayload, [digest]),
+    ).toThrow(/revocation_commitment/);
+  });
+
+  it("rejects a second revocation commitment anchor", () => {
+    const cred = credentialWith(
+      { nested: { revocation_commitment: REVOCATION_COMMITMENT } },
+      [digest],
+      [raw],
+    );
+    expect(() =>
+      assertUnambiguousPayload(cred, cred.decodedPayload, [digest]),
+    ).toThrow(/must occur once/);
   });
 
   it("rejects a nested _sd array", () => {

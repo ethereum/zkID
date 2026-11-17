@@ -215,16 +215,49 @@ export {
   buildShowStatementFields,
   buildShowStatementPublicValues,
 } from "./inputs/show-statement.js";
-// Issuer-key helpers: convert a key to the coordinates the circuits use, and
-// read those coordinates back out of a proof's public values.
+// Issuer-key helper: convert a key to the coordinates the circuits use.
 export { issuerPublicKeyToPoint } from "./inputs/issuer-key.js";
-// Readers for the Prepare proof's public IO: the issuer key, and the claim
-// normalization the proof's claim values were produced under.
+export type { IssuerKeyPoint } from "./inputs/issuer-key.js";
+// Reader for the Prepare proof's public IO: the claim normalization.
 export {
-  extractIssuerKeyFromPreparePublicValues,
   extractClaimNormalizationFromPreparePublicValues,
 } from "./inputs/prepare-public-io.js";
-export type { IssuerKeyPoint } from "./inputs/prepare-public-io.js";
+// Issuer hiding: SHA-256 issuer registry and Show membership inputs.
+export {
+  IssuerRegistry,
+  issuerSha256Scheme,
+  ISSUER_TREE_MAX_DEPTH,
+  issuerCommitment,
+  createIssuerRegistry,
+  buildIssuerMembershipInputs,
+  acceptIssuerRoots,
+} from "./issuer-hiding.js";
+export type { IssuerProof, IssuerMembershipInputs, IssuerRootCheck } from "./issuer-hiding.js";
+// [hi, lo] 128-bit limb helpers for registry roots.
+export { toLimbs, fromLimbs } from "./limbs.js";
+// Revocation: commitments, the shared SHA-256 LeanIMT+ registry and root checks.
+export {
+  REVOCATION_MAX_DEPTH,
+  REVOCATION_COMMITMENT_CLAIM,
+  generateRevocationSecret,
+  computeRevocationCommitment,
+  encodeRevocationCommitment,
+  decodeRevocationCommitment,
+  createRevocationRegistry,
+  revocationRegistryFromLeaves,
+  acceptRevocationRoots,
+  buildRevocationWitness,
+} from "./revocation.js";
+export type {
+  RevocationRegistryLike,
+  RevocationRequest,
+  RevocationRootCheck,
+  RevocationWitness,
+} from "./revocation.js";
+export {
+  RevocationRegistry,
+  sha256Scheme as revocationSha256Scheme,
+} from "@coordination-network/revocation-registry";
 // Circuit-level predicate program types/constants, for building ExpectedStatement.
 export { PredicateOp, LogicToken } from "./inputs/show-input-builder.js";
 export type { PredicateSpec, PredicateRhs } from "./inputs/show-input-builder.js";
@@ -250,7 +283,6 @@ export type {
   ProofPublicValues,
   VerificationResult,
   ExpectedStatement,
-  ProvenIssuerKey,
   VerifyingKeys,
   KeySet,
   SerializedKeySet,

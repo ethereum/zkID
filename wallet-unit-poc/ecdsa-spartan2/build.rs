@@ -31,6 +31,11 @@ fn main() {
         println!("cargo:warning=Found compiled circuit: mdoc.cpp — enabling mdoc support");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(has_circuit_show_mdoc)");
+    if circuits_dir.join("show_mdoc.cpp").exists() {
+        println!("cargo:rustc-cfg=has_circuit_show_mdoc");
+    }
+
     // Only run witnesscalc build when the native-witness feature is enabled.
     // WASM builds use JavaScript witness generation instead.
     #[cfg(feature = "native-witness")]

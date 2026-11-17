@@ -13,8 +13,15 @@ import {
   Credential,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
+  computeRevocationCommitment,
+  createRevocationRegistry,
+  generateRevocationSecret,
+  createIssuerRegistry,
+  issuerCommitment,
+  acceptIssuerRoots,
 } from "../src/index.js";
-import { generateDummyCredential } from "../src/testing/index.js";
+import { generateDummyCredential, issuerProofFor } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
 import type { KeySet, VerifyingKeys, ExpectedStatement } from "../src/types.js";
 import type { PredicateExpression } from "../src/predicates.js";
@@ -74,6 +81,15 @@ function sha256Hex(buf: Uint8Array): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
+// Other holders' revoked commitments; the test credentials are not in it.
+const REGISTRY = createRevocationRegistry(
+  Array.from({ length: 6 }, () => computeRevocationCommitment(generateRevocationSecret())),
+);
+
+function revocationFor(cred: { revocationSecretHex: string }) {
+  return { secret: cred.revocationSecretHex, registry: REGISTRY };
+}
+
 function makeDummy1k() {
   return generateDummyCredential({
     size: "1k",
@@ -108,6 +124,9 @@ function expectedStatement(
     predicates: compiled.predicates,
     logicExpression: compiled.logicExpression,
     claimNormalization: requiredNormalization(compiled),
+    // issuerProofFor proves against a registry of just the credential's issuer.
+    isValidIssuerRoot: acceptIssuerRoots([createIssuerRegistry([cred.issuerPublicKey]).root]),
+    isValidRevocationRoot: acceptRevocationRoots([REGISTRY.root]),
   };
 }
 
@@ -262,6 +281,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-c2c-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -297,6 +318,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-age-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: predicate,
     });
@@ -333,6 +356,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-all-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: expr,
     });
@@ -362,6 +387,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "verifyComponents-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -393,6 +420,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "verifyProof-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -455,6 +484,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "policy-swap-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: easyPolicy,
     });
@@ -495,6 +526,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -538,60 +571,19 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
     }
   }, 600_000);
 
-  it("reports the proving issuer key for a credential signed by another key", async () => {
-    const keys = loadLocalKeySet("1k");
-
-    // A credential signed by a key other than the expected issuer's, whose
-    // claims satisfy the policy.
-    const otherIssuerCred = generateDummyCredential({
+  it("hides the issuer: reports only the registry root, which the verifier accepts", async () => {
+    const cred = makeDummy1k();
+    const other = generateDummyCredential({
       size: "1k",
-      issuerPrivateKey:
-        "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      issuerPrivateKey: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      revocationSecret: "1111111111111111111111111111111111111111111111111111111111111111",
       claims: [
         { key: "roc_birthday", value: "0900101" },
         { key: "roc_max", value: "0950101" },
       ],
     });
-    const expectedIssuerCred = makeDummy1k();
-    expect(otherIssuerCred.issuerPublicKey.x).not.toBe(expectedIssuerCred.issuerPublicKey.x);
-
-    const precomputed = await openac.precompute({
-      jwt: otherIssuerCred.jwt,
-      disclosures: otherIssuerCred.disclosures,
-      issuerPublicKey: otherIssuerCred.issuerPublicKey,
-      keys,
-      predicates: claimToClaimPredicate,
-    });
-
-    const proof = await openac.present({
-      precomputed,
-      verifierNonce: "other-issuer-nonce",
-      devicePrivateKey: otherIssuerCred.devicePrivateKeyHex,
-      keys,
-      predicates: claimToClaimPredicate,
-    });
-
-    const result = await openac.verify(
-      proof,
-      keys.verifyingKeys(),
-      expectedStatement(otherIssuerCred, "other-issuer-nonce", claimToClaimPredicate),
-    );
-
-    // The credential is internally consistent, so the proofs verify and the
-    // predicate is true. Issuer identity is not part of that result.
-    expect(result.valid).toBe(true);
-    expect(result.expressionResult).toBe(true);
-
-    // issuerKey reports the key actually used, which is what lets a caller
-    // comparing against its trust store reject this presentation.
-    expect(result.issuerKey?.jwk.x).toBe(otherIssuerCred.issuerPublicKey.x);
-    expect(result.issuerKey?.jwk.y).toBe(otherIssuerCred.issuerPublicKey.y);
-    expect(result.issuerKey?.jwk.x).not.toBe(expectedIssuerCred.issuerPublicKey.x);
-  }, 600_000);
-
-  it("reports the issuer key for a credential signed by the expected issuer", async () => {
-    const cred = makeDummy1k();
     const keys = loadLocalKeySet("1k");
+    const registry = createIssuerRegistry([other.issuerPublicKey, cred.issuerPublicKey]);
 
     const precomputed = await openac.precompute({
       jwt: cred.jwt,
@@ -602,24 +594,98 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
     });
     const proof = await openac.present({
       precomputed,
-      verifierNonce: "issuer-report-nonce",
+      verifierNonce: "issuer-hiding-nonce-001",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: registry.generateProof(issuerCommitment(cred.issuerPublicKey)),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
 
-    const result = await openac.verify(
-      proof,
-      keys.verifyingKeys(),
-      expectedStatement(cred, "issuer-report-nonce", claimToClaimPredicate),
-    );
-
+    const result = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expectedStatement(cred, "issuer-hiding-nonce-001", claimToClaimPredicate),
+      isValidIssuerRoot: (root) => root === registry.root,
+    });
     expect(result.valid).toBe(true);
-    // Directly comparable to a trust store holding the issuer's JWK.
-    expect(result.issuerKey?.jwk.x).toBe(cred.issuerPublicKey.x);
-    expect(result.issuerKey?.jwk.y).toBe(cred.issuerPublicKey.y);
-    expect(result.issuerKey?.jwk.kty).toBe("EC");
-    expect(result.issuerKey?.jwk.crv).toBe("P-256");
+    expect(result.issuerRoot).toBe(registry.root);
+    expect(result.revocationRoot).toBe(REGISTRY.root);
+
+    // A credential from the other issuer exposes the same issuer root and the
+    // same revocation root: revocation uses one registry for all issuers, so
+    // neither public root tells the two issuers apart.
+    const otherProof = await openac.present({
+      precomputed: await openac.precompute({
+        jwt: other.jwt,
+        disclosures: other.disclosures,
+        issuerPublicKey: other.issuerPublicKey,
+        keys,
+        predicates: claimToClaimPredicate,
+      }),
+      verifierNonce: "issuer-hiding-nonce-001",
+      devicePrivateKey: other.devicePrivateKeyHex,
+      issuerProof: registry.generateProof(issuerCommitment(other.issuerPublicKey)),
+      revocation: revocationFor(other),
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const otherResult = await openac.verify(otherProof, keys.verifyingKeys(), {
+      ...expectedStatement(other, "issuer-hiding-nonce-001", claimToClaimPredicate),
+      isValidIssuerRoot: (root) => root === registry.root,
+    });
+    expect(otherResult.valid).toBe(true);
+    expect(otherResult.issuerRoot).toBe(result.issuerRoot);
+    expect(otherResult.revocationRoot).toBe(result.revocationRoot);
+  }, 1_200_000);
+
+  it("rejects a credential from an issuer outside the accepted registry", async () => {
+    const keys = loadLocalKeySet("1k");
+    const accepted = createIssuerRegistry([makeDummy1k().issuerPublicKey]);
+    // Self-signed credential: the holder can only build a registry of their own key.
+    const forged = generateDummyCredential({
+      size: "1k",
+      issuerPrivateKey: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      claims: [
+        { key: "roc_birthday", value: "0900101" },
+        { key: "roc_max", value: "0950101" },
+      ],
+    });
+
+    const precomputed = await openac.precompute({
+      jwt: forged.jwt,
+      disclosures: forged.disclosures,
+      issuerPublicKey: forged.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+
+    // A proof from the accepted registry is for another issuer, so present() refuses it.
+    await expect(
+      openac.present({
+        precomputed,
+        verifierNonce: "issuer-hiding-nonce-002",
+        devicePrivateKey: forged.devicePrivateKeyHex,
+        issuerProof: accepted.generateProof(accepted.commitments[0]!),
+        revocation: revocationFor(forged),
+        keys,
+        predicates: claimToClaimPredicate,
+      }),
+    ).rejects.toThrow(/issuer/i);
+
+    const proof = await openac.present({
+      precomputed,
+      verifierNonce: "issuer-hiding-nonce-002",
+      devicePrivateKey: forged.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(forged.issuerPublicKey),
+      revocation: revocationFor(forged),
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const result = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expectedStatement(forged, "issuer-hiding-nonce-002", claimToClaimPredicate),
+      isValidIssuerRoot: (root) => root === accepted.root,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/issuer root/i);
   }, 600_000);
 
   it("rejects a replay: proof for an old nonce fails against a fresh challenge", async () => {
@@ -638,6 +704,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "captured-old-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -651,6 +719,99 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
     expect(replayed.valid).toBe(false);
     expect(replayed.expressionResult).toBeNull();
     expect(replayed.error).toMatch(/nonce/i);
+  }, 600_000);
+
+  it("proves non-revocation against the registry root and rejects an unaccepted root", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const nonce = "revocation-root-nonce";
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const proof = await openac.present({
+      precomputed,
+      verifierNonce: nonce,
+      devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    expect(proof.publicValues.revocationRoot).toBe(REGISTRY.root);
+
+    const expected = expectedStatement(cred, nonce, claimToClaimPredicate);
+    const accepted = await openac.verify(proof, keys.verifyingKeys(), expected);
+    expect(accepted.valid).toBe(true);
+    expect(accepted.revocationRoot).toBe(REGISTRY.root);
+
+    // A verifier whose registry has moved on rejects the stale root.
+    const stale = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expected,
+      isValidRevocationRoot: acceptRevocationRoots([REGISTRY.root + 1n]),
+    });
+    expect(stale.valid).toBe(false);
+    expect(stale.error).toMatch(/Revocation root/);
+  }, 600_000);
+
+  it("proves against an empty registry with root 0", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const nonce = "revocation-empty-nonce";
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const proof = await openac.present({
+      precomputed,
+      verifierNonce: nonce,
+      devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+
+    const result = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expectedStatement(cred, nonce, claimToClaimPredicate),
+      isValidRevocationRoot: acceptRevocationRoots([0n]),
+    });
+    expect(result.valid).toBe(true);
+    expect(result.revocationRoot).toBe(0n);
+  }, 600_000);
+
+  it("refuses to present a revoked credential", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const registry = createRevocationRegistry([...REGISTRY.commitments, cred.revocationCommitment]);
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+
+    await expect(
+      openac.present({
+        precomputed,
+        verifierNonce: "revoked-credential-nonce",
+        devicePrivateKey: cred.devicePrivateKeyHex,
+        issuerProof: issuerProofFor(cred.issuerPublicKey),
+        revocation: { secret: cred.revocationSecretHex, registry },
+        keys,
+        predicates: claimToClaimPredicate,
+      }),
+    ).rejects.toMatchObject({ code: "CREDENTIAL_REVOKED" });
   }, 600_000);
 });
 
@@ -678,6 +839,8 @@ describe.skipIf(!HAS_R2)("Full pipeline with keys fetched from R2", () => {
       precomputed,
       verifierNonce: "sdk-e2e-r2-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -711,6 +874,8 @@ describe.skipIf(!HAS_R2)("Full pipeline with keys fetched from R2", () => {
       precomputed,
       verifierNonce: "sdk-e2e-hybrid-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });

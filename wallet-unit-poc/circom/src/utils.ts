@@ -126,3 +126,10 @@ export function generateDidKey(publicKey: { x: string; y: string }): string {
   const encoded = (bs58.default || bs58).encode(keyBytes);
   return `did:key:z${encoded}`;
 }
+
+const LIMB_MASK = (1n << 128n) - 1n;
+
+/** Splits a 256-bit value into the [hi, lo] 128-bit limbs the circuits use. */
+export function toLimbs(value: bigint): [bigint, bigint] {
+  return [value >> 128n, value & LIMB_MASK];
+}

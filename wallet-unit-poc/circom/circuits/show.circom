@@ -3,6 +3,8 @@ pragma circom 2.2.3;
 include "ecdsa/ecdsa.circom";
 include "keyless_zk_proofs/hashtofield.circom";
 include "components/expression.circom";
+include "components/issuer-membership.circom";
+include "components/revocation.circom";
 
 /// @title Show
 /// @notice Verifies device binding and evaluates a logical expression over predicate results.
@@ -10,11 +12,13 @@ include "components/expression.circom";
 /// @param maxPredicates: maximum number of predicates to evaluate
 /// @param maxLogicTokens: capacity of the RPN token array for the logical expression
 /// @param valueBits: bit width for claim/compare values in generalized predicates
+/// @param maxIssuerDepth: max depth of the issuer registry LeanIMT (issuer hiding)
+/// @param revocationMaxDepth: max LeanIMT+ depth of the revocation tree; 0 disables revocation
 ///
 /// Logical expression token encoding (postfix):
 ///   tokenTypes[i]: 0=REF, 1=AND, 2=OR, 3=NOT
 ///   tokenValues[i]: predicate index for REF, else 0
-template Show(nClaims, maxPredicates, maxLogicTokens, valueBits) {
+template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth, revocationMaxDepth) {
     // Fixed width the attribute name is hashed over; must equal the credential
     // circuit's NAME_ID_LEN (jwt.circom) so identities match by construction.
     var NAME_ID_LEN = 31;
@@ -48,8 +52,21 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits) {
     signal input tokenValues[maxLogicTokens]; // Token payload: predicate index for REF tokens.
     signal input exprLen; // Number of active expression tokens.
 
+    // Issuer hiding: the issuer key arrives from Prepare via the shared witness.
+    signal input issuerKeyX;
+    signal input issuerKeyY;
+    signal input issuerTreeDepth;
+    signal input issuerTreeIndex;
+    signal input issuerTreeSiblings[maxIssuerDepth][2]; // [hi, lo] limbs.
+
     // Output: result of the logical expression over all predicate results
     signal output expressionResult;
+    // Output: issuer registry root as [hi, lo] 128-bit limbs.
+    signal output issuerRoot[2];
+
+    issuerRoot <== IssuerMembership(maxIssuerDepth)(
+        issuerKeyX, issuerKeyY, issuerTreeDepth, issuerTreeIndex, issuerTreeSiblings
+    );
 
     component ecdsa = ECDSA();
     ecdsa.s_inverse <== sig_s_inverse;
@@ -91,5 +108,31 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits) {
     expressionEval.tokenValues <== tokenValues;
     expressionEval.exprLen <== exprLen;
     expressionResult <== expressionEval.finalResult;
+
+    // Revocation: the credential's commitment (shared with the credential circuit)
+    // must open to the holder's secret and be absent from the revocation tree.
+    // There is one revocation tree for all issuers, so its root does not reveal
+    // which issuer signed the credential.
+    if (revocationMaxDepth > 0) {
+        signal input revocationCommitment[2]; // [hi, lo], shared via comm_W_shared.
+        signal input revocationSecret[2];
+        signal input revocationLeafValue[2];
+        signal input revocationLeafNextValue[2];
+        signal input revocationLeafIndex;
+        signal input revocationDepth;
+        signal input revocationSiblings[revocationMaxDepth][2];
+
+        signal output revocationRoot[2]; // [hi, lo]; [0, 0] for an empty registry.
+
+        component revocation = RevocationCheck(revocationMaxDepth);
+        revocation.secret <== revocationSecret;
+        revocation.commitment <== revocationCommitment;
+        revocation.leafValue <== revocationLeafValue;
+        revocation.leafNextValue <== revocationLeafNextValue;
+        revocation.leafIndex <== revocationLeafIndex;
+        revocation.depth <== revocationDepth;
+        revocation.siblings <== revocationSiblings;
+        revocationRoot <== revocation.root;
+    }
 }
 

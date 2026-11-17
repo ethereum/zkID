@@ -55,27 +55,10 @@ describe("Age Verification", () => {
       await readFile(join(INPUTS_DIR, "show", "default.json"), "utf-8"),
     );
 
-    const inputs: Record<string, unknown> = {
-      deviceKeyX: BigInt(inputJson.deviceKeyX),
-      deviceKeyY: BigInt(inputJson.deviceKeyY),
-      sig_r: BigInt(inputJson.sig_r),
-      sig_s_inverse: BigInt(inputJson.sig_s_inverse),
-      messageHash: BigInt(inputJson.messageHash),
-      predicateLen: BigInt(inputJson.predicateLen),
-      claimValues: inputJson.claimValues.map((v: string) => BigInt(v)),
-      claimIdentifierHashes: inputJson.claimIdentifierHashes.map((v: string) => BigInt(v)),
-      predicateClaimNames: inputJson.predicateClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-      predicateClaimNameLens: inputJson.predicateClaimNameLens.map((v: string) => BigInt(v)),
-      predicateRhsClaimNames: inputJson.predicateRhsClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-      predicateRhsClaimNameLens: inputJson.predicateRhsClaimNameLens.map((v: string) => BigInt(v)),
-      predicateClaimRefs: inputJson.predicateClaimRefs.map((v: string) => BigInt(v)),
-      predicateOps: inputJson.predicateOps.map((v: string) => BigInt(v)),
-      predicateRhsIsRef: inputJson.predicateRhsIsRef.map((v: string) => BigInt(v)),
-      predicateRhsValues: inputJson.predicateRhsValues.map((v: string) => BigInt(v)),
-      tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
-      tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
-      exprLen: BigInt(inputJson.exprLen),
-    };
+    // Field elements are decimal strings in the fixture.
+    const inputs = JSON.parse(JSON.stringify(inputJson), (_k, v) =>
+      typeof v === "string" && /^\d+$/.test(v) ? BigInt(v) : v,
+    );
 
     const witness = await calculator.calculateShowWitness(inputs);
 

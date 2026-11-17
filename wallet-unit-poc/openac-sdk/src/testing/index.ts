@@ -4,3 +4,4 @@ export {
   type GenerateDummyCredentialOptions,
   type DummyCredential,
 } from "./dummy-credential.js";
+export { issuerProofFor } from "./issuer-proof.js";

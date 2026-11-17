@@ -10,9 +10,13 @@ import {
   Credential,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
+  createRevocationRegistry,
+  acceptIssuerRoots,
+  createIssuerRegistry,
 } from "../src/index.js";
 import { WasmBridge } from "../src/wasm-bridge.js";
-import { generateDummyCredential } from "../src/testing/index.js";
+import { generateDummyCredential, issuerProofFor } from "../src/testing/index.js";
 import type {
   VerifyingKeys,
   KeySet,
@@ -140,6 +144,8 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
+      revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -151,6 +157,8 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
       predicates: compiled.predicates,
       logicExpression: compiled.logicExpression,
       claimNormalization: requiredNormalization(compiled),
+      isValidIssuerRoot: acceptIssuerRoots([createIssuerRegistry([cred.issuerPublicKey]).root]),
+      isValidRevocationRoot: acceptRevocationRoots([0n]),
     };
 
     // The Verifier class is exercised directly (not via OpenAC) on a bridge

@@ -1,4 +1,4 @@
-use super::{bind_shared, synthesize_all_vars, synthesize_witness_only};
+use super::{alloc_shared_issuer_key, bind_shared, synthesize_all_vars, synthesize_witness_only};
 use crate::{paths::PathConfig, utils::*, Scalar, E};
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
 use circom_scotia::reader::load_r1cs;
@@ -16,9 +16,29 @@ use tracing::info;
 #[cfg(feature = "native-witness")]
 witnesscalc_adapter::witness!(show);
 
+#[cfg(all(feature = "native-witness", has_circuit_show_mdoc))]
+witnesscalc_adapter::witness!(show_mdoc);
+
+#[cfg(feature = "native-witness")]
+fn call_show_witness(variant: ShowVariant, inputs_json: &str) -> Result<Vec<u8>, SynthesisError> {
+    let result = match variant {
+        ShowVariant::Jwt => show_witness(inputs_json),
+        #[cfg(has_circuit_show_mdoc)]
+        ShowVariant::Mdoc => show_mdoc_witness(inputs_json),
+        #[cfg(not(has_circuit_show_mdoc))]
+        ShowVariant::Mdoc => {
+            eprintln!("show_mdoc is not compiled into this binary. Run `yarn compile:show:mdoc` first.");
+            return Err(SynthesisError::Unsatisfiable);
+        }
+    };
+    result.map_err(|_| SynthesisError::Unsatisfiable)
+}
+
 // show.circom
 #[derive(Debug, Clone)]
 pub struct ShowCircuit {
+    /// `show` (with revocation) or `show_mdoc` (without)
+    variant: ShowVariant,
     /// Path configuration for resolving file paths
     path_config: PathConfig,
     /// Optional override for input JSON path
@@ -30,6 +50,7 @@ pub struct ShowCircuit {
 impl Default for ShowCircuit {
     fn default() -> Self {
         Self {
+            variant: ShowVariant::default(),
             path_config: PathConfig::default(),
             input_path: None,
             cached_witness: Arc::new(Mutex::new(None)),
@@ -41,16 +62,24 @@ impl ShowCircuit {
     /// Create a new ShowCircuit with PathConfig and optional input path override.
     pub fn new(path_config: PathConfig, input_path: Option<PathBuf>) -> Self {
         Self {
+            variant: ShowVariant::default(),
             path_config,
             input_path,
             cached_witness: Arc::new(Mutex::new(None)),
         }
     }
 
+    /// Select the compiled Show circuit (`show` or `show_mdoc`).
+    pub fn with_variant(mut self, variant: ShowVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
     /// Create from just an input path (for backwards compatibility).
     /// Uses development PathConfig.
     pub fn with_input_path<P: Into<Option<PathBuf>>>(path: P) -> Self {
         Self {
+            variant: ShowVariant::default(),
             path_config: PathConfig::development(),
             input_path: path.into(),
             cached_witness: Arc::new(Mutex::new(None)),
@@ -61,10 +90,15 @@ impl ShowCircuit {
     /// This bypasses filesystem I/O entirely.
     pub fn with_witness(witness: Vec<Scalar>) -> Self {
         Self {
+            variant: ShowVariant::default(),
             path_config: PathConfig::default(),
             input_path: None,
             cached_witness: Arc::new(Mutex::new(Some(witness))),
         }
+    }
+
+    fn layout(&self) -> ShowWitnessLayout {
+        calculate_show_witness_indices(self.path_config.circuit_size.n_claims(), self.variant)
     }
 
     /// Resolve the input JSON path using PathConfig.
@@ -77,7 +111,7 @@ impl ShowCircuit {
 
     /// Get the R1CS file path.
     fn r1cs_path(&self) -> PathBuf {
-        self.path_config.r1cs_path("show")
+        self.path_config.r1cs_path(self.variant.circuit_name())
     }
 
     /// Get cached witness or generate and cache it.
@@ -109,8 +143,7 @@ impl ShowCircuit {
             self.path_config.circuit_size.max_substring_length(),
             self.path_config.circuit_size.max_claims_length(),
         )?;
-        let witness_bytes =
-            show_witness(&inputs_json).map_err(|_| SynthesisError::Unsatisfiable)?;
+        let witness_bytes = call_show_witness(self.variant, &inputs_json)?;
 
         info!("witnesscalc time: {} ms", t0.elapsed().as_millis());
 
@@ -146,7 +179,7 @@ impl SpartanCircuit<E> for ShowCircuit {
     ) -> Result<(), SynthesisError> {
         let cs_type = type_name::<CS>();
         let is_setup_phase = cs_type.contains("ShapeCS");
-        let layout = calculate_show_witness_indices(self.path_config.circuit_size.n_claims());
+        let layout = self.layout();
 
         if is_setup_phase {
             let r1cs =
@@ -175,11 +208,10 @@ impl SpartanCircuit<E> for ShowCircuit {
     }
 
     fn public_values(&self) -> Result<Vec<Scalar>, SynthesisError> {
-        // Public IO = expressionResult (output) followed by the bound verifier
-        // statement (messageHash + predicate program). Circom lays these out as
+        // Public IO = outputs (expressionResult, issuerRoot[2], plus revocationRoot[2]
+        // for `show`) followed by the bound verifier statement. Circom lays these out as
         // the contiguous witness prefix `witness[1..=num_public]`.
-        let num_public =
-            calculate_show_witness_indices(self.path_config.circuit_size.n_claims()).num_public();
+        let num_public = self.layout().num_public();
 
         let witness = self.get_or_generate_witness().ok();
 
@@ -194,8 +226,7 @@ impl SpartanCircuit<E> for ShowCircuit {
         &self,
         cs: &mut CS,
     ) -> Result<Vec<AllocatedNum<Scalar>>, SynthesisError> {
-        let layout =
-            calculate_show_witness_indices(self.path_config.circuit_size.n_claims());
+        let layout = self.layout();
 
         // Check cached witness first (covers with_witness() path), then try
         // generating from input_path (native path). Returns None during setup.
@@ -223,12 +254,13 @@ impl SpartanCircuit<E> for ShowCircuit {
         let kb_x = AllocatedNum::alloc(cs.namespace(|| "KeyBindingX"), || Ok(device_key_x))?;
         let kb_y = AllocatedNum::alloc(cs.namespace(|| "KeyBindingY"), || Ok(device_key_y))?;
 
-        // Shared layout (must match `PrepareCircuit::shared` and
-        // `MdocCircuit::shared`):
+        // Shared layout (must match `PrepareCircuit::shared`, or
+        // `MdocCircuit::shared` for `show_mdoc`):
         //   [KeyBindingX, KeyBindingY,
         //    claimValues[0..n_claims],
-        //    claimIdentifierHashes[0..n_claims]]
-        let mut shared_values = Vec::with_capacity(2 + 2 * layout.claim_values_len);
+        //    claimIdentifierHashes[0..n_claims], issuerKeyX, issuerKeyY,
+        //    revocationCommitment[0..2] (`show` only)]
+        let mut shared_values = Vec::with_capacity(6 + 2 * layout.claim_values_len);
         shared_values.push(kb_x);
         shared_values.push(kb_y);
 
@@ -254,6 +286,24 @@ impl SpartanCircuit<E> for ShowCircuit {
                 move || Ok(id_scalar),
             )?;
             shared_values.push(id_alloc);
+        }
+
+        shared_values.extend(alloc_shared_issuer_key(
+            cs,
+            witness.as_deref(),
+            layout.issuer_key_x_index,
+        )?);
+        if let Some(start) = layout.revocation_commitment_index {
+            for limb in 0..2 {
+                let value = witness
+                    .as_ref()
+                    .map(|w| w[start + limb])
+                    .unwrap_or(Scalar::ZERO);
+                shared_values.push(AllocatedNum::alloc(
+                    cs.namespace(|| format!("RevocationCommitment{limb}")),
+                    move || Ok(value),
+                )?);
+            }
         }
 
         Ok(shared_values)

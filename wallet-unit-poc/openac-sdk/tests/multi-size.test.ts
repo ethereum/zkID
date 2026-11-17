@@ -9,8 +9,12 @@ import {
   Credential,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
+  createRevocationRegistry,
+  acceptIssuerRoots,
+  createIssuerRegistry,
 } from "../src/index.js";
-import { generateDummyCredential } from "../src/testing/index.js";
+import { generateDummyCredential, issuerProofFor } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
 import type { KeySet, VerifyingKeys } from "../src/types.js";
 
@@ -109,6 +113,8 @@ describe("multi-size pipeline", () => {
           precomputed,
           verifierNonce: nonce,
           devicePrivateKey: cred.devicePrivateKeyHex,
+          issuerProof: issuerProofFor(cred.issuerPublicKey),
+          revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
           keys,
           predicates: claimToClaimPredicate,
         });
@@ -120,6 +126,8 @@ describe("multi-size pipeline", () => {
           predicates: compiled.predicates,
           logicExpression: compiled.logicExpression,
           claimNormalization: requiredNormalization(compiled),
+          isValidIssuerRoot: acceptIssuerRoots([createIssuerRegistry([cred.issuerPublicKey]).root]),
+          isValidRevocationRoot: acceptRevocationRoots([0n]),
         });
 
         expect(verification.valid).toBe(true);

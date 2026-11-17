@@ -181,6 +181,8 @@ pub mod keys {
     pub const MDOC_PROOF: &str = "mdoc_proof.bin";
     pub const MDOC_WITNESS: &str = "mdoc_witness.bin";
     pub const MDOC_INSTANCE: &str = "mdoc_instance.bin";
+    pub const SHOW_MDOC_PROVING_KEY: &str = "show_mdoc_proving.key";
+    pub const SHOW_MDOC_VERIFYING_KEY: &str = "show_mdoc_verifying.key";
 }
 
 #[cfg(test)]

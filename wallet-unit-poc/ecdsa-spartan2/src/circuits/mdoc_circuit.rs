@@ -1,4 +1,4 @@
-use super::{bind_shared, synthesize_all_vars, synthesize_witness_only};
+use super::{alloc_shared_issuer_key, bind_shared, synthesize_all_vars, synthesize_witness_only};
 use crate::{
     paths::PathConfig, prover::generate_mdoc_witness, utils::calculate_mdoc_output_indices, Scalar,
     E,
@@ -184,7 +184,7 @@ impl SpartanCircuit<E> for MdocCircuit {
         // Shared layout (must match `ShowCircuit::shared`):
         //   [deviceKeyX, deviceKeyY,
         //    normalizedClaimValues[0..MDOC_SHARED_CLAIMS],
-        //    claimIdentifierHashes[0..MDOC_SHARED_CLAIMS]]
+        //    claimIdentifierHashes[0..MDOC_SHARED_CLAIMS], issuerKeyX, issuerKeyY]
         let shared_claims = MDOC_SHARED_CLAIMS.min(layout.claim_values_len);
         let mut shared_values = Vec::with_capacity(2 + 2 * shared_claims);
         shared_values.push(dk_x_alloc);
@@ -213,6 +213,12 @@ impl SpartanCircuit<E> for MdocCircuit {
             )?;
             shared_values.push(id_alloc);
         }
+
+        shared_values.extend(alloc_shared_issuer_key(
+            cs,
+            witness.as_deref(),
+            layout.issuer_key_x_index,
+        )?);
 
         Ok(shared_values)
     }

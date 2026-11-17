@@ -3,4 +3,4 @@ pragma circom 2.2.3;
 
 include "../jwt.circom";
 
-component main {public[pubKeyX, pubKeyY, decodeFlags, claimFormats]} = JWT(4096, 4000, 4, 50, 128);
+component main {public[decodeFlags, claimFormats]} = JWT(4096, 4000, 4, 50, 128);

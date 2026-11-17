@@ -8,6 +8,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ASSETS_DIR = join(__dirname, "..", "assets");
 const INPUTS_DIR = join(__dirname, "fixtures", "inputs");
 
+// Circuit input JSON stores field elements as decimal strings.
+function withBigInts(json: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(json), (_k, v) =>
+    typeof v === "string" && /^\d+$/.test(v) ? BigInt(v) : v,
+  );
+}
+
 describe("WitnessCalculator", () => {
   let calculator: WitnessCalculator;
 
@@ -22,39 +29,19 @@ describe("WitnessCalculator", () => {
         await readFile(join(INPUTS_DIR, "show", "default.json"), "utf-8"),
       );
 
-      const inputs: Record<string, unknown> = {
-        deviceKeyX: BigInt(inputJson.deviceKeyX),
-        deviceKeyY: BigInt(inputJson.deviceKeyY),
-        sig_r: BigInt(inputJson.sig_r),
-        sig_s_inverse: BigInt(inputJson.sig_s_inverse),
-        messageHash: BigInt(inputJson.messageHash),
-        predicateLen: BigInt(inputJson.predicateLen),
-        claimValues: inputJson.claimValues.map((v: string) => BigInt(v)),
-        claimIdentifierHashes: inputJson.claimIdentifierHashes.map((v: string) => BigInt(v)),
-        predicateClaimNames: inputJson.predicateClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-        predicateClaimNameLens: inputJson.predicateClaimNameLens.map((v: string) => BigInt(v)),
-        predicateRhsClaimNames: inputJson.predicateRhsClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-        predicateRhsClaimNameLens: inputJson.predicateRhsClaimNameLens.map((v: string) => BigInt(v)),
-        predicateClaimRefs: inputJson.predicateClaimRefs.map((v: string) => BigInt(v)),
-        predicateOps: inputJson.predicateOps.map((v: string) => BigInt(v)),
-        predicateRhsIsRef: inputJson.predicateRhsIsRef.map((v: string) => BigInt(v)),
-        predicateRhsValues: inputJson.predicateRhsValues.map((v: string) => BigInt(v)),
-        tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
-        tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
-        exprLen: BigInt(inputJson.exprLen),
-      };
+      const inputs = withBigInts(inputJson);
 
       const witness = await calculator.calculateShowWitness(inputs);
 
       expect(witness[0]).toBe(1n);
-      // Witness layout after binding the verifier statement into the public IO:
-      // w[1] = expressionResult, w[2..=30] = messageHash + predicate program
-      // (public, now including predicateClaimIdentifiers), then the private
-      // Show now has 156 public signals (names replaced the scalar identifier),
-      // so the private device key sits at witness[157]/[158] (SHOW_NUM_PUBLIC+1).
-      expect(witness[2]).toBe(BigInt(inputJson.messageHash));
-      expect(witness[157]).toBe(BigInt(inputJson.deviceKeyX));
-      expect(witness[158]).toBe(BigInt(inputJson.deviceKeyY));
+      // w[1] = expressionResult, w[2..=3] = issuerRoot[hi, lo], w[4..=5] =
+      // revocationRoot, w[6..=160] = messageHash + predicate program, then the
+      // private device key at w[161]/[162].
+      expect(witness[2] + witness[3]).not.toBe(0n);
+      expect(witness[4] + witness[5]).not.toBe(0n);
+      expect(witness[6]).toBe(BigInt(inputJson.messageHash));
+      expect(witness[161]).toBe(BigInt(inputJson.deviceKeyX));
+      expect(witness[162]).toBe(BigInt(inputJson.deviceKeyY));
     }, 30_000);
 
     it("should generate WTNS binary from show inputs", async () => {
@@ -62,27 +49,7 @@ describe("WitnessCalculator", () => {
         await readFile(join(INPUTS_DIR, "show", "default.json"), "utf-8"),
       );
 
-      const inputs: Record<string, unknown> = {
-        deviceKeyX: BigInt(inputJson.deviceKeyX),
-        deviceKeyY: BigInt(inputJson.deviceKeyY),
-        sig_r: BigInt(inputJson.sig_r),
-        sig_s_inverse: BigInt(inputJson.sig_s_inverse),
-        messageHash: BigInt(inputJson.messageHash),
-        predicateLen: BigInt(inputJson.predicateLen),
-        claimValues: inputJson.claimValues.map((v: string) => BigInt(v)),
-        claimIdentifierHashes: inputJson.claimIdentifierHashes.map((v: string) => BigInt(v)),
-        predicateClaimNames: inputJson.predicateClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-        predicateClaimNameLens: inputJson.predicateClaimNameLens.map((v: string) => BigInt(v)),
-        predicateRhsClaimNames: inputJson.predicateRhsClaimNames.map((r: string[]) => r.map((v) => BigInt(v))),
-        predicateRhsClaimNameLens: inputJson.predicateRhsClaimNameLens.map((v: string) => BigInt(v)),
-        predicateClaimRefs: inputJson.predicateClaimRefs.map((v: string) => BigInt(v)),
-        predicateOps: inputJson.predicateOps.map((v: string) => BigInt(v)),
-        predicateRhsIsRef: inputJson.predicateRhsIsRef.map((v: string) => BigInt(v)),
-        predicateRhsValues: inputJson.predicateRhsValues.map((v: string) => BigInt(v)),
-        tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
-        tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
-        exprLen: BigInt(inputJson.exprLen),
-      };
+      const inputs = withBigInts(inputJson);
 
       const wtns = await calculator.calculateShowWitnessWtns(inputs);
 

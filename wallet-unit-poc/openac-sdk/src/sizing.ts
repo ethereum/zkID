@@ -49,10 +49,10 @@ export const VC_SIZES: readonly VcSize[] = ["1k", "2k", "4k", "8k"] as const;
  * so a recompile that moves these fails loudly.
  */
 export const CLAIM_VALUES_WITNESS_START: Record<VcSize, number> = {
-  "1k": 2462,
-  "2k": 4010,
-  "4k": 7558,
-  "8k": 14654,
+  "1k": 2463,
+  "2k": 4011,
+  "4k": 7559,
+  "8k": 14655,
 };
 
 /**
@@ -61,10 +61,10 @@ export const CLAIM_VALUES_WITNESS_START: Record<VcSize, number> = {
  * values and carried to Show via comm_W_shared to bind slots to attribute names.
  */
 export const CLAIM_IDENTITY_WITNESS_START: Record<VcSize, number> = {
-  "1k": 2526,
-  "2k": 4074,
-  "4k": 7622,
-  "8k": 14718,
+  "1k": 2527,
+  "2k": 4075,
+  "4k": 7623,
+  "8k": 14719,
 };
 
 export function selectVcSizeForSigningInput(byteLength: number): VcSize {
