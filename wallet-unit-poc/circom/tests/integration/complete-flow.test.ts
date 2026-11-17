@@ -3,8 +3,13 @@ import { circomkit } from "../common/index.ts";
 import { generateMockData } from "../../src/mock-vc-generator.ts";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce } from "../../src/show.ts";
 import { bindPredicateName } from "../common/claim-identity.ts";
+import { witnessIndices } from "../common/witness-signals.ts";
+import { buildRevocationWitness, createRevocationRegistry, toLimbs, bytesToBigInt } from "../../src/revocation.ts";
+import { randomBytes } from "crypto";
 import assert from "assert";
 import { p256 } from "@noble/curves/nist.js";
+
+const REVOCATION_MAX_DEPTH = 4;
 
 describe("Complete Flow: Register (JWT) → Show Circuit", () => {
   let jwtCircuit: WitnessTester<
@@ -60,7 +65,7 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
     showCircuit = await circomkit.WitnessTester(`Show`, {
       file: "show",
       template: "Show",
-      params: [2, 2, 8, 64],
+      params: [2, 2, 8, 64, REVOCATION_MAX_DEPTH],
       recompile: RECOMPILE,
     });
     console.log("Show Circuit #constraints:", await showCircuit.getConstraintCount());
@@ -99,7 +104,19 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
       showInputs.exprLen = 1n;
       await bindPredicateName(showInputs, 0, 0, "roc_birthday");
 
-      await showCircuit.expectPass(showInputs, { expressionResult: 1n });
+      // The commitment Show proves against is the one the JWT circuit extracted.
+      const [hi, lo] = await witnessIndices(jwtCircuit, [
+        "main.RevocationCommitment[0]",
+        "main.RevocationCommitment[1]",
+      ]);
+      const registry = createRevocationRegistry(Array.from({ length: 5 }, () => bytesToBigInt(randomBytes(32))));
+      const revocation = buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH);
+      revocation.revocationCommitment = [jwtWitness[hi], jwtWitness[lo]];
+
+      await showCircuit.expectPass(
+        { ...showInputs, ...revocation },
+        { expressionResult: 1n, revocationRoot: toLimbs(registry.root) },
+      );
     });
 
     // it("should complete full flow: JWT circuit extracts device key → Show circuit verifies device signature", async () => {

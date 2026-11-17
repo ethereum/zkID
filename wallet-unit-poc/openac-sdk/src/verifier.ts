@@ -1,6 +1,10 @@
 import { WasmBridge } from "./wasm-bridge.js";
 import { deserializeProofBundle } from "./prover.js";
-import { buildShowStatementPublicValues } from "./inputs/show-statement.js";
+import {
+  buildShowStatementPublicValues,
+  showNumOutputs,
+} from "./inputs/show-statement.js";
+import { fromLimbs } from "./revocation.js";
 import {
   extractIssuerKeyFromPreparePublicValues,
   extractClaimNormalizationFromPreparePublicValues,
@@ -70,6 +74,7 @@ export class Verifier {
       expressionResult: null,
       deviceKey: null,
       issuerKey: null,
+      revocationRoot: null,
       verifyMs: performance.now() - startTime,
       error,
     };
@@ -259,12 +264,13 @@ export class Verifier {
       }
     }
 
-    // Public IO layout: index 0 = expressionResult, indices 1.. = the bound
-    // verifier statement (messageHash + predicate program).
+    // Public IO layout: [0] expressionResult, [1..3] revocationRoot [hi, lo],
+    // then the bound verifier statement (messageHash + predicate program).
     const publicValues = result.showPublicValues.map(parseScalar);
     const expressionResult = (publicValues[0] ?? 0n) !== 0n;
+    const revocationRoot = fromLimbs(publicValues[1] ?? 0n, publicValues[2] ?? 0n);
 
-    const boundValues = publicValues.slice(1);
+    const boundValues = publicValues.slice(showNumOutputs(DEFAULT_SHOW_PARAMS));
     if (boundValues.length !== expectedStatementValues.length) {
       return Verifier.failure(
         `Statement binding size mismatch: proof exposes ${boundValues.length} bound values, expected ${expectedStatementValues.length}`,
@@ -284,11 +290,28 @@ export class Verifier {
       }
     }
 
+    let rootAccepted: boolean;
+    try {
+      rootAccepted = await expected.isValidRevocationRoot(revocationRoot, issuerKey);
+    } catch (e) {
+      return Verifier.failure(
+        `Revocation root check failed: ${e instanceof Error ? e.message : String(e)}`,
+        startTime,
+      );
+    }
+    if (rootAccepted !== true) {
+      return Verifier.failure(
+        "Revocation root is not accepted: the registry state is stale or unknown",
+        startTime,
+      );
+    }
+
     return {
       valid: true,
       expressionResult,
       deviceKey: null,
       issuerKey,
+      revocationRoot,
       verifyMs: performance.now() - startTime,
     };
   }

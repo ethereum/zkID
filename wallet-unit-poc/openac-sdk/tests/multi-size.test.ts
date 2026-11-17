@@ -9,6 +9,8 @@ import {
   Credential,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
+  createRevocationRegistry,
 } from "../src/index.js";
 import { generateDummyCredential } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
@@ -109,6 +111,7 @@ describe("multi-size pipeline", () => {
           precomputed,
           verifierNonce: nonce,
           devicePrivateKey: cred.devicePrivateKeyHex,
+          revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
           keys,
           predicates: claimToClaimPredicate,
         });
@@ -120,6 +123,7 @@ describe("multi-size pipeline", () => {
           predicates: compiled.predicates,
           logicExpression: compiled.logicExpression,
           claimNormalization: requiredNormalization(compiled),
+          isValidRevocationRoot: acceptRevocationRoots([0n]),
         });
 
         expect(verification.valid).toBe(true);

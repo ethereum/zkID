@@ -10,6 +10,7 @@ include "components/ec-extractor.circom";
 include "components/claim-value-extractor.circom";
 include "components/claim-name-extractor.circom";
 include "components/claim-value-normalizer.circom";
+include "components/revocation-commitment-extractor.circom";
 
 /// @title JWT
 /// @notice Verifies an ES256-signed SD-JWT and extracts normalized claim values.
@@ -24,6 +25,7 @@ include "components/claim-value-normalizer.circom";
 ///           - "_sd":[ occurs exactly once, so there is one disclosure array and no
 ///             nested ones
 ///           - every disclosure digest occurs exactly once, as an element of that array
+///           - "revocation_commitment":" occurs exactly once, before the commitment
 ///         A nested object with an x or y key, a nested _sd array, or a signed string
 ///         that repeats a digest each add a second position and leave the match
 ///         undetermined. The payload bytes are fixed by the ES256 check below, so this
@@ -47,6 +49,8 @@ include "components/claim-value-normalizer.circom";
 ///         too: constant across every presentation from this credential, they
 ///         would be a stable identifier defeating the per-presentation
 ///         reblinding. The circuit therefore has no public outputs at all.
+/// @notice RevocationCommitment ([hi, lo] of the signed 32-byte commitment) is private
+///         for the same reason and reaches Show through the shared-witness commitment.
 template JWT(
     maxMessageLength,
     maxB64PayloadLength,
@@ -81,6 +85,9 @@ template JWT(
     // claimFormats[i]: format for normalizing claim slot i (0=bool,1=uint,2=iso_date,3=roc_date,4=string).
     // Only meaningful when decodeFlags[i] = 1.
     signal input claimFormats[maxClaims];
+
+    // Position of "revocation_commitment":" in the decoded payload.
+    signal input revocationCommitmentIndex;
 
     signal decodedClaims[maxClaims][decodedLen] <== ClaimDecoder(maxClaims, maxClaimsLength)(claims, claimLengths, decodeFlags);
     signal claimHashes[maxClaims][32] <== ClaimHasher(maxClaims, maxClaimsLength)(claims);
@@ -241,4 +248,10 @@ template JWT(
     // This leaves the circuit with no public outputs at all.
     signal KeyBindingX <== ecExtractor.pubKeyX;
     signal KeyBindingY <== ecExtractor.pubKeyY;
+
+    // The signed revocation commitment, for Show's non-revocation proof.
+    signal RevocationCommitment[2] <== RevocationCommitmentExtractor(maxPayloadLength)(
+        payload,
+        revocationCommitmentIndex
+    );
 }

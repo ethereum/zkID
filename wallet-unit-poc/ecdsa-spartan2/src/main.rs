@@ -23,15 +23,17 @@ use ecdsa_spartan2::{
     paths::keys::{
         MDOC_INSTANCE, MDOC_PROOF, MDOC_PROVING_KEY, MDOC_VERIFYING_KEY, MDOC_WITNESS,
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
-        PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
-        SHOW_VERIFYING_KEY, SHOW_WITNESS,
+        PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_MDOC_PROVING_KEY,
+        SHOW_MDOC_VERIFYING_KEY, SHOW_PROOF, SHOW_PROVING_KEY, SHOW_VERIFYING_KEY, SHOW_WITNESS,
     },
     prove_circuit, prove_circuit_with_pk, reblind, reblind_with_loaded_data, run_circuit,
     save_keys, setup_circuit_keys, setup_circuit_keys_no_save, verify_circuit,
     verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
     E,
 };
-use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
+use ecdsa_spartan2::utils::{
+    calculate_jwt_output_indices, calculate_mdoc_output_indices, ShowVariant,
+};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
 use tracing::info;
@@ -527,16 +529,16 @@ fn run_mdoc_prove_pipeline(
 
     let mdoc_pk_path = path_config.key_path(MDOC_PROVING_KEY);
     let mdoc_vk_path = path_config.key_path(MDOC_VERIFYING_KEY);
-    let show_pk_path = path_config.key_path(SHOW_PROVING_KEY);
-    let show_vk_path = path_config.key_path(SHOW_VERIFYING_KEY);
+    let show_pk_path = path_config.key_path(SHOW_MDOC_PROVING_KEY);
+    let show_vk_path = path_config.key_path(SHOW_MDOC_VERIFYING_KEY);
 
     if !mdoc_pk_path.exists() || !mdoc_vk_path.exists() {
         return Err("MDOC keys not found. Run: cargo run --release -- mdoc setup".into());
     }
     if !show_pk_path.exists() || !show_vk_path.exists() {
         return Err(format!(
-            "Show keys not found for size {size}.\n\
-             Run:  cargo run --release -- show setup --size {size}"
+            "show_mdoc keys not found for size {size}.\n\
+             Run:  cargo run --release -- mdoc setup --size {size}"
         ));
     }
 
@@ -591,7 +593,8 @@ fn run_mdoc_prove_pipeline(
 
     info!("Proving Show circuit (mdoc flow)...");
     let t0 = Instant::now();
-    let show_circuit = ShowCircuit::new(path_config.clone(), Some(show_mdoc_input.clone()));
+    let show_circuit = ShowCircuit::new(path_config.clone(), Some(show_mdoc_input.clone()))
+        .with_variant(ShowVariant::Mdoc);
     prove_circuit_with_pk(
         show_circuit,
         &show_pk,
@@ -926,6 +929,16 @@ fn execute_mdoc(action: CircuitAction, options: CommandOptions) {
                 path_config.key_path(MDOC_PROVING_KEY),
                 path_config.key_path(MDOC_VERIFYING_KEY),
             );
+            if path_config.r1cs_path(ShowVariant::Mdoc.circuit_name()).exists() {
+                info!("Setting up keys for show_mdoc");
+                setup_circuit_keys(
+                    ShowCircuit::new(path_config.clone(), None).with_variant(ShowVariant::Mdoc),
+                    path_config.key_path(SHOW_MDOC_PROVING_KEY),
+                    path_config.key_path(SHOW_MDOC_VERIFYING_KEY),
+                );
+            } else {
+                eprintln!("show_mdoc not compiled; skipping its keys (run `yarn compile:show:mdoc`).");
+            }
         }
         CircuitAction::Run => {
             let circuit = MdocCircuit::new(path_config, options.input.clone());

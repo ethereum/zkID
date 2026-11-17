@@ -17,6 +17,7 @@ import { issuerPublicKeyToPoint } from "./issuer-key.js";
 import {
   assertUnambiguousPayload,
   DEVICE_KEY_ANCHORS,
+  REVOCATION_COMMITMENT_ANCHOR,
 } from "./payload-anchors.js";
 import type {
   JwtCircuitParams,
@@ -130,7 +131,7 @@ export function buildJwtCircuitInputs(
       stringToPaddedBigIntArray(pattern, params.maxSubstringLength),
     );
     matchLength.push(pattern.length);
-    matchIndex.push(index);
+    matchIndex.push(byteOffset(decodedPayload, index));
   }
 
   // pad remaining match slots
@@ -180,5 +181,14 @@ export function buildJwtCircuitInputs(
     claimLengths,
     decodeFlags: decodeFlagsOut,
     claimFormats: claimFormatsOut,
+    revocationCommitmentIndex: byteOffset(
+      decodedPayload,
+      decodedPayload.indexOf(REVOCATION_COMMITMENT_ANCHOR),
+    ),
   };
+}
+
+// The circuit indexes payload bytes; String.indexOf counts UTF-16 code units.
+function byteOffset(text: string, index: number): number {
+  return utf8Encode(text.slice(0, index)).length;
 }

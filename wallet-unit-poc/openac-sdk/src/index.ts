@@ -225,6 +225,26 @@ export {
   extractClaimNormalizationFromPreparePublicValues,
 } from "./inputs/prepare-public-io.js";
 export type { IssuerKeyPoint } from "./inputs/prepare-public-io.js";
+// Revocation: commitments, the SHA-256 LeanIMT+ registry and root checks.
+export {
+  REVOCATION_MAX_DEPTH,
+  REVOCATION_COMMITMENT_CLAIM,
+  generateRevocationSecret,
+  computeRevocationCommitment,
+  encodeRevocationCommitment,
+  decodeRevocationCommitment,
+  createRevocationRegistry,
+  revocationRegistryFromLeaves,
+  acceptRevocationRoots,
+  buildRevocationWitness,
+} from "./revocation.js";
+export type {
+  RevocationRegistryLike,
+  RevocationRequest,
+  RevocationRootCheck,
+  RevocationWitness,
+} from "./revocation.js";
+export { RevocationRegistry, sha256Scheme } from "@coordination-network/revocation-registry";
 // Circuit-level predicate program types/constants, for building ExpectedStatement.
 export { PredicateOp, LogicToken } from "./inputs/show-input-builder.js";
 export type { PredicateSpec, PredicateRhs } from "./inputs/show-input-builder.js";

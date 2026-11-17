@@ -1,16 +1,17 @@
 #!/bin/bash
 
 usage() {
-  echo "Usage: $0 {jwt|jwt_1k|jwt_2k|jwt_4k|jwt_8k|show|ecdsa|mdoc|all}"
+  echo "Usage: $0 {jwt|jwt_1k|jwt_2k|jwt_4k|jwt_8k|show|show_mdoc|ecdsa|mdoc|all}"
   echo "  jwt:    Compile the default JWT circuit."
   echo "  jwt_1k: Compile JWT circuit (1KB - maxMsg=1280)."
   echo "  jwt_2k: Compile JWT circuit (2KB - maxMsg=2048)."
   echo "  jwt_4k: Compile JWT circuit (4KB - maxMsg=4096)."
   echo "  jwt_8k: Compile JWT circuit (8KB - maxMsg=8192)."
-  echo "  show:   Compile Show circuit."
+  echo "  show:   Compile Show circuit (with revocation)."
+  echo "  show_mdoc: Compile Show circuit without revocation (MDOC flow)."
   echo "  ecdsa:  Compile ECDSA circuit."
   echo "  mdoc:   Compile MDOC circuit."
-  echo "  all:    Compile everything — jwt + jwt_1k/2k/4k/8k + show + ecdsa + mdoc."
+  echo "  all:    Compile everything: jwt + jwt_1k/2k/4k/8k + show + show_mdoc + ecdsa + mdoc."
   exit 1
 }
 
@@ -38,17 +39,18 @@ compile_circuit() {
 }
 
 case "$1" in
-  jwt|jwt_1k|jwt_2k|jwt_4k|jwt_8k|show|ecdsa|mdoc)
+  jwt|jwt_1k|jwt_2k|jwt_4k|jwt_8k|show|show_mdoc|ecdsa|mdoc)
     compile_circuit "$1"
     ;;
   all)
-    echo "Compiling all circuits (jwt + jwt_1k/2k/4k/8k + show + ecdsa)..."
+    echo "Compiling all circuits (jwt + jwt_1k/2k/4k/8k + show + show_mdoc + ecdsa + mdoc)..."
     compile_circuit jwt
     compile_circuit jwt_1k
     compile_circuit jwt_2k
     compile_circuit jwt_4k
     compile_circuit jwt_8k
     compile_circuit show
+    compile_circuit show_mdoc
     compile_circuit ecdsa
     compile_circuit mdoc
     echo "All circuits compiled successfully."

@@ -89,10 +89,10 @@ impl CircuitSize {
     /// reading the wrong slot.
     pub fn claim_values_witness_start(self) -> usize {
         match self {
-            CircuitSize::Kb1 => 2462,
-            CircuitSize::Kb2 => 4010,
-            CircuitSize::Kb4 => 7558,
-            CircuitSize::Kb8 => 14654,
+            CircuitSize::Kb1 => 2463,
+            CircuitSize::Kb2 => 4011,
+            CircuitSize::Kb4 => 7559,
+            CircuitSize::Kb8 => 14655,
         }
     }
 
@@ -102,10 +102,10 @@ impl CircuitSize {
     /// Re-derived from each `.sym` by `tests/witness_layout.rs`.
     pub fn claim_identifier_hashes_witness_start(self) -> usize {
         match self {
-            CircuitSize::Kb1 => 2526,
-            CircuitSize::Kb2 => 4074,
-            CircuitSize::Kb4 => 7622,
-            CircuitSize::Kb8 => 14718,
+            CircuitSize::Kb1 => 2527,
+            CircuitSize::Kb2 => 4075,
+            CircuitSize::Kb4 => 7623,
+            CircuitSize::Kb8 => 14719,
         }
     }
 }

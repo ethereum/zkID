@@ -8,16 +8,18 @@ import * as snarkjs from "snarkjs";
 import { generateMockData } from "./mock-vc-generator";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce, nameToBuffer } from "./show";
 import { PredicateFormat } from "./predicate-types";
+import { buildRevocationWitness, createRevocationRegistry, bytesToBigInt } from "./revocation";
 
 // Witness index of claimIdentifierHashes[0] per compiled JWT size (.sym column $2).
 // Read from the JWT witness because H(name) can't be computed off-circuit
 // (the circuits are over secq256r1; no JS Poseidon matches). Mirrors
 // CLAIM_IDENTITY_WITNESS_START in openac-sdk/src/sizing.ts.
 const CLAIM_IDENTITY_WITNESS_START: Record<string, number> = {
-  "1k": 2526,
-  "2k": 4074,
-  "4k": 7622,
-  "8k": 14718,
+  default: 3872,
+  "1k": 2527,
+  "2k": 4075,
+  "4k": 7623,
+  "8k": 14719,
 };
 
 export const CIRCUIT_SIZES: Record<string, number[]> = {
@@ -29,6 +31,9 @@ export const CIRCUIT_SIZES: Record<string, number[]> = {
   "4k": [4096, 4000, 4, 50, 128],
   "8k": [8192, 8000, 4, 50, 128],
 };
+
+// Max revocation tree depth of the compiled Show circuit (circuits.json).
+const REVOCATION_MAX_DEPTH = 10;
 
 // Predicate operator codes (see eval-predicate.circom).
 const OP_LE = 0;
@@ -55,6 +60,9 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const claimFormats = [PredicateFormat.STRING_EQ, PredicateFormat.ROC_DATE];
 
   const mockData = await generateMockData({
+    // Short identifiers so the 1k payload fits with the revocation commitment.
+    issuer: "https://issuer.example",
+    subject: "did:example:holder",
     circuitParams: params,
     targetPayloadLength,
     claimFormats,
@@ -87,7 +95,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   let claimIdentifierHashes: bigint[] = [];
   const identityStart = CLAIM_IDENTITY_WITNESS_START[sizeName];
   if (identityStart !== undefined) {
-    const jwtName = `jwt_${sizeName}`;
+    const jwtName = sizeName === "default" ? "jwt" : `jwt_${sizeName}`;
     const jwtWasm = path.resolve(__dirname, "..", "build", jwtName, `${jwtName}_js`, `${jwtName}.wasm`);
     const wtnsPath = path.join(os.tmpdir(), `${jwtName}-geninputs.wtns`);
     await snarkjs.wtns.calculate(mockData.circuitInputs, jwtWasm, wtnsPath);
@@ -123,6 +131,12 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const lhsName = nameToBuffer(mockData.claims[ROC_BIRTHDAY_SLOT] ? "roc_birthday" : "");
   showInputs.predicateClaimNames[0] = lhsName.bytes;
   showInputs.predicateClaimNameLens[0] = lhsName.len;
+
+  // Non-revocation proof against a registry holding a few unrelated commitments.
+  const registry = createRevocationRegistry(
+    Array.from({ length: 5 }, () => bytesToBigInt(nodeCrypto.randomBytes(32))),
+  );
+  Object.assign(showInputs, buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH));
 
   const circomDir = path.resolve(__dirname, "..");
   // The "default" pseudo-size writes to inputs/{jwt,show}/default.json directly,

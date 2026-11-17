@@ -13,6 +13,10 @@ import {
   Credential,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
+  computeRevocationCommitment,
+  createRevocationRegistry,
+  generateRevocationSecret,
 } from "../src/index.js";
 import { generateDummyCredential } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
@@ -74,6 +78,15 @@ function sha256Hex(buf: Uint8Array): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
+// Other holders' revoked commitments; the test credentials are not in it.
+const REGISTRY = createRevocationRegistry(
+  Array.from({ length: 6 }, () => computeRevocationCommitment(generateRevocationSecret())),
+);
+
+function revocationFor(cred: { revocationSecretHex: string }) {
+  return { secret: cred.revocationSecretHex, registry: REGISTRY };
+}
+
 function makeDummy1k() {
   return generateDummyCredential({
     size: "1k",
@@ -108,6 +121,7 @@ function expectedStatement(
     predicates: compiled.predicates,
     logicExpression: compiled.logicExpression,
     claimNormalization: requiredNormalization(compiled),
+    isValidRevocationRoot: acceptRevocationRoots([REGISTRY.root]),
   };
 }
 
@@ -262,6 +276,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-c2c-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -297,6 +312,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-age-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: predicate,
     });
@@ -333,6 +349,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "typed-dsl-all-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: expr,
     });
@@ -362,6 +379,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "verifyComponents-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -393,6 +411,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "verifyProof-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -455,6 +474,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "policy-swap-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: easyPolicy,
     });
@@ -495,6 +515,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -567,6 +588,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "other-issuer-nonce",
       devicePrivateKey: otherIssuerCred.devicePrivateKeyHex,
+      revocation: revocationFor(otherIssuerCred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -604,6 +626,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "issuer-report-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -638,6 +661,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: "captured-old-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -651,6 +675,96 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
     expect(replayed.valid).toBe(false);
     expect(replayed.expressionResult).toBeNull();
     expect(replayed.error).toMatch(/nonce/i);
+  }, 600_000);
+
+  it("proves non-revocation against the registry root and rejects an unaccepted root", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const nonce = "revocation-root-nonce";
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const proof = await openac.present({
+      precomputed,
+      verifierNonce: nonce,
+      devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    expect(proof.publicValues.revocationRoot).toBe(REGISTRY.root);
+
+    const expected = expectedStatement(cred, nonce, claimToClaimPredicate);
+    const accepted = await openac.verify(proof, keys.verifyingKeys(), expected);
+    expect(accepted.valid).toBe(true);
+    expect(accepted.revocationRoot).toBe(REGISTRY.root);
+
+    // A verifier whose registry has moved on rejects the stale root.
+    const stale = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expected,
+      isValidRevocationRoot: acceptRevocationRoots([REGISTRY.root + 1n]),
+    });
+    expect(stale.valid).toBe(false);
+    expect(stale.error).toMatch(/Revocation root/);
+  }, 600_000);
+
+  it("proves against an empty registry with root 0", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const nonce = "revocation-empty-nonce";
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+    const proof = await openac.present({
+      precomputed,
+      verifierNonce: nonce,
+      devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+
+    const result = await openac.verify(proof, keys.verifyingKeys(), {
+      ...expectedStatement(cred, nonce, claimToClaimPredicate),
+      isValidRevocationRoot: acceptRevocationRoots([0n]),
+    });
+    expect(result.valid).toBe(true);
+    expect(result.revocationRoot).toBe(0n);
+  }, 600_000);
+
+  it("refuses to present a revoked credential", async () => {
+    const cred = makeDummy1k();
+    const keys = loadLocalKeySet("1k");
+    const registry = createRevocationRegistry([...REGISTRY.commitments, cred.revocationCommitment]);
+
+    const precomputed = await openac.precompute({
+      jwt: cred.jwt,
+      disclosures: cred.disclosures,
+      issuerPublicKey: cred.issuerPublicKey,
+      keys,
+      predicates: claimToClaimPredicate,
+    });
+
+    await expect(
+      openac.present({
+        precomputed,
+        verifierNonce: "revoked-credential-nonce",
+        devicePrivateKey: cred.devicePrivateKeyHex,
+        revocation: { secret: cred.revocationSecretHex, registry },
+        keys,
+        predicates: claimToClaimPredicate,
+      }),
+    ).rejects.toMatchObject({ code: "CREDENTIAL_REVOKED" });
   }, 600_000);
 });
 
@@ -678,6 +792,7 @@ describe.skipIf(!HAS_R2)("Full pipeline with keys fetched from R2", () => {
       precomputed,
       verifierNonce: "sdk-e2e-r2-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -711,6 +826,7 @@ describe.skipIf(!HAS_R2)("Full pipeline with keys fetched from R2", () => {
       precomputed,
       verifierNonce: "sdk-e2e-hybrid-nonce",
       devicePrivateKey: cred.devicePrivateKeyHex,
+      revocation: revocationFor(cred),
       keys,
       predicates: claimToClaimPredicate,
     });

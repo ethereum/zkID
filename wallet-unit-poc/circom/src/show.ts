@@ -38,8 +38,8 @@ export interface ShowCircuitParams {
 
 export function generateShowCircuitParams(params: number[] | JwtCircuitParams): ShowCircuitParams {
   const nClaims = Array.isArray(params) ? Math.max(1, (params[2] || 2) - 2) : Math.max(1, (params.maxMatches || 2) - 2);
-  const maxPredicates = Array.isArray(params) ? (params[5] || 2) : 2;
-  const maxLogicTokens = Array.isArray(params) ? (params[6] || 8) : 8;
+  const maxPredicates = 2;
+  const maxLogicTokens = 8;
   const valueBits = 64;
 
   return { nClaims, maxPredicates, maxLogicTokens, valueBits };

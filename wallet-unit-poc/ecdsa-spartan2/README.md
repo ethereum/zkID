@@ -15,7 +15,7 @@ in `../circom/inputs/`.
 ```sh
   cd ../circom
   yarn install
-  yarn compile:all          # compiles jwt + jwt_1k/2k/4k/8k + show + ecdsa
+  yarn compile:all          # compiles jwt + jwt_1k/2k/4k/8k + show + show_mdoc + ecdsa + mdoc
 ```
 
 ## Build

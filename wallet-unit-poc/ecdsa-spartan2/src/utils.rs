@@ -62,6 +62,7 @@ pub fn parse_jwt_inputs(
         ("messageLength", FieldParser::U64Scalar),
         ("periodIndex", FieldParser::U64Scalar),
         ("matchesCount", FieldParser::U64Scalar),
+        ("revocationCommitmentIndex", FieldParser::U64Scalar),
         // Array fields
         ("message", FieldParser::BigIntArray),
         ("matchIndex", FieldParser::U64Array),
@@ -79,8 +80,10 @@ pub fn parse_jwt_inputs(
 
 /// Parse Show circuit inputs from JSON.
 ///
-/// Matches the current `Show(nClaims, maxPredicates, maxLogicTokens, valueBits)`
-/// template: predicates + RPN logic expression replaced the old
+/// Matches the current
+/// `Show(nClaims, maxPredicates, maxLogicTokens, valueBits, revocationMaxDepth)`
+/// template. The revocation inputs are parsed when present (`show`) and absent
+/// for `show_mdoc`. Predicates + an RPN logic expression replaced the old
 /// `claim/currentYear/currentMonth/currentDay` interface.
 ///
 /// Predicate RHS encoding uses a single `predicateRhsValues[]` array:
@@ -118,8 +121,21 @@ pub fn parse_show_inputs(
         ("tokenTypes", FieldParser::BigIntArray),
         ("tokenValues", FieldParser::BigIntArray),
     ];
+    let revocation_defs: &[(&str, FieldParser)] = &[
+        ("revocationCommitment", FieldParser::BigIntArray),
+        ("revocationSecret", FieldParser::BigIntArray),
+        ("revocationLeafValue", FieldParser::BigIntArray),
+        ("revocationLeafNextValue", FieldParser::BigIntArray),
+        ("revocationLeafIndex", FieldParser::BigIntScalar),
+        ("revocationDepth", FieldParser::BigIntScalar),
+        ("revocationSiblings", FieldParser::BigInt2DArray),
+    ];
 
-    parse_inputs(json_value, field_defs)
+    let mut inputs = parse_inputs(json_value, field_defs)?;
+    if json_value.get("revocationCommitment").is_some() {
+        inputs.extend(parse_inputs(json_value, revocation_defs)?);
+    }
+    Ok(inputs)
 }
 
 /// Convert a single BigInt to Scalar
@@ -417,6 +433,8 @@ pub struct JwtOutputLayout {
     pub claim_identifier_hashes_start: usize,
     pub keybinding_x_index: usize,
     pub keybinding_y_index: usize,
+    /// Witness index of `RevocationCommitment[0]` (hi limb); the lo limb follows.
+    pub revocation_commitment_index: usize,
     /// Witness index of the public issuer key coordinate `pubKeyX`.
     pub issuer_key_x_index: usize,
     /// Witness index of the public issuer key coordinate `pubKeyY`.
@@ -456,11 +474,16 @@ impl JwtOutputLayout {
 
     /// Witness indices the shared partition must equal, in the order
     /// `PrepareCircuit::shared` pushes them:
-    /// [KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes..].
+    /// [KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes..,
+    ///  RevocationCommitment[0], RevocationCommitment[1]].
     pub fn shared_witness_indices(&self) -> Vec<usize> {
         let mut idx = vec![self.keybinding_x_index, self.keybinding_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
+        idx.extend([
+            self.revocation_commitment_index,
+            self.revocation_commitment_index + 1,
+        ]);
         idx
     }
 }
@@ -475,6 +498,8 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
     let claim_identifier_hashes_start = size.claim_identifier_hashes_witness_start();
     let keybinding_x_index = claim_identifier_hashes_start + claim_values_len;
     let keybinding_y_index = keybinding_x_index + 1;
+    // Declared right after KeyBindingY in jwt.circom.
+    let revocation_commitment_index = keybinding_y_index + 1;
     // No public outputs, so the public inputs occupy witness[1..] directly.
     let issuer_key_x_index = 1;
     let issuer_key_y_index = 2;
@@ -487,6 +512,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
         claim_identifier_hashes_start,
         keybinding_x_index,
         keybinding_y_index,
+        revocation_commitment_index,
         issuer_key_x_index,
         issuer_key_y_index,
         decode_flags_start,
@@ -543,64 +569,88 @@ pub fn check_issuer_key_binding(
     Ok(())
 }
 
-/// Show circuit template parameters (`Show(nClaims, maxPredicates, maxLogicTokens, valueBits)`).
-/// Fixed across all VC sizes: the Show circuit is always `Show(2, 2, 8, 64)`
-/// (see `circom/circuits.json`), so only `nClaims` varies with the JWT circuit
-/// and it is always `2` because every JWT size uses `maxMatches = 4`.
+/// Show circuit template parameters
+/// (`Show(nClaims, maxPredicates, maxLogicTokens, valueBits, revocationMaxDepth)`),
+/// fixed across all VC sizes (see `circom/circuits.json`). `nClaims` is always `2`
+/// because every JWT size uses `maxMatches = 4`.
 pub const SHOW_MAX_PREDICATES: usize = 2;
 pub const SHOW_MAX_LOGIC_TOKENS: usize = 8;
 /// Fixed byte width an attribute name is hashed over (Show NAME_ID_LEN in show.circom).
 pub const SHOW_NAME_ID_LEN: usize = 31;
+/// Max LeanIMT+ depth of the revocation tree in the `show` circuit.
+pub const SHOW_REVOCATION_MAX_DEPTH: usize = 10;
 
-/// Number of public IO signals of the Show circuit.
-///
-/// The verifier statement is bound into the proof's public IO (see
-/// `circom/circuits/main/show.circom`). Circom lays the public signals out as a
-/// contiguous witness prefix `witness[1..=SHOW_NUM_PUBLIC]`, in declaration order:
-///   [0] expressionResult (output)
-///   [1] messageHash
-///   [2] predicateLen
-///   [3..]  predicateClaimRefs[maxPredicates]
-///          predicateOps[maxPredicates]
-///          predicateRhsIsRef[maxPredicates]
-///          predicateRhsValues[maxPredicates]
-///          predicateClaimNames[maxPredicates][NAME_ID_LEN]
-///          predicateClaimNameLens[maxPredicates]
-///          predicateRhsClaimNames[maxPredicates][NAME_ID_LEN]
-///          predicateRhsClaimNameLens[maxPredicates]
-///          tokenTypes[maxLogicTokens]
-///          tokenValues[maxLogicTokens]
-///          exprLen
-/// = 4 + 6*maxPredicates + 2*maxPredicates*NAME_ID_LEN + 2*maxLogicTokens
-///   (maxPredicates=2, maxLogicTokens=8, NAME_ID_LEN=31: 4 + 12 + 124 + 16 = 156).
-///
-/// The attribute names are public so the verifier sees (and pins) which attribute
-/// each predicate operand was bound to; the circuit hashes them to the identity.
-pub const SHOW_NUM_PUBLIC: usize = 4
+/// Number of public inputs of the Show circuit: the verifier statement
+/// (messageHash + predicate program), in declaration order:
+///   messageHash, predicateLen,
+///   predicateClaimRefs[maxPredicates], predicateOps[maxPredicates],
+///   predicateRhsIsRef[maxPredicates], predicateRhsValues[maxPredicates],
+///   predicateClaimNames[maxPredicates][NAME_ID_LEN], predicateClaimNameLens[maxPredicates],
+///   predicateRhsClaimNames[maxPredicates][NAME_ID_LEN], predicateRhsClaimNameLens[maxPredicates],
+///   tokenTypes[maxLogicTokens], tokenValues[maxLogicTokens], exprLen
+pub const SHOW_STATEMENT_LEN: usize = 3
     + 6 * SHOW_MAX_PREDICATES
     + 2 * SHOW_MAX_PREDICATES * SHOW_NAME_ID_LEN
     + 2 * SHOW_MAX_LOGIC_TOKENS;
 
+/// Number of public IO signals of the `show` circuit (with revocation):
+/// `expressionResult`, `revocationRoot[2]`, then the verifier statement.
+pub const SHOW_NUM_PUBLIC: usize = 3 + SHOW_STATEMENT_LEN;
+
+/// Which compiled Show circuit to use. The SD-JWT flow proves revocation
+/// (`show`); the MDOC flow has no revocation commitment (`show_mdoc`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShowVariant {
+    #[default]
+    Jwt,
+    Mdoc,
+}
+
+impl ShowVariant {
+    pub fn circuit_name(self) -> &'static str {
+        match self {
+            ShowVariant::Jwt => "show",
+            ShowVariant::Mdoc => "show_mdoc",
+        }
+    }
+
+    pub fn has_revocation(self) -> bool {
+        self == ShowVariant::Jwt
+    }
+
+    /// Public outputs: `expressionResult`, plus `revocationRoot[2]` with revocation.
+    pub fn num_outputs(self) -> usize {
+        if self.has_revocation() {
+            3
+        } else {
+            1
+        }
+    }
+
+    pub fn num_public(self) -> usize {
+        self.num_outputs() + SHOW_STATEMENT_LEN
+    }
+}
+
 /// Layout of the Show circuit's witness vector.
 ///
-/// Verified against `build/show/show.sym` (`Show(2, 2, 8, 64)`), with the
-/// verifier statement made public (`SHOW_NUM_PUBLIC = 30`):
-///   witness[1]        = main.expressionResult (public output)
-///   witness[2..=30]   = messageHash + predicate program (public inputs)
-///   witness[31]       = main.deviceKeyX       (private, shared via comm_W_shared)
-///   witness[32]       = main.deviceKeyY       (private, shared)
-///   witness[33]       = main.sig_r            (private)
-///   witness[34]       = main.sig_s_inverse    (private)
-///   witness[35..35+n_claims] = main.claimValues[..] (private, shared)
-///   witness[35+n_claims..]   = main.claimIdentifierHashes[..] (private, shared)
+/// Verified against `build/show/show.sym` and `build/show_mdoc/show_mdoc.sym`:
+///   witness[1]                  = main.expressionResult (public output)
+///   witness[2..=3]              = main.revocationRoot[2] (public output, `show` only)
+///   witness[..=num_public]      = messageHash + predicate program (public inputs)
+///   then private: deviceKeyX, deviceKeyY, sig_r, sig_s_inverse,
+///   claimValues[..], claimIdentifierHashes[..], revocationCommitment[2] (`show` only)
 #[derive(Debug, Clone, Copy)]
 pub struct ShowWitnessLayout {
+    pub variant: ShowVariant,
     pub expression_result_index: usize,
     pub device_key_x_index: usize,
     pub device_key_y_index: usize,
     pub claim_values_start: usize,
     pub claim_values_len: usize,
     pub claim_identifier_hashes_start: usize,
+    /// Witness index of `revocationCommitment[0]`; `None` without revocation.
+    pub revocation_commitment_index: Option<usize>,
 }
 
 impl ShowWitnessLayout {
@@ -613,9 +663,8 @@ impl ShowWitnessLayout {
             ..self.claim_identifier_hashes_start + self.claim_values_len
     }
 
-    /// Number of public IO signals (`expressionResult` + bound statement).
     pub fn num_public(&self) -> usize {
-        SHOW_NUM_PUBLIC
+        self.variant.num_public()
     }
 
     /// Witness indices the shared partition must equal, in the order
@@ -624,25 +673,33 @@ impl ShowWitnessLayout {
         let mut idx = vec![self.device_key_x_index, self.device_key_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
+        if let Some(i) = self.revocation_commitment_index {
+            idx.extend([i, i + 1]);
+        }
         idx
     }
 }
 
-/// Calculate Show circuit witness layout for the given `n_claims` template parameter.
-///
-/// `n_claims` must equal the JWT circuit's `maxMatches - 2` (see [`CircuitSize::n_claims`]).
-pub fn calculate_show_witness_indices(n_claims: usize) -> ShowWitnessLayout {
+/// Calculate the Show witness layout for `n_claims` (the JWT circuit's
+/// `maxMatches - 2`, see [`CircuitSize::n_claims`]) and the circuit variant.
+pub fn calculate_show_witness_indices(n_claims: usize, variant: ShowVariant) -> ShowWitnessLayout {
     // Private signals follow the public prefix: deviceKeyX, deviceKeyY, sig_r,
-    // sig_s_inverse, then claimValues[..].
-    let device_key_x_index = SHOW_NUM_PUBLIC + 1;
+    // sig_s_inverse, claimValues[..], claimIdentifierHashes[..], then the
+    // revocation inputs.
+    let device_key_x_index = variant.num_public() + 1;
     let claim_values_start = device_key_x_index + 4;
+    let claim_identifier_hashes_start = claim_values_start + n_claims;
     ShowWitnessLayout {
+        variant,
         expression_result_index: 1,
         device_key_x_index,
         device_key_y_index: device_key_x_index + 1,
         claim_values_start,
         claim_values_len: n_claims,
-        claim_identifier_hashes_start: claim_values_start + n_claims,
+        claim_identifier_hashes_start,
+        revocation_commitment_index: variant
+            .has_revocation()
+            .then_some(claim_identifier_hashes_start + n_claims),
     }
 }
 
@@ -842,66 +899,54 @@ pub fn mdoc_hashmap_to_json_string(
 mod show_witness_indices_tests {
     use super::*;
 
-    /// Catches witness-layout drift between show.sym and calculate_show_witness_indices,
-    /// which would silently break the Prepare<->Show commitment binding.
+    /// Catches witness-layout drift between the Show `.sym` files and
+    /// calculate_show_witness_indices, which would silently break the
+    /// Prepare<->Show commitment binding.
     #[test]
     fn witness_indices_match_show_sym() {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let sym_path = std::path::Path::new(manifest_dir)
-            .join("../circom/build/show/show.sym");
-        if !sym_path.exists() {
-            eprintln!(
-                "show.sym not found at {}; skipping (run `bash ../circom/scripts/compile.sh show`).",
-                sym_path.display()
-            );
-            return;
-        }
-
-        let contents = std::fs::read_to_string(&sym_path).expect("read show.sym");
-        let idx_of = |name: &str| -> Option<usize> {
-            for line in contents.lines() {
-                let mut parts = line.split(',');
-                let _ = parts.next();
-                let witness_idx = parts.next()?;
-                let _ = parts.next();
-                let signal = parts.next()?.trim();
-                if signal == name {
-                    let parsed: i64 = witness_idx.parse().ok()?;
-                    if parsed < 0 {
-                        return None;
-                    }
-                    return Some(parsed as usize);
-                }
+        for variant in [ShowVariant::Jwt, ShowVariant::Mdoc] {
+            let name = variant.circuit_name();
+            let sym_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../circom/build/{name}/{name}.sym"));
+            if !sym_path.exists() {
+                eprintln!("{} not found; skipping.", sym_path.display());
+                continue;
             }
-            None
-        };
 
-        let expression_result = idx_of("main.expressionResult")
-            .expect("main.expressionResult missing from show.sym");
-        let device_key_x =
-            idx_of("main.deviceKeyX").expect("main.deviceKeyX missing from show.sym");
-        let device_key_y =
-            idx_of("main.deviceKeyY").expect("main.deviceKeyY missing from show.sym");
-        let claim0 =
-            idx_of("main.claimValues[0]").expect("main.claimValues[0] missing from show.sym");
+            let contents = std::fs::read_to_string(&sym_path).expect("read show sym");
+            let idx_of = |signal: &str| -> Option<usize> {
+                contents.lines().find_map(|line| {
+                    let mut parts = line.split(',');
+                    let _ = parts.next();
+                    let witness_idx = parts.next()?;
+                    let _ = parts.next();
+                    (parts.next()?.trim() == signal)
+                        .then(|| witness_idx.parse::<i64>().ok().filter(|i| *i >= 0))
+                        .flatten()
+                        .map(|i| i as usize)
+                })
+            };
 
-        let layout = calculate_show_witness_indices(2);
-        assert_eq!(
-            layout.expression_result_index, expression_result,
-            "expressionResult witness index mismatch with show.sym"
-        );
-        assert_eq!(
-            layout.device_key_x_index, device_key_x,
-            "deviceKeyX witness index mismatch with show.sym (recompile show and update utils.rs)"
-        );
-        assert_eq!(
-            layout.device_key_y_index, device_key_y,
-            "deviceKeyY witness index mismatch with show.sym (recompile show and update utils.rs)"
-        );
-        assert_eq!(
-            layout.claim_values_start, claim0,
-            "claimValues[0] witness index mismatch with show.sym"
-        );
+            let layout = calculate_show_witness_indices(2, variant);
+            let mut expected = vec![
+                ("main.expressionResult", Some(layout.expression_result_index)),
+                ("main.deviceKeyX", Some(layout.device_key_x_index)),
+                ("main.deviceKeyY", Some(layout.device_key_y_index)),
+                ("main.claimValues[0]", Some(layout.claim_values_start)),
+                ("main.claimIdentifierHashes[0]", Some(layout.claim_identifier_hashes_start)),
+                ("main.exprLen", Some(layout.num_public())),
+            ];
+            if let Some(i) = layout.revocation_commitment_index {
+                expected.push(("main.revocationRoot[0]", Some(2)));
+                expected.push(("main.revocationRoot[1]", Some(3)));
+                expected.push(("main.revocationCommitment[0]", Some(i)));
+                expected.push(("main.revocationCommitment[1]", Some(i + 1)));
+            }
+
+            for (signal, index) in expected {
+                assert_eq!(idx_of(signal), index, "{signal} index drifted from {name}.sym");
+            }
+        }
     }
 }
 

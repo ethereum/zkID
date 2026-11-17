@@ -178,7 +178,7 @@ impl SpartanCircuit<E> for PrepareCircuit {
         let layout = calculate_jwt_output_indices(self.path_config.circuit_size);
 
         // The shared segment is [KeyBindingX, KeyBindingY, claimValues[..],
-        // claimIdentifierHashes[..]] and every slot now maps to a real JWT
+        // claimIdentifierHashes[..], RevocationCommitment[..]] and every slot now maps to a real JWT
         // witness signal (jwt.circom derives claimIdentifierHashes = H(name)).
         // `bind_shared` constrains all of them to those witness indices, so a
         // slot's attribute identity travels to Show via comm_W_shared (Items 1+3).
@@ -259,8 +259,9 @@ impl SpartanCircuit<E> for PrepareCircuit {
         // Shared layout (must match `ShowCircuit::shared`):
         //   [KeyBindingX, KeyBindingY,
         //    normalizedClaimValues[0..n_claims],
-        //    claimIdentifierHashes[0..n_claims]]
-        let mut shared_values = Vec::with_capacity(2 + 2 * layout.claim_values_len);
+        //    claimIdentifierHashes[0..n_claims],
+        //    RevocationCommitment[0..2]]
+        let mut shared_values = Vec::with_capacity(4 + 2 * layout.claim_values_len);
         shared_values.push(keybinding_x_alloc);
         shared_values.push(keybinding_y_alloc);
 
@@ -288,6 +289,17 @@ impl SpartanCircuit<E> for PrepareCircuit {
             shared_values.push(AllocatedNum::alloc(
                 cs.namespace(|| format!("ClaimIdentifierHash{idx}")),
                 move || Ok(id_scalar),
+            )?);
+        }
+
+        for limb in 0..2 {
+            let value = witness
+                .as_ref()
+                .map(|w| w[layout.revocation_commitment_index + limb])
+                .unwrap_or(Scalar::ZERO);
+            shared_values.push(AllocatedNum::alloc(
+                cs.namespace(|| format!("RevocationCommitment{limb}")),
+                move || Ok(value),
             )?);
         }
 

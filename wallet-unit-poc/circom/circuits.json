@@ -32,7 +32,27 @@
   "show": {
     "file": "show",
     "template": "Show",
-    "params": [2, 2, 8, 64],
+    "params": [2, 2, 8, 64, 10],
+    "pubs": [
+      "messageHash",
+      "predicateLen",
+      "predicateClaimRefs",
+      "predicateOps",
+      "predicateRhsIsRef",
+      "predicateRhsValues",
+      "tokenTypes",
+      "tokenValues",
+      "exprLen",
+      "predicateClaimNames",
+      "predicateClaimNameLens",
+      "predicateRhsClaimNames",
+      "predicateRhsClaimNameLens"
+    ]
+  },
+  "show_mdoc": {
+    "file": "show",
+    "template": "Show",
+    "params": [2, 2, 8, 64, 0],
     "pubs": [
       "messageHash",
       "predicateLen",

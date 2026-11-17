@@ -9,7 +9,7 @@ import { generateShowInputs, signDeviceNonce } from "../../src/show.ts";
 import { bindPredicateName, hashClaimName } from "../common/claim-identity.ts";
 import { uint8ArrayToBigIntArray } from "../../src/utils.ts";
 
-const SHOW_PARAMS = [2, 2, 8, 64] as const;
+const SHOW_PARAMS = [2, 2, 8, 64, 0] as const;
 const SHOW_PARAM_OBJ = {
   nClaims: SHOW_PARAMS[0],
   maxPredicates: SHOW_PARAMS[1],

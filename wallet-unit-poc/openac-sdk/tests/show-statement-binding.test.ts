@@ -16,6 +16,7 @@ import {
   buildShowStatementPublicValues,
   compilePredicateExpression,
   requiredNormalization,
+  acceptRevocationRoots,
 } from "../src/index.js";
 import { NAME_ID_LEN } from "../src/inputs/show-statement.js";
 import { issuerPublicKeyToPoint } from "../src/inputs/issuer-key.js";
@@ -105,7 +106,10 @@ function preparePublicValuesFor(
   ];
 }
 
-/** The public-value vector a proof for (nonce, predicates) would expose, expressionResult first. */
+// A revocation root above 2^128, so both limbs are non-zero.
+const ROOT = (123n << 128n) | 456n;
+
+/** The public-value vector a proof for (nonce, predicates) would expose: expressionResult, revocationRoot [hi, lo], statement. */
 function publicValuesFor(
   nonce: string,
   predicates: PredicateExpression,
@@ -118,7 +122,9 @@ function publicValuesFor(
     compiled.predicates,
     compiled.logicExpression,
   );
-  return [expressionResult ? 1n : 0n, ...statement].map(toScalarString);
+  return [expressionResult ? 1n : 0n, ROOT >> 128n, ROOT & ((1n << 128n) - 1n), ...statement].map(
+    toScalarString,
+  );
 }
 
 // Two distinct P-256 keys, standing in for a known issuer and an unknown one.
@@ -139,6 +145,7 @@ const expected: ExpectedStatement = {
   predicates: compiledPolicy.predicates,
   logicExpression: compiledPolicy.logicExpression,
   claimNormalization: compiledNormalization,
+  isValidRevocationRoot: acceptRevocationRoots([ROOT]),
 };
 
 async function verifyWith(
@@ -189,6 +196,44 @@ describe("Show statement binding: verifier enforcement", () => {
     expect(result.valid).toBe(true);
     expect(result.expressionResult).toBe(true);
     expect(result.error).toBeUndefined();
+  });
+
+  it("reports the revocation root", async () => {
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true));
+    expect(result.revocationRoot).toBe(ROOT);
+  });
+
+  it("rejects a revocation root the verifier does not accept", async () => {
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true), {
+      ...expected,
+      isValidRevocationRoot: async () => false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/Revocation root/);
+  });
+
+  it("passes the proven issuer key to the root check", async () => {
+    let seen: bigint | undefined;
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true), {
+      ...expected,
+      isValidRevocationRoot: (root, issuer) => {
+        seen = issuer.x;
+        return root === ROOT;
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(seen).toBe(issuerPublicKeyToPoint(KNOWN_ISSUER).x);
+  });
+
+  it("fails closed when the root check throws", async () => {
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true), {
+      ...expected,
+      isValidRevocationRoot: () => {
+        throw new Error("rpc down");
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/rpc down/);
   });
 
   it("reports expressionResult=false when the bound result bit is zero", async () => {
@@ -392,6 +437,7 @@ describe("Claim normalization binding: verifier enforcement", () => {
       predicates: narrow.predicates,
       logicExpression: narrow.logicExpression,
       claimNormalization: requiredNormalization(narrow),
+      isValidRevocationRoot: acceptRevocationRoots([ROOT]),
     };
     expect(narrow.decodeFlags).toEqual([1, 0]);
 

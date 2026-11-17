@@ -97,12 +97,30 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@coordination-network/revocation-registry@npm:0.3.0":
+  version: 0.3.0
+  resolution: "@coordination-network/revocation-registry@npm:0.3.0"
+  dependencies:
+    "@noble/hashes": "npm:^1.8.0"
+    "@zk-kit/lean-imt-plus": "npm:0.1.2"
+    poseidon-lite: "npm:0.3.0"
+  checksum: 10c0/5f42cda04a1f71220057609e21dccb7777b1c67634262b6262e7c0aee661d07b6f95e9e4992591472c119da4c8bbc1f16df0efa847c590eaa62d903d1ad291c8
+  languageName: node
+  linkType: hard
+
 "@cspotcode/source-map-support@npm:^0.8.0":
   version: 0.8.1
   resolution: "@cspotcode/source-map-support@npm:0.8.1"
   dependencies:
     "@jridgewell/trace-mapping": "npm:0.3.9"
   checksum: 10c0/05c5368c13b662ee4c122c7bfbe5dc0b613416672a829f3e78bc49a357a197e0218d6e74e7c66cfcd04e15a179acab080bd3c69658c9fbefd0e1ccd950a07fc6
+  languageName: node
+  linkType: hard
+
+"@datastructures-js/binary-search-tree@npm:5.4.0":
+  version: 5.4.0
+  resolution: "@datastructures-js/binary-search-tree@npm:5.4.0"
+  checksum: 10c0/8b7bc2e8a4817f3b2e3897289a9ecb9f0aad30327fbd3a69cd355172a20996f2a612781533335833890f86cd9d3fde836d98b7a423bc1e1fac4c8bb3ec223832
   languageName: node
   linkType: hard
 
@@ -780,7 +798,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.7.1":
+"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.7.1, @noble/hashes@npm:^1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
@@ -1001,6 +1019,7 @@ __metadata:
   dependencies:
     "@auth0/mdl": "npm:^3.0.1"
     "@aws-crypto/sha256-js": "npm:^5.2.0"
+    "@coordination-network/revocation-registry": "npm:0.3.0"
     "@noble/curves": "npm:^1.8.1"
     "@noble/hashes": "npm:^1.7.1"
     "@peculiar/x509": "npm:^2.0.0"
@@ -1011,6 +1030,7 @@ __metadata:
     "@types/node": "npm:^20.3.0"
     "@zk-email/circuits": "npm:^6.3.3-nightly-20250214"
     "@zk-email/helpers": "npm:^6.4.2"
+    "@zk-kit/lean-imt-plus-sha256.circom": "npm:0.1.0"
     asn1: "npm:^0.2.6"
     base64-js: "npm:^1.5.1"
     bs58: "npm:^6.0.0"
@@ -1182,6 +1202,24 @@ __metadata:
     commander: "npm:^11.0.0"
     snarkjs: "npm:^0.7.5"
   checksum: 10c0/d2b2ccae85b5a4f1a57caf71f895cafb922f4e8b4f136cc57eb3434701640744bd8a02928037604b6f9d7c2084373d922d912180e41da070ff402d6033e35f8b
+  languageName: node
+  linkType: hard
+
+"@zk-kit/lean-imt-plus-sha256.circom@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@zk-kit/lean-imt-plus-sha256.circom@npm:0.1.0"
+  dependencies:
+    circomlib: "npm:^2.0.5"
+  checksum: 10c0/b95fa3304d5db0cf09738542c4dcb61888e8ef58baf1962d4dd9fd2f154c524eeb589318ce2c02d4371545670db3df76def179daef058059f8b52bced444ea21
+  languageName: node
+  linkType: hard
+
+"@zk-kit/lean-imt-plus@npm:0.1.2":
+  version: 0.1.2
+  resolution: "@zk-kit/lean-imt-plus@npm:0.1.2"
+  dependencies:
+    "@datastructures-js/binary-search-tree": "npm:5.4.0"
+  checksum: 10c0/7fbcb455a6f247c1314cd8dcd32c457d0f8cade41ef97a3bdeeeceb5b655f15bbd54173aa433bde5c2d99d0dc6eb4b6e206b5791abfb7836870335654fdddc33
   languageName: node
   linkType: hard
 
@@ -3152,6 +3190,13 @@ __metadata:
     pvutils: "npm:^1.1.3"
     tslib: "npm:^2.8.1"
   checksum: 10c0/33cfab9283702782ae228bd2d4a51b1e9b2e0d6e2141207f29ee95716101ac4fe6e6821882da5f5eca28c74be3964b181b09e95cbbb757b2bd9dca918a5765fd
+  languageName: node
+  linkType: hard
+
+"poseidon-lite@npm:0.3.0":
+  version: 0.3.0
+  resolution: "poseidon-lite@npm:0.3.0"
+  checksum: 10c0/03494ea69be0dc3ced055b7f1505ff73848002c68332d52a5cf5f00d1a657693317e1ffc790b84ccaf9a0f5f61bf05e1a453eab60c385c98701a6580edead49c
   languageName: node
   linkType: hard
 

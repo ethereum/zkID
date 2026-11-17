@@ -9,6 +9,7 @@ import {
   signDeviceNonce,
 } from "./inputs/show-input-builder.js";
 import { circuitInputsToJson, base64Encode } from "./utils.js";
+import { buildRevocationWitness, fromLimbs } from "./revocation.js";
 import { InputError, ProofError } from "./errors.js";
 import { base64Decode } from "./utils.js";
 import {
@@ -183,6 +184,20 @@ export class Prover {
     // same claims under the same formats.
     assertNormalizationSupports(precomputed.claimNormalization, compiled);
 
+    if (!request.revocation?.secret || !request.revocation.registry) {
+      throw new InputError("MISSING_REVOCATION_INPUTS", "present() requires revocation: { secret, registry }");
+    }
+    const revocationCommitment = parsed.revocationCommitment;
+    if (revocationCommitment === null) {
+      throw new InputError("CLAIM_NOT_FOUND", "Credential has no revocation_commitment claim");
+    }
+    const revocation = buildRevocationWitness(
+      request.revocation.secret,
+      revocationCommitment,
+      request.revocation.registry,
+      DEFAULT_SHOW_PARAMS.revocationMaxDepth,
+    );
+
     const showInputs = buildShowCircuitInputs(
       DEFAULT_SHOW_PARAMS,
       verifierNonce,
@@ -193,6 +208,7 @@ export class Prover {
         claimIdentifierHashes: precomputed.claimIdentifierHashes,
         predicates: compiled.predicates,
         logicExpression: compiled.logicExpression,
+        revocation,
       },
     );
     const showInputsJson = circuitInputsToJson(showInputs);
@@ -221,13 +237,15 @@ export class Prover {
     timing.totalMs = performance.now() - startTime;
 
     let expressionResult = false;
+    let revocationRoot = 0n;
     if (this.witnessCalculator) {
       const inputs = this.parseJsonToBigInt(showInputsJson);
       const showWitness = await this.witnessCalculator.calculateShowWitness(inputs);
       expressionResult = showWitness[1] === 1n;
+      revocationRoot = fromLimbs(showWitness[2]!, showWitness[3]!);
     }
 
-    const publicValues: ProofPublicValues = { expressionResult };
+    const publicValues: ProofPublicValues = { expressionResult, revocationRoot };
 
     return this.buildPresentationProof(
       presentResult.prepareProof,
@@ -389,6 +407,7 @@ export class Prover {
           showInstance: base64Encode(result.showInstance),
           publicValues: {
             expressionResult: result.publicValues.expressionResult,
+            revocationRoot: result.publicValues.revocationRoot.toString(),
           },
         };
       },

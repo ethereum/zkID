@@ -28,6 +28,8 @@ export interface ShowCircuitParams {
   maxPredicates: number;
   maxLogicTokens: number;
   valueBits: number;
+  /** Max LeanIMT+ depth of the revocation tree; 0 compiles revocation out. */
+  revocationMaxDepth: number;
 }
 
 export const DEFAULT_JWT_PARAMS: JwtCircuitParams = {
@@ -43,6 +45,7 @@ export const DEFAULT_SHOW_PARAMS: ShowCircuitParams = {
   maxPredicates: 2,
   maxLogicTokens: 8,
   valueBits: 64,
+  revocationMaxDepth: 10,
 };
 
 export interface EcdsaPublicKey {
@@ -68,6 +71,8 @@ export interface ProofPublicValues {
    * commitment, not proof outputs.
    */
   expressionResult: boolean;
+  /** Root of the revocation tree the credential was proven absent from; 0 for an empty registry. */
+  revocationRoot: bigint;
 }
 
 export interface VerifyingKeys {
@@ -124,6 +129,13 @@ export interface ExpectedStatement {
    * still reported on the result but no trust decision is enforced (back-compat).
    */
   trustedIssuers?: EcdsaPublicKey[];
+  /**
+   * Accepts or rejects the revocation root the proof was built against, in the
+   * registry of the proven issuer, e.g. with that issuer's `OpenACRevocationRegistry`
+   * contract: `(root, issuer) => contractFor(issuer.jwk).isValidRoot(root)`.
+   * `verify()` fails when it returns false.
+   */
+  isValidRevocationRoot: import("./revocation.js").RevocationRootCheck;
 }
 
 /**
@@ -168,6 +180,8 @@ export interface VerificationResult {
    * ```
    */
   issuerKey: ProvenIssuerKey | null;
+  /** The accepted revocation root. Non-null exactly when `valid` is true. */
+  revocationRoot: bigint | null;
   /** Always null. The device-key binding flows through comm_W_shared, not a public output. */
   deviceKey: null;
   verifyMs: number;
@@ -198,6 +212,7 @@ export interface SerializedProofJSON {
   showInstance: string; // base64
   publicValues: {
     expressionResult: boolean;
+    revocationRoot: string;
   };
 }
 
@@ -221,7 +236,11 @@ export type ErrorCode =
   | "PARAMS_EXCEEDED"
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
-  | "WASM_NOT_INITIALIZED";
+  | "WASM_NOT_INITIALIZED"
+  | "INVALID_REVOCATION_SECRET"
+  | "INVALID_REVOCATION_REGISTRY"
+  | "MISSING_REVOCATION_INPUTS"
+  | "CREDENTIAL_REVOKED";
 
 export interface DisclosedClaim {
   index: number;
@@ -285,9 +304,11 @@ export interface JwtCircuitInputs {
   claimLengths: bigint[];
   decodeFlags: number[];
   claimFormats: bigint[];
+  /** Position of `"revocation_commitment":"` in the decoded payload. */
+  revocationCommitmentIndex: number;
 }
 
-export interface ShowCircuitInputs {
+export interface ShowCircuitInputs extends Partial<import("./revocation.js").RevocationWitness> {
   deviceKeyX: bigint;
   deviceKeyY: bigint;
   sig_r: bigint;
@@ -419,6 +440,9 @@ export interface PresentRequest {
 
   /** Predicates to evaluate against the precomputed credential. */
   predicates: import("./predicates.js").PredicateExpression;
+
+  /** The revocation secret and the registry to prove non-revocation against. */
+  revocation: import("./revocation.js").RevocationRequest;
 
   /** Trusted clock / profile policy for JWT validity checks (re-checked at present time). */
   profile?: import("./credential.js").CredentialProfileOptions;

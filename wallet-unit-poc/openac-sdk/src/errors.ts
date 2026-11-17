@@ -21,6 +21,10 @@ export type ErrorCode =
   | "PARAMS_EXCEEDED"
   | "INVALID_NONCE"
   | "INVALID_ENCODING"
+  | "INVALID_REVOCATION_SECRET"
+  | "INVALID_REVOCATION_REGISTRY"
+  | "MISSING_REVOCATION_INPUTS"
+  | "CREDENTIAL_REVOKED"
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
   | "WASM_NOT_INITIALIZED";
@@ -78,7 +82,11 @@ export class InputError extends OpenACError {
       | "CLAIM_FORMAT_MISMATCH"
       | "PARAMS_EXCEEDED"
       | "INVALID_NONCE"
-      | "INVALID_ENCODING",
+      | "INVALID_ENCODING"
+      | "INVALID_REVOCATION_SECRET"
+      | "INVALID_REVOCATION_REGISTRY"
+      | "MISSING_REVOCATION_INPUTS"
+      | "CREDENTIAL_REVOKED",
     message: string,
     cause?: unknown
   ) {

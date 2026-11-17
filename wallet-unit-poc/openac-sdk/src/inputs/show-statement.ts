@@ -7,9 +7,10 @@
 // The Show circuit exposes its public signals as the contiguous witness prefix
 // `witness[1..=num_public]`, in this order (see circom/circuits/main/show.circom):
 //   [0] expressionResult   (output; NOT produced here, it is the result bit)
-//   [1] messageHash
-//   [2] predicateLen
-//   [3..]  predicateClaimRefs[maxPredicates]
+//   [1..3] revocationRoot  (output, [hi, lo]; NOT produced here)
+//   [3] messageHash
+//   [4] predicateLen
+//   [5..]  predicateClaimRefs[maxPredicates]
 //          predicateOps[maxPredicates]
 //          predicateRhsIsRef[maxPredicates]
 //          predicateRhsValues[maxPredicates]
@@ -24,7 +25,7 @@
 // declared between predicateRhsValues and tokenTypes, so it flattens there.
 //
 // `buildShowStatementFields` returns the padded arrays; `buildShowStatementPublicValues`
-// flattens them (excluding expressionResult) into the exact order above.
+// flattens them (excluding the outputs) into the exact order above.
 
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToBigInt, P256_SCALAR_ORDER } from "../utils.js";
@@ -167,10 +168,14 @@ export function buildShowStatementFields(
   };
 }
 
+/** Public outputs before the statement: expressionResult, plus revocationRoot[2] with revocation. */
+export function showNumOutputs(params: ShowCircuitParams): number {
+  return params.revocationMaxDepth > 0 ? 3 : 1;
+}
+
 /**
  * Flatten the statement fields into the public-value vector in circuit order,
- * EXCLUDING the leading `expressionResult` (public index 0). The returned array
- * therefore corresponds to public indices `1..num_public`.
+ * EXCLUDING the leading outputs (`showNumOutputs`).
  */
 export function buildShowStatementPublicValues(
   params: ShowCircuitParams,

@@ -20,6 +20,13 @@ note: This project uses [circomkit](https://github.com/erhant/circomkit) to comp
 
 - `es256` – ECDSA signature verification (ES256)
 - `jwt` – JWT validation circuit
+- `show`: device binding, predicates and revocation (`show_mdoc` without revocation)
+
+### Revocation
+
+- `components/revocation-commitment-extractor.circom`: reads the signed `revocation_commitment` from the JWT payload. Every JWT credential must carry it.
+- `components/revocation.circom`: `RevocationCheck(MAX_DEPTH)` proves `commitment = sha256(secret)` and non-membership in a SHA-256 LeanIMT+ ([`@zk-kit/lean-imt-plus-sha256.circom`](https://www.npmjs.com/package/@zk-kit/lean-imt-plus-sha256.circom)), and outputs the root.
+- `Show(..., revocationMaxDepth)`: `0` disables revocation.
 
 ## Testing
 

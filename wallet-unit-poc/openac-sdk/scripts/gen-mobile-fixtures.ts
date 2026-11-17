@@ -33,6 +33,7 @@ import { DEFAULT_SHOW_PARAMS, type EcdsaPublicKey } from "../src/types.js";
 import { base64urlEncode, circuitInputsToJson } from "../src/utils.js";
 import { WitnessCalculator } from "../src/witness-calculator.js";
 import { generateDummyCredential } from "../src/testing/dummy-credential.js";
+import { buildRevocationWitness, createRevocationRegistry } from "../src/revocation.js";
 
 const SIZE = "2k" as const;
 const ISSUER_URL = "https://issuer.example/";
@@ -238,6 +239,13 @@ async function generate(
     truePrepareValues,
   );
 
+  // The demo proves against an empty revocation registry (root 0).
+  const revocation = buildRevocationWitness(
+    cred.revocationSecretHex,
+    cred.revocationCommitment,
+    createRevocationRegistry(),
+  );
+
   const outRequests = [];
   const showInputJsons = new Map<string, string>();
   for (const req of requests) {
@@ -259,6 +267,7 @@ async function generate(
         claimIdentifierHashes,
         predicates: compiled.predicates,
         logicExpression: compiled.logicExpression,
+        revocation,
       },
     );
     const showInputJson = circuitInputsToJson(showInputs);
@@ -276,8 +285,8 @@ async function generate(
     const expressionResult = showWitness[1] === 1n;
     expectEqual(
       `Show witness public signals for request ${req.id}`,
-      showWitness.slice(1, 2 + showStatement.length),
-      [expressionResult ? "1" : "0", ...showStatement],
+      showWitness.slice(1, 4 + showStatement.length),
+      [expressionResult ? "1" : "0", "0", "0", ...showStatement],
     );
 
     outRequests.push({
@@ -377,7 +386,7 @@ async function generate(
   console.log(
     `fixtures ok: ${SIZE}, signing input ${signingInputLen}B, ` +
       `prepare public values ${truePrepareValues.length}, ` +
-      `show public values ${1 + outRequests[0]!.expected.showStatement.length}`,
+      `show public values ${3 + outRequests[0]!.expected.showStatement.length}`,
   );
 }
 

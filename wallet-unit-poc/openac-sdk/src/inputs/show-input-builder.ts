@@ -5,6 +5,7 @@ import { Field } from "@noble/curves/abstract/modular";
 import { base64urlToBigInt } from "../utils.js";
 import { InputError } from "../errors.js";
 import { buildShowStatementFields } from "./show-statement.js";
+import type { RevocationWitness } from "../revocation.js";
 import type {
   ShowCircuitParams,
   ShowCircuitInputs,
@@ -69,6 +70,8 @@ export interface ShowInputOptions {
   predicates?: PredicateSpec[];
   /** Postfix logic expression as [tokenType, tokenValue] pairs. Defaults to REF(0). */
   logicExpression?: Array<{ type: number; value: number }>;
+  /** Revocation inputs, from `buildRevocationWitness`. Required when revocation is compiled in. */
+  revocation?: RevocationWitness;
 }
 
 export function buildShowCircuitInputs(
@@ -148,7 +151,12 @@ export function buildShowCircuitInputs(
     logicExpr,
   );
 
+  if (params.revocationMaxDepth > 0 && !options.revocation) {
+    throw new InputError("MISSING_REVOCATION_INPUTS", "The Show circuit requires revocation inputs");
+  }
+
   return {
+    ...(params.revocationMaxDepth > 0 ? options.revocation : {}),
     deviceKeyX,
     deviceKeyY,
     sig_r: sigDecoded.r,

@@ -17,6 +17,7 @@
     "compile:jwt:4k": "bash scripts/compile.sh jwt_4k",
     "compile:jwt:8k": "bash scripts/compile.sh jwt_8k",
     "compile:show": "bash scripts/compile.sh show",
+    "compile:show:mdoc": "bash scripts/compile.sh show_mdoc",
     "compile:mdoc": "bash scripts/compile.sh mdoc",
     "compile:ecdsa": "bash scripts/compile.sh ecdsa",
     "compile:all": "bash scripts/compile.sh all",
@@ -33,6 +34,7 @@
     "@types/asn1": "^0.2.4",
     "@zk-email/circuits": "^6.3.3-nightly-20250214",
     "@zk-email/helpers": "^6.4.2",
+    "@zk-kit/lean-imt-plus-sha256.circom": "0.1.0",
     "asn1": "^0.2.6",
     "base64-js": "^1.5.1",
     "bs58": "^6.0.0",
@@ -50,6 +52,7 @@
   },
   "devDependencies": {
     "@auth0/mdl": "^3.0.1",
+    "@coordination-network/revocation-registry": "0.3.0",
     "@peculiar/x509": "^2.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/jwk-to-pem": "^2.0.3",
