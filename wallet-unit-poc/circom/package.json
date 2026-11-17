@@ -37,7 +37,7 @@
     "base64-js": "^1.5.1",
     "bs58": "^6.0.0",
     "circom_tester": "^0.0.21",
-    "circomkit": "^0.3.4",
+    "circomkit": "^0.4.0",
     "circomlib": "^2.0.5",
     "did-resolver": "^4.1.0",
     "jose": "^6.0.10",
