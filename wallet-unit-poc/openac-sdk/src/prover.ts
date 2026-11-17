@@ -8,7 +8,9 @@ import {
   buildShowCircuitInputs,
   signDeviceNonce,
 } from "./inputs/show-input-builder.js";
-import { circuitInputsToJson, base64Encode } from "./utils.js";
+import { circuitInputsToJson, base64Encode, bigintToBase64url } from "./utils.js";
+import { buildIssuerMembershipInputs } from "./issuer-hiding.js";
+import { issuerPublicKeyToPoint } from "./inputs/issuer-key.js";
 import { InputError, ProofError } from "./errors.js";
 import { base64Decode } from "./utils.js";
 import {
@@ -150,6 +152,7 @@ export class Prover {
       birthdayClaimIndex,
       birthdayClaim.raw,
       deviceKey,
+      canonicalIssuerJwk(request.issuerPublicKey),
       normalizedClaimValues,
       claimIdentifierHashes,
       // Taken from the built inputs rather than from `compiled`: the builder
@@ -193,6 +196,11 @@ export class Prover {
         claimIdentifierHashes: precomputed.claimIdentifierHashes,
         predicates: compiled.predicates,
         logicExpression: compiled.logicExpression,
+        issuer: buildIssuerMembershipInputs(
+          issuerPublicKeyToPoint(precomputed.issuerPublicKey),
+          request.issuerProof,
+          DEFAULT_SHOW_PARAMS.maxIssuerDepth,
+        ),
       },
     );
     const showInputsJson = circuitInputsToJson(showInputs);
@@ -303,6 +311,7 @@ export class Prover {
     birthdayClaimIndex: number,
     birthdayClaim: string,
     deviceKey: EcdsaPublicKey,
+    issuerPublicKey: EcdsaPublicKey,
     normalizedClaimValues: bigint[],
     claimIdentifierHashes: bigint[],
     claimNormalization: ClaimNormalization,
@@ -320,6 +329,7 @@ export class Prover {
       birthdayClaimIndex,
       birthdayClaim,
       deviceKey,
+      issuerPublicKey,
       normalizedClaimValues,
       claimIdentifierHashes,
       claimNormalization,
@@ -339,6 +349,7 @@ export class Prover {
           birthdayClaimIndex: result.birthdayClaimIndex,
           birthdayClaim: result.birthdayClaim,
           deviceKey: result.deviceKey,
+          issuerPublicKey: result.issuerPublicKey,
           normalizedClaimValues: result.normalizedClaimValues.map((v) => v.toString()),
           claimIdentifierHashes: result.claimIdentifierHashes.map((v) => v.toString()),
           claimNormalization: {
@@ -489,6 +500,13 @@ export function deserializePrecomputed(data: Uint8Array): PrecomputedCredential 
     );
   }
 
+  if (!json.issuerPublicKey) {
+    throw new InputError(
+      "INVALID_ENCODING",
+      "Precomputed credential has no issuer key (needed for issuer hiding); run precompute() again.",
+    );
+  }
+
   const result: PrecomputedCredential = {
     prepareProof: base64Decode(json.prepareProof),
     prepareInstance: base64Decode(json.prepareInstance),
@@ -497,6 +515,7 @@ export function deserializePrecomputed(data: Uint8Array): PrecomputedCredential 
     birthdayClaimIndex: json.birthdayClaimIndex,
     birthdayClaim: json.birthdayClaim,
     deviceKey: json.deviceKey,
+    issuerPublicKey: json.issuerPublicKey,
     normalizedClaimValues: (json.normalizedClaimValues ?? []).map((s) => BigInt(s)),
     claimIdentifierHashes: (json.claimIdentifierHashes ?? []).map((s) => BigInt(s)),
     claimNormalization: {
@@ -521,4 +540,10 @@ export function deserializePrecomputed(data: Uint8Array): PrecomputedCredential 
   };
 
   return result;
+}
+
+/** The issuer key as a canonical P-256 JWK (32-byte coordinates), whatever its input form. */
+function canonicalIssuerJwk(key: PrecomputeRequest["issuerPublicKey"]): EcdsaPublicKey {
+  const { x, y } = issuerPublicKeyToPoint(key);
+  return { kty: "EC", crv: "P-256", x: bigintToBase64url(x), y: bigintToBase64url(y) };
 }

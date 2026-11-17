@@ -5,12 +5,14 @@ import * as nodeCrypto from "crypto";
 import { createTestMdocCredential } from "./mdoc-fixture";
 import { generateMdocCircuitParams, generateMdocInputs, parseMdocClaims, type MdocClaimType } from "./mdoc";
 import { generateShowInputs, signDeviceNonce } from "./show";
+import { generateIssuerMembershipInputs } from "./issuer-hiding";
+import { bufferToBigInt } from "./utils";
 
 // Mirrors circuits/main/mdoc.circom: MDOC(1792, 256, 4, 32, 64).
 const MDOC_PARAMS: [number, number, number, number, number] = [1792, 256, 4, 32, 64];
 
-// Mirrors circuits/main/show.circom: Show(2, 2, 8, 64).
-const SHOW_PARAMS = { nClaims: 2, maxPredicates: 2, maxLogicTokens: 8, valueBits: 64 };
+// Mirrors circuits/main/show.circom: Show(2, 2, 8, 64, 8).
+const SHOW_PARAMS = { nClaims: 2, maxPredicates: 2, maxLogicTokens: 8, valueBits: 64, maxIssuerDepth: 8 };
 
 const OP_LE = 0;
 
@@ -77,6 +79,12 @@ async function main(): Promise<void> {
     [],
     [],
     normalizedClaimValues,
+    undefined,
+    // Issuer hiding: Show must see the same issuer key MDOC verified.
+    generateIssuerMembershipInputs({
+      x: bufferToBigInt(Buffer.from(cred.issuerPubRaw.slice(1, 33))),
+      y: bufferToBigInt(Buffer.from(cred.issuerPubRaw.slice(33, 65))),
+    }),
   );
 
   showInputs.predicateLen = 1n;

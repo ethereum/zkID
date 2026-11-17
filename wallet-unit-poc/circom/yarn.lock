@@ -5,6 +5,13 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
+"@adraffy/ens-normalize@npm:1.10.1":
+  version: 1.10.1
+  resolution: "@adraffy/ens-normalize@npm:1.10.1"
+  checksum: 10c0/fdd647604e8fac6204921888aaf5a6bc65eabf0d2921bc5f93b64d01f4bc33ead167c1445f7de05468d05cd92ac31b74c68d2be840c62b79d73693308f885c06
+  languageName: node
+  linkType: hard
+
 "@auth0/mdl@npm:^3.0.1":
   version: 3.0.1
   resolution: "@auth0/mdl@npm:3.0.1"
@@ -94,6 +101,17 @@ __metadata:
   version: 2.2.2
   resolution: "@cbor-extract/cbor-extract-win32-x64@npm:2.2.2"
   conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@coordination-network/issuer-registry@npm:0.3.0":
+  version: 0.3.0
+  resolution: "@coordination-network/issuer-registry@npm:0.3.0"
+  dependencies:
+    "@noble/hashes": "npm:^1.8.0"
+    "@zk-kit/lean-imt": "npm:2.2.5"
+    poseidon-lite: "npm:0.3.0"
+  checksum: 10c0/d8548a669c31d4d9bc518fad599fbaec6f2491810f225afbae1ca7514efce5a8c5d45e30a2a9d66f5a6dc74aad321fb84f0defc7dfebb532ce6ea36c76d5997a
   languageName: node
   linkType: hard
 
@@ -764,12 +782,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/curves@npm:1.2.0":
+  version: 1.2.0
+  resolution: "@noble/curves@npm:1.2.0"
+  dependencies:
+    "@noble/hashes": "npm:1.3.2"
+  checksum: 10c0/0bac7d1bbfb3c2286910b02598addd33243cb97c3f36f987ecc927a4be8d7d88e0fcb12b0f0ef8a044e7307d1844dd5c49bb724bfa0a79c8ec50ba60768c97f6
+  languageName: node
+  linkType: hard
+
 "@noble/curves@npm:^1.2.0, @noble/curves@npm:^1.8.1":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
   dependencies:
     "@noble/hashes": "npm:1.8.0"
   checksum: 10c0/150014751ebe8ca06a8654ca2525108452ea9ee0be23430332769f06808cddabfe84f248b6dbf836916bc869c27c2092957eec62c7506d68a1ed0a624017c2a3
+  languageName: node
+  linkType: hard
+
+"@noble/hashes@npm:1.3.2":
+  version: 1.3.2
+  resolution: "@noble/hashes@npm:1.3.2"
+  checksum: 10c0/2482cce3bce6a596626f94ca296e21378e7a5d4c09597cbc46e65ffacc3d64c8df73111f2265444e36a3168208628258bbbaccba2ef24f65f58b2417638a20e7
   languageName: node
   linkType: hard
 
@@ -780,7 +814,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.7.1":
+"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.7.1, @noble/hashes@npm:^1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
@@ -1001,6 +1035,7 @@ __metadata:
   dependencies:
     "@auth0/mdl": "npm:^3.0.1"
     "@aws-crypto/sha256-js": "npm:^5.2.0"
+    "@coordination-network/issuer-registry": "npm:0.3.0"
     "@noble/curves": "npm:^1.8.1"
     "@noble/hashes": "npm:^1.7.1"
     "@peculiar/x509": "npm:^2.0.0"
@@ -1011,6 +1046,7 @@ __metadata:
     "@types/node": "npm:^20.3.0"
     "@zk-email/circuits": "npm:^6.3.3-nightly-20250214"
     "@zk-email/helpers": "npm:^6.4.2"
+    "@zk-kit/binary-merkle-root-sha256.circom": "npm:0.1.0"
     asn1: "npm:^0.2.6"
     base64-js: "npm:^1.5.1"
     bs58: "npm:^6.0.0"
@@ -1148,6 +1184,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/node@npm:22.7.5":
+  version: 22.7.5
+  resolution: "@types/node@npm:22.7.5"
+  dependencies:
+    undici-types: "npm:~6.19.2"
+  checksum: 10c0/cf11f74f1a26053ec58066616e3a8685b6bcd7259bc569738b8f752009f9f0f7f85a1b2d24908e5b0f752482d1e8b6babdf1fbb25758711ec7bb9500bfcd6e60
+  languageName: node
+  linkType: hard
+
 "@zk-email/circuits@npm:^6.3.3-nightly-20250214":
   version: 6.3.4
   resolution: "@zk-email/circuits@npm:6.3.4"
@@ -1182,6 +1227,34 @@ __metadata:
     commander: "npm:^11.0.0"
     snarkjs: "npm:^0.7.5"
   checksum: 10c0/d2b2ccae85b5a4f1a57caf71f895cafb922f4e8b4f136cc57eb3434701640744bd8a02928037604b6f9d7c2084373d922d912180e41da070ff402d6033e35f8b
+  languageName: node
+  linkType: hard
+
+"@zk-kit/binary-merkle-root-sha256.circom@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@zk-kit/binary-merkle-root-sha256.circom@npm:0.1.0"
+  dependencies:
+    circomlib: "npm:^2.0.5"
+  checksum: 10c0/e92c47f5c6bb630e491a36fe426658cd43223cb093ff1d6e50e2c9e5369903358b05e53097fca2a0e9aa7e7ab0844e463c0dbfd226cd75b4b2a8877ce97f6e85
+  languageName: node
+  linkType: hard
+
+"@zk-kit/lean-imt@npm:2.2.5":
+  version: 2.2.5
+  resolution: "@zk-kit/lean-imt@npm:2.2.5"
+  dependencies:
+    "@zk-kit/utils": "npm:1.4.1"
+  checksum: 10c0/2be2cc7f6eda8265001405576af2ea11e425f6a949c5cf53fb5a530d8d51d203d85ef5c00eb161325274a7c0daff0590e6738ebe7c9b3e36a9e41ab043567c44
+  languageName: node
+  linkType: hard
+
+"@zk-kit/utils@npm:1.4.1":
+  version: 1.4.1
+  resolution: "@zk-kit/utils@npm:1.4.1"
+  dependencies:
+    buffer: "npm:^6.0.3"
+    ethers: "npm:6.13.5"
+  checksum: 10c0/22bf32a16e4d7d7ef5f14678235a4fe5ed53c5e84f7518cd27630e142e2dc775620c3b0eaf47d7311c7796570b8a1fe1482fb71515e3f19117ffe917aafbf19b
   languageName: node
   linkType: hard
 
@@ -1221,6 +1294,13 @@ __metadata:
   version: 3.0.0
   resolution: "aes-js@npm:3.0.0"
   checksum: 10c0/87dd5b2363534b867db7cef8bc85a90c355460783744877b2db7c8be09740aac5750714f9e00902822f692662bda74cdf40e03fbb5214ffec75c2666666288b8
+  languageName: node
+  linkType: hard
+
+"aes-js@npm:4.0.0-beta.5":
+  version: 4.0.0-beta.5
+  resolution: "aes-js@npm:4.0.0-beta.5"
+  checksum: 10c0/444f4eefa1e602cbc4f2a3c644bc990f93fd982b148425fee17634da510586fc09da940dcf8ace1b2d001453c07ff042e55f7a0482b3cc9372bf1ef75479090c
   languageName: node
   linkType: hard
 
@@ -2127,6 +2207,21 @@ __metadata:
   version: 2.0.3
   resolution: "esutils@npm:2.0.3"
   checksum: 10c0/9a2fe69a41bfdade834ba7c42de4723c97ec776e40656919c62cbd13607c45e127a003f05f724a1ea55e5029a4cf2de444b13009f2af71271e42d93a637137c7
+  languageName: node
+  linkType: hard
+
+"ethers@npm:6.13.5":
+  version: 6.13.5
+  resolution: "ethers@npm:6.13.5"
+  dependencies:
+    "@adraffy/ens-normalize": "npm:1.10.1"
+    "@noble/curves": "npm:1.2.0"
+    "@noble/hashes": "npm:1.3.2"
+    "@types/node": "npm:22.7.5"
+    aes-js: "npm:4.0.0-beta.5"
+    tslib: "npm:2.7.0"
+    ws: "npm:8.17.1"
+  checksum: 10c0/64bc7b8907de199392b8a88c15c9a085892919cff7efa2e5326abc7fe5c426001726c51d91e10c74e5fc5e2547188297ce4127f6e52ea42a97ade0b2ae474677
   languageName: node
   linkType: hard
 
@@ -3155,6 +3250,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"poseidon-lite@npm:0.3.0":
+  version: 0.3.0
+  resolution: "poseidon-lite@npm:0.3.0"
+  checksum: 10c0/03494ea69be0dc3ced055b7f1505ff73848002c68332d52a5cf5f00d1a657693317e1ffc790b84ccaf9a0f5f61bf05e1a453eab60c385c98701a6580edead49c
+  languageName: node
+  linkType: hard
+
 "possible-typed-array-names@npm:^1.0.0":
   version: 1.1.0
   resolution: "possible-typed-array-names@npm:1.1.0"
@@ -3546,6 +3648,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"tslib@npm:2.7.0":
+  version: 2.7.0
+  resolution: "tslib@npm:2.7.0"
+  checksum: 10c0/469e1d5bf1af585742128827000711efa61010b699cb040ab1800bcd3ccdd37f63ec30642c9e07c4439c1db6e46345582614275daca3e0f4abae29b0083f04a6
+  languageName: node
+  linkType: hard
+
 "tslib@npm:^1.9.3":
   version: 1.14.1
   resolution: "tslib@npm:1.14.1"
@@ -3631,6 +3740,13 @@ __metadata:
   version: 1.13.6
   resolution: "underscore@npm:1.13.6"
   checksum: 10c0/5f57047f47273044c045fddeb8b141dafa703aa487afd84b319c2495de2e685cecd0b74abec098292320d518b267c0c4598e45aa47d4c3628d0d4020966ba521
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~6.19.2":
+  version: 6.19.8
+  resolution: "undici-types@npm:6.19.8"
+  checksum: 10c0/078afa5990fba110f6824823ace86073b4638f1d5112ee26e790155f481f2a868cc3e0615505b6f4282bdf74a3d8caad715fd809e870c2bb0704e3ea6082f344
   languageName: node
   linkType: hard
 
@@ -3790,6 +3906,21 @@ __metadata:
     string-width: "npm:^5.0.1"
     strip-ansi: "npm:^7.0.1"
   checksum: 10c0/138ff58a41d2f877eae87e3282c0630fc2789012fc1af4d6bd626eeb9a2f9a65ca92005e6e69a75c7b85a68479fe7443c7dbe1eb8fbaa681a4491364b7c55c60
+  languageName: node
+  linkType: hard
+
+"ws@npm:8.17.1":
+  version: 8.17.1
+  resolution: "ws@npm:8.17.1"
+  peerDependencies:
+    bufferutil: ^4.0.1
+    utf-8-validate: ">=5.0.2"
+  peerDependenciesMeta:
+    bufferutil:
+      optional: true
+    utf-8-validate:
+      optional: true
+  checksum: 10c0/f4a49064afae4500be772abdc2211c8518f39e1c959640457dcee15d4488628620625c783902a52af2dd02f68558da2868fd06e6fd0e67ebcd09e6881b1b5bfe
   languageName: node
   linkType: hard
 

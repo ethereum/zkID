@@ -60,7 +60,7 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
     showCircuit = await circomkit.WitnessTester(`Show`, {
       file: "show",
       template: "Show",
-      params: [2, 2, 8, 64],
+      params: [2, 2, 8, 64, 8],
       recompile: RECOMPILE,
     });
     console.log("Show Circuit #constraints:", await showCircuit.getConstraintCount());
@@ -166,6 +166,7 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
         maxPredicates: 2,
         maxLogicTokens: 8,
         valueBits: 64,
+        maxIssuerDepth: 8,
       };
 
       assert.throws(

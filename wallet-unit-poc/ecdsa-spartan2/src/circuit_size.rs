@@ -96,6 +96,17 @@ impl CircuitSize {
         }
     }
 
+    /// Witness index of the private issuer `main.pubKeyX` (`pubKeyY` follows),
+    /// shared with Show for issuer hiding. Re-derived by `tests/witness_layout.rs`.
+    pub fn issuer_key_witness_start(self) -> usize {
+        match self {
+            CircuitSize::Kb1 => 1288,
+            CircuitSize::Kb2 => 2056,
+            CircuitSize::Kb4 => 4104,
+            CircuitSize::Kb8 => 8200,
+        }
+    }
+
     /// Witness index of `main.claimIdentifierHashes[0]` in each compiled JWT
     /// circuit. Follows normalizedClaimValues[maxClaims] (with the name-extractor
     /// internal signals in between), and is immediately followed by KeyBindingX/Y.

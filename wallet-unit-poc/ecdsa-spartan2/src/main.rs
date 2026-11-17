@@ -31,7 +31,9 @@ use ecdsa_spartan2::{
     verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
     E,
 };
-use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
+use ecdsa_spartan2::utils::{
+    calculate_jwt_output_indices, calculate_mdoc_output_indices, issuer_root_from_show_public_values,
+};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
 use tracing::info;
@@ -256,22 +258,10 @@ fn print_comparison_table(results: &[BenchmarkResults]) {
 /// `public_values[i]` is `witness[i + 1]`, so the 1-based layout indices are
 /// shifted by one here.
 ///
-/// Printed rather than checked: this pipeline has no trust store or policy to
-/// compare against. Applications that do have one can use
-/// `utils::check_issuer_key_binding` and compare the normalization against the
-/// formats their predicates expect.
-fn print_public_statement(
-    public_values: &[Scalar],
-    issuer_key_x_index: usize,
-    flags: Range<usize>,
-    formats: Range<usize>,
-) {
+/// Printed rather than checked: this pipeline has no policy to compare against.
+/// The issuer is hidden; see [`print_issuer_root`].
+fn print_public_statement(public_values: &[Scalar], flags: Range<usize>, formats: Range<usize>) {
     let at = |i: usize| public_values.get(i.wrapping_sub(1));
-
-    match (at(issuer_key_x_index), at(issuer_key_x_index + 1)) {
-        (Some(x), Some(y)) => println!("  issuer key: x={x:?}\n              y={y:?}"),
-        _ => println!("  issuer key: <unavailable: proof exposed too few public values>"),
-    }
 
     // Flags and format codes are small integers; print the trailing hex digits
     // of each scalar rather than all 64.
@@ -292,6 +282,15 @@ fn print_public_statement(
         render(flags),
         render(formats),
     );
+}
+
+/// Print the issuer registry root the Show proof was built against. A verifier
+/// must check it is accepted on chain (`OpenACIssuerRegistry.isValidRoot`).
+fn print_issuer_root(show_public_values: &[Scalar]) {
+    match issuer_root_from_show_public_values(show_public_values) {
+        Ok(root) => println!("  issuer root: 0x{}", root.to_str_radix(16)),
+        Err(e) => println!("  issuer root: <unavailable: {e}>"),
+    }
 }
 
 /// Prove + reblind + verify pipeline using pre-existing keys on disk.
@@ -428,7 +427,6 @@ fn run_prove_pipeline(
     let jwt_layout = calculate_jwt_output_indices(size);
     print_public_statement(
         &prepare_public_values,
-        jwt_layout.issuer_key_x_index,
         jwt_layout.decode_flags_range(),
         jwt_layout.claim_formats_range(),
     );
@@ -439,6 +437,7 @@ fn run_prove_pipeline(
     info!("Verifying Show proof...");
     let t0 = Instant::now();
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    print_issuer_root(&show_public_values);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
     if !show_public_values.is_empty() {
@@ -632,7 +631,6 @@ fn run_mdoc_prove_pipeline(
         calculate_mdoc_output_indices(ecdsa_spartan2::circuits::mdoc_circuit::MDOC_MAX_CLAIMS);
     print_public_statement(
         &mdoc_public_values,
-        mdoc_layout.issuer_key_x_index,
         mdoc_layout.value_types_range(),
         mdoc_layout.claim_flags_range(),
     );
@@ -642,6 +640,7 @@ fn run_mdoc_prove_pipeline(
     info!("Verifying Show proof...");
     let t0 = Instant::now();
     let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    print_issuer_root(&show_public_values);
     let verify_show_ms = t0.elapsed().as_millis();
     println!("✓ Show proof verified: {} ms", verify_show_ms);
     if !show_public_values.is_empty() {

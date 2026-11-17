@@ -10,7 +10,7 @@ import {
   compilePredicateExpression,
   requiredNormalization,
 } from "../src/index.js";
-import { generateDummyCredential } from "../src/testing/index.js";
+import { generateDummyCredential, issuerProofFor } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
 import type { KeySet, VerifyingKeys } from "../src/types.js";
 
@@ -109,6 +109,7 @@ describe("multi-size pipeline", () => {
           precomputed,
           verifierNonce: nonce,
           devicePrivateKey: cred.devicePrivateKeyHex,
+          issuerProof: issuerProofFor(cred.issuerPublicKey),
           keys,
           predicates: claimToClaimPredicate,
         });

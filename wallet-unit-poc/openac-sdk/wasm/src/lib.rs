@@ -50,12 +50,9 @@ pub struct PresentResult {
 
 /// Combined verification result
 ///
-/// Prepare's public values are returned so the caller can bind the presentation
-/// to an issuer it trusts: they are `[pubKeyX, pubKeyY, decodeFlags[n],
-/// claimFormats[n]]`. Normalized claim values and the device key were removed
-/// from this vector (they now reach Show privately via `comm_W_shared`), so
-/// returning it no longer leaks the holder's attributes or a stable identifier.
-/// Dropping it entirely would leave `valid` meaning "signed by some P-256 key".
+/// Prepare's public values are `[decodeFlags[n], claimFormats[n]]`; claim values,
+/// the device key and the issuer key reach Show privately via `comm_W_shared`.
+/// Show's start with `[expressionResult, issuerRoot[hi], issuerRoot[lo]]`.
 #[derive(Serialize, Deserialize)]
 pub struct VerifyResult {
     pub valid: bool,
@@ -376,8 +373,7 @@ pub fn verify(
         bincode::deserialize(show_instance_bytes)
             .map_err(|e| JsError::new(&format!("Show instance deserialization failed: {}", e)))?;
 
-    // Prepare's public IO carries the issuer key the credential was verified
-    // against; the caller needs it to decide whether to trust the issuer.
+    // Prepare's public IO carries the claim normalization the caller checks.
     let prepare_pv = match prepare_proof.verify(&prepare_vk) {
         Ok(pv) => pv,
         Err(e) => {

@@ -42,19 +42,21 @@ describe("WitnessCalculator", () => {
         tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
         tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
         exprLen: BigInt(inputJson.exprLen),
+        issuerKeyX: BigInt(inputJson.issuerKeyX),
+        issuerKeyY: BigInt(inputJson.issuerKeyY),
+        issuerTreeDepth: BigInt(inputJson.issuerTreeDepth),
+        issuerTreeIndex: BigInt(inputJson.issuerTreeIndex),
+        issuerTreeSiblings: inputJson.issuerTreeSiblings.map((r: string[]) => r.map((v) => BigInt(v))),
       };
 
       const witness = await calculator.calculateShowWitness(inputs);
 
       expect(witness[0]).toBe(1n);
-      // Witness layout after binding the verifier statement into the public IO:
-      // w[1] = expressionResult, w[2..=30] = messageHash + predicate program
-      // (public, now including predicateClaimIdentifiers), then the private
-      // Show now has 156 public signals (names replaced the scalar identifier),
-      // so the private device key sits at witness[157]/[158] (SHOW_NUM_PUBLIC+1).
-      expect(witness[2]).toBe(BigInt(inputJson.messageHash));
-      expect(witness[157]).toBe(BigInt(inputJson.deviceKeyX));
-      expect(witness[158]).toBe(BigInt(inputJson.deviceKeyY));
+      // w[1] = expressionResult, w[2..=3] = issuerRoot[hi, lo], w[4..=158] =
+      // messageHash + predicate program; the private device key follows.
+      expect(witness[4]).toBe(BigInt(inputJson.messageHash));
+      expect(witness[159]).toBe(BigInt(inputJson.deviceKeyX));
+      expect(witness[160]).toBe(BigInt(inputJson.deviceKeyY));
     }, 30_000);
 
     it("should generate WTNS binary from show inputs", async () => {
@@ -82,6 +84,11 @@ describe("WitnessCalculator", () => {
         tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
         tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
         exprLen: BigInt(inputJson.exprLen),
+        issuerKeyX: BigInt(inputJson.issuerKeyX),
+        issuerKeyY: BigInt(inputJson.issuerKeyY),
+        issuerTreeDepth: BigInt(inputJson.issuerTreeDepth),
+        issuerTreeIndex: BigInt(inputJson.issuerTreeIndex),
+        issuerTreeSiblings: inputJson.issuerTreeSiblings.map((r: string[]) => r.map((v) => BigInt(v))),
       };
 
       const wtns = await calculator.calculateShowWitnessWtns(inputs);

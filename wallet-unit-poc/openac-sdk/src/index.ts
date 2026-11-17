@@ -215,16 +215,23 @@ export {
   buildShowStatementFields,
   buildShowStatementPublicValues,
 } from "./inputs/show-statement.js";
-// Issuer-key helpers: convert a key to the coordinates the circuits use, and
-// read those coordinates back out of a proof's public values.
+// Issuer-key helper: convert a key to the coordinates the circuits use.
 export { issuerPublicKeyToPoint } from "./inputs/issuer-key.js";
-// Readers for the Prepare proof's public IO: the issuer key, and the claim
-// normalization the proof's claim values were produced under.
+export type { IssuerKeyPoint } from "./inputs/issuer-key.js";
+// Issuer hiding: SHA-256 issuer registry and Show membership inputs.
 export {
-  extractIssuerKeyFromPreparePublicValues,
-  extractClaimNormalizationFromPreparePublicValues,
-} from "./inputs/prepare-public-io.js";
-export type { IssuerKeyPoint } from "./inputs/prepare-public-io.js";
+  IssuerRegistry,
+  sha256Scheme,
+  ISSUER_TREE_MAX_DEPTH,
+  issuerCommitment,
+  createIssuerRegistry,
+  buildIssuerMembershipInputs,
+  toLimbs,
+  fromLimbs,
+} from "./issuer-hiding.js";
+export type { IssuerProof, IssuerMembershipInputs } from "./issuer-hiding.js";
+// Reader for the Prepare proof's public IO: the claim normalization.
+export { extractClaimNormalizationFromPreparePublicValues } from "./inputs/prepare-public-io.js";
 // Circuit-level predicate program types/constants, for building ExpectedStatement.
 export { PredicateOp, LogicToken } from "./inputs/show-input-builder.js";
 export type { PredicateSpec, PredicateRhs } from "./inputs/show-input-builder.js";
@@ -250,7 +257,6 @@ export type {
   ProofPublicValues,
   VerificationResult,
   ExpectedStatement,
-  ProvenIssuerKey,
   VerifyingKeys,
   KeySet,
   SerializedKeySet,

@@ -11,8 +11,11 @@ import {
   Credential,
   DEFAULT_SHOW_PARAMS,
   circuitInputsToJson,
-  extractIssuerKeyFromPreparePublicValues,
   issuerPublicKeyToPoint,
+  buildIssuerMembershipInputs,
+  createIssuerRegistry,
+  issuerCommitment,
+  fromLimbs,
 } from "../src/index.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
@@ -352,12 +355,19 @@ describe.skipIf(!checkArtifactsExist())(
       VERIFIER_NONCE,
       data.devicePrivateKeyHex,
     );
+    const registry = createIssuerRegistry([ISSUER_PUBLIC_KEY]);
     const showInputs = buildShowCircuitInputs(
       DEFAULT_SHOW_PARAMS,
       VERIFIER_NONCE,
       deviceSignature,
       data.devicePublicKey,
-      { normalizedClaimValues },
+      {
+        normalizedClaimValues,
+        issuer: buildIssuerMembershipInputs(
+          issuerPublicKeyToPoint(ISSUER_PUBLIC_KEY),
+          registry.generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
+        ),
+      },
     );
 
     const showInputsJson = circuitInputsToJson(showInputs);
@@ -378,11 +388,12 @@ describe.skipIf(!checkArtifactsExist())(
     );
     expect(showResult.proof.length).toBeGreaterThan(0);
 
-    // JWT 1k (maxMatches=4, maxClaims=2): w[3]=KeyBindingX, w[4]=KeyBindingY.
-    // In the Show witness the verifier statement now occupies the public prefix
-    // (w[1..=28]), so the device key sits at w[29]=deviceKeyX, w[30]=deviceKeyY.
-    expect(jwtWitness[3]).toBe(showWitness[29]);
-    expect(jwtWitness[4]).toBe(showWitness[30]);
+    // Shared segment: KeyBindingX/Y (JWT 1k w[2528..]) = Show deviceKeyX/Y (w[159..]),
+    // and the private issuer key (JWT 1k w[1288..]) = Show issuerKeyX/Y (w[167..]).
+    expect(jwtWitness[2528]).toBe(showWitness[159]);
+    expect(jwtWitness[2529]).toBe(showWitness[160]);
+    expect(jwtWitness[1288]).toBe(showWitness[167]);
+    expect(jwtWitness[1289]).toBe(showWitness[168]);
 
     const presentResult = await bridge.present(
       preparePk,
@@ -408,18 +419,12 @@ describe.skipIf(!checkArtifactsExist())(
 
     expect(verifyResult.valid).toBe(true);
     expect(verifyResult.error).toBeUndefined();
-    // Show circuit public IO: expressionResult (1) + the bound verifier statement
-    // (messageHash + predicate program) = 28 values. The device key remains in
-    // the shared witness commitment, not a public output.
-    expect(verifyResult.showPublicValues.length).toBe(28);
-    // Prepare public IO is 2n + 2 for n = 2 claim slots: the issuer key
-    // (pubKeyX, pubKeyY) then decodeFlags and claimFormats. Claim values and the
-    // device key are private -- they used to hand the verifier the exact claim.
-    expect(verifyResult.preparePublicValues.length).toBe(6);
-    const provenIssuer = extractIssuerKeyFromPreparePublicValues(
-      verifyResult.preparePublicValues.map(parseScalar),
-    );
-    expect(provenIssuer).toEqual(issuerPublicKeyToPoint(ISSUER_PUBLIC_KEY));
+    // Show public IO: expressionResult + issuerRoot[hi, lo] + the bound statement.
+    expect(verifyResult.showPublicValues.length).toBe(158);
+    const showPv = verifyResult.showPublicValues.map(parseScalar);
+    expect(fromLimbs(showPv[1]!, showPv[2]!)).toBe(registry.root);
+    // Prepare public IO is decodeFlags + claimFormats (2n); the issuer key is private.
+    expect(verifyResult.preparePublicValues.length).toBe(4);
   }, 900_000);
 },
 );

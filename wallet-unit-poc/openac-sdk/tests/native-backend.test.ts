@@ -75,6 +75,11 @@ describe("Age Verification", () => {
       tokenTypes: inputJson.tokenTypes.map((v: string) => BigInt(v)),
       tokenValues: inputJson.tokenValues.map((v: string) => BigInt(v)),
       exprLen: BigInt(inputJson.exprLen),
+      issuerKeyX: BigInt(inputJson.issuerKeyX),
+      issuerKeyY: BigInt(inputJson.issuerKeyY),
+      issuerTreeDepth: BigInt(inputJson.issuerTreeDepth),
+      issuerTreeIndex: BigInt(inputJson.issuerTreeIndex),
+      issuerTreeSiblings: inputJson.issuerTreeSiblings.map((r: string[]) => r.map((v) => BigInt(v))),
     };
 
     const witness = await calculator.calculateShowWitness(inputs);

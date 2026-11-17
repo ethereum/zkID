@@ -114,6 +114,13 @@ describe("deserializePrecomputed", () => {
     expect(() => deserializePrecomputed(encode(legacy))).toThrowError(/older SDK version/);
   });
 
+  it("rejects a blob with no issuer key", () => {
+    const claimNormalization = { decodeFlags: [1, 0], claimFormats: [1, 1] };
+    expect(() => deserializePrecomputed(encode({ ...legacy, claimNormalization }))).toThrowError(
+      /issuer key/,
+    );
+  });
+
   it("rejects a blob whose normalization metadata is not arrays", () => {
     const malformed = { ...legacy, claimNormalization: { decodeFlags: 1, claimFormats: 1 } };
     expect(() => deserializePrecomputed(encode(malformed))).toThrowError(OpenACError);
@@ -121,8 +128,12 @@ describe("deserializePrecomputed", () => {
 
   it("round-trips normalization metadata", () => {
     const claimNormalization = { decodeFlags: [1, 0], claimFormats: [1, 1] };
-    const restored = deserializePrecomputed(encode({ ...legacy, claimNormalization }));
+    const issuerPublicKey = { kty: "EC", crv: "P-256", x: "", y: "" };
+    const restored = deserializePrecomputed(
+      encode({ ...legacy, claimNormalization, issuerPublicKey }),
+    );
     expect(restored.claimNormalization).toEqual(claimNormalization);
+    expect(restored.issuerPublicKey).toEqual(issuerPublicKey);
     expect(restored.toJSON().claimNormalization).toEqual(claimNormalization);
   });
 });

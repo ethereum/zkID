@@ -18,7 +18,7 @@ import {
   requiredNormalization,
 } from "../src/index.js";
 import { NAME_ID_LEN } from "../src/inputs/show-statement.js";
-import { issuerPublicKeyToPoint } from "../src/inputs/issuer-key.js";
+import { createIssuerRegistry, toLimbs } from "../src/issuer-hiding.js";
 import { DEFAULT_SHOW_PARAMS } from "../src/types.js";
 import {
   P256_SCALAR_ORDER,
@@ -70,14 +70,12 @@ function toScalarString(v: bigint): string {
 function stubBridge(
   showPublicValues: string[],
   valid = true,
-  issuerKey: EcdsaPublicKey = KNOWN_ISSUER,
   normalization: ClaimNormalization = compiledNormalization,
 ) {
-  const point = issuerPublicKeyToPoint(issuerKey);
   return {
     verify: async () => ({
       valid,
-      preparePublicValues: preparePublicValuesFor(point, normalization).map(toScalarString),
+      preparePublicValues: preparePublicValuesFor(normalization).map(toScalarString),
       showPublicValues,
       error: valid ? undefined : "snark failed",
     }),
@@ -87,29 +85,24 @@ function stubBridge(
 
 /**
  * The Prepare public IO a JWT proof with two claim slots exposes:
- * [pubKeyX, pubKeyY, decodeFlags[2], claimFormats[2]] = 6 values (2n + 2).
- * Claim values and the device key are NOT here: they are private and reach Show
- * through comm_W_shared, so publishing them would leak the holder's attributes
- * and a stable per-credential identifier.
+ * [decodeFlags[2], claimFormats[2]] = 4 values (2n). Claim values, the device
+ * key and the issuer key are private and reach Show through comm_W_shared.
  */
-function preparePublicValuesFor(
-  point: { x: bigint; y: bigint },
-  normalization: ClaimNormalization,
-): bigint[] {
+function preparePublicValuesFor(normalization: ClaimNormalization): bigint[] {
   const pad = (a: number[]) =>
     [0, 1].map((i) => BigInt(a[i] ?? 0));
   return [
-    point.x, point.y,
     ...pad(normalization.decodeFlags),
     ...pad(normalization.claimFormats),
   ];
 }
 
-/** The public-value vector a proof for (nonce, predicates) would expose, expressionResult first. */
+/** The Show public values: [expressionResult, issuerRoot[hi, lo], ...statement]. */
 function publicValuesFor(
   nonce: string,
   predicates: PredicateExpression,
   expressionResult: boolean,
+  issuerRoot: bigint = ISSUER_ROOT,
 ): string[] {
   const compiled = compilePredicateExpression(predicates, CLAIMS);
   const statement = buildShowStatementPublicValues(
@@ -118,7 +111,9 @@ function publicValuesFor(
     compiled.predicates,
     compiled.logicExpression,
   );
-  return [expressionResult ? 1n : 0n, ...statement].map(toScalarString);
+  return [expressionResult ? 1n : 0n, ...toLimbs(issuerRoot), ...statement].map(
+    toScalarString,
+  );
 }
 
 // Two distinct P-256 keys, standing in for a known issuer and an unknown one.
@@ -130,6 +125,8 @@ function keyFromScalar(k: bigint): EcdsaPublicKey {
 
 const KNOWN_ISSUER = keyFromScalar(0x2a2an);
 const OTHER_ISSUER = keyFromScalar(0x9f9fn);
+const ISSUER_ROOT = createIssuerRegistry([KNOWN_ISSUER, OTHER_ISSUER]).root;
+const OTHER_ROOT = createIssuerRegistry([OTHER_ISSUER]).root;
 
 const NONCE = "session-nonce-abc";
 const compiledPolicy = compilePredicateExpression(POLICY, CLAIMS);
@@ -141,12 +138,8 @@ const expected: ExpectedStatement = {
   claimNormalization: compiledNormalization,
 };
 
-async function verifyWith(
-  showPublicValues: string[],
-  exp: ExpectedStatement = expected,
-  issuerKey: EcdsaPublicKey = KNOWN_ISSUER,
-) {
-  const verifier = new Verifier(stubBridge(showPublicValues, true, issuerKey));
+async function verifyWith(showPublicValues: string[], exp: ExpectedStatement = expected) {
+  const verifier = new Verifier(stubBridge(showPublicValues, true));
   return verifier.verifyComponents(
     new Uint8Array(),
     new Uint8Array(),
@@ -232,63 +225,42 @@ describe("Show statement binding: verifier enforcement", () => {
   });
 });
 
-describe("Issuer key reporting", () => {
-  it("reports the issuer key the proof was built under", async () => {
+describe("Issuer hiding: root reporting and acceptance", () => {
+  it("reports the issuer root the proof was built against", async () => {
     const result = await verifyWith(publicValuesFor(NONCE, POLICY, true));
     expect(result.valid).toBe(true);
-    // Reported as exact coordinates and as a directly comparable JWK.
-    expect(result.issuerKey?.jwk).toEqual(KNOWN_ISSUER);
-    expect(result.issuerKey?.x).toBe(issuerPublicKeyToPoint(KNOWN_ISSUER).x);
-    expect(result.issuerKey?.y).toBe(issuerPublicKeyToPoint(KNOWN_ISSUER).y);
+    expect(result.issuerRoot).toBe(ISSUER_ROOT);
   });
 
-  /**
-   * Pins the documented contract: an unknown issuer key does not by itself make
-   * a presentation invalid, so `valid` stays true and the caller is expected to
-   * act on `issuerKey`. Changing this would silently break callers that rely on
-   * `issuerKey` to make the trust decision.
-   */
-  it("reports valid with the proving key when the issuer is unknown", async () => {
-    const result = await verifyWith(
-      publicValuesFor(NONCE, POLICY, true),
-      expected,
-      OTHER_ISSUER,
-    );
+  it("accepts when isValidIssuerRoot accepts the root", async () => {
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true), {
+      ...expected,
+      isValidIssuerRoot: async (root) => root === ISSUER_ROOT,
+    });
     expect(result.valid).toBe(true);
-    expect(result.issuerKey?.jwk).toEqual(OTHER_ISSUER);
-    expect(result.issuerKey?.jwk).not.toEqual(KNOWN_ISSUER);
-
-    // The comparison a caller is expected to make, and its outcome here.
-    const trustStore = [KNOWN_ISSUER];
-    const trusted = trustStore.some(
-      (k) => k.x === result.issuerKey?.jwk.x && k.y === result.issuerKey?.jwk.y,
-    );
-    expect(trusted).toBe(false);
   });
 
-  it("reports no issuer key when verification fails", async () => {
+  it("rejects a root the verifier does not accept", async () => {
+    const result = await verifyWith(publicValuesFor(NONCE, POLICY, true, OTHER_ROOT), {
+      ...expected,
+      isValidIssuerRoot: (root) => root === ISSUER_ROOT,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.issuerRoot).toBeNull();
+    expect(result.error).toMatch(/issuer root/i);
+  });
+
+  it("rejects a non-canonical root limb", async () => {
+    const values = publicValuesFor(NONCE, POLICY, true);
+    values[1] = toScalarString(1n << 128n);
+    const result = await verifyWith(values);
+    expect(result.valid).toBe(false);
+  });
+
+  it("reports no issuer root when verification fails", async () => {
     const result = await verifyWith(publicValuesFor("a-stale-session-nonce", POLICY, true));
     expect(result.valid).toBe(false);
-    expect(result.issuerKey).toBeNull();
-  });
-
-  it("rejects when trustedIssuers is set and the issuer is not in it (Item 13)", async () => {
-    const result = await verifyWith(
-      publicValuesFor(NONCE, POLICY, true),
-      { ...expected, trustedIssuers: [OTHER_ISSUER] },
-      KNOWN_ISSUER,
-    );
-    expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/trusted/i);
-  });
-
-  it("accepts when trustedIssuers contains the credential's issuer (Item 13)", async () => {
-    const result = await verifyWith(
-      publicValuesFor(NONCE, POLICY, true),
-      { ...expected, trustedIssuers: [KNOWN_ISSUER] },
-      KNOWN_ISSUER,
-    );
-    expect(result.valid).toBe(true);
+    expect(result.issuerRoot).toBeNull();
   });
 
   it("rejects an expected statement whose nonce is too short (Item 20)", async () => {
@@ -318,7 +290,7 @@ describe("Issuer key reporting", () => {
       expected,
     );
     expect(result.valid).toBe(false);
-    expect(result.issuerKey).toBeNull();
+    expect(result.issuerRoot).toBeNull();
     expect(result.error).toMatch(/not a valid JWT circuit public IO size/i);
   });
 });
@@ -330,7 +302,7 @@ describe("Claim normalization binding: verifier enforcement", () => {
 
   async function verifyWithNormalization(normalization: ClaimNormalization) {
     const verifier = new Verifier(
-      stubBridge(publicValuesFor(NONCE, POLICY, true), true, KNOWN_ISSUER, normalization),
+      stubBridge(publicValuesFor(NONCE, POLICY, true), true, normalization),
     );
     return verifier.verifyComponents(
       new Uint8Array(),
@@ -368,12 +340,12 @@ describe("Claim normalization binding: verifier enforcement", () => {
     expect(result.error).toMatch(/normalization/i);
   });
 
-  it("reports no issuer key when the normalization is rejected", async () => {
+  it("reports no issuer root when the normalization is rejected", async () => {
     const result = await verifyWithNormalization({
       decodeFlags: [0, 0],
       claimFormats: compiledNormalization.claimFormats,
     });
-    expect(result.issuerKey).toBeNull();
+    expect(result.issuerRoot).toBeNull();
     expect(result.expressionResult).toBeNull();
   });
 
@@ -400,7 +372,6 @@ describe("Claim normalization binding: verifier enforcement", () => {
       stubBridge(
         publicValuesFor(NONCE, narrowPolicy, true),
         true,
-        KNOWN_ISSUER,
         compiledNormalization,
       ),
     );

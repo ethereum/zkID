@@ -34,7 +34,7 @@ describe("Show Circuit - Device Binding Verification", () => {
     circuit = await circomkit.WitnessTester(`Show`, {
       file: "show",
       template: "Show",
-      params: [4, 2, 8, 64],
+      params: [4, 2, 8, 64, 8],
       recompile: RECOMPILE,
     });
     console.log("#constraints:", await circuit.getConstraintCount());

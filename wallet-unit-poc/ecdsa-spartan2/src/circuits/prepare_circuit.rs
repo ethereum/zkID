@@ -1,4 +1,4 @@
-use super::{bind_shared, synthesize_all_vars, synthesize_witness_only};
+use super::{alloc_shared_issuer_key, bind_shared, synthesize_all_vars, synthesize_witness_only};
 use crate::{
     circuit_size::CircuitSize, paths::PathConfig, prover::generate_prepare_witness,
     utils::calculate_jwt_output_indices, Scalar, E,
@@ -201,8 +201,8 @@ impl SpartanCircuit<E> for PrepareCircuit {
             }
             Err(_) => {
                 // Prepare circuit public signals (in witness order):
-                //   pubKeyX, pubKeyY, decodeFlags[..], claimFormats[..].
-                //   Claim values and the device key are private.
+                //   decodeFlags[..], claimFormats[..].
+                //   Claim values, the device key and the issuer key are private.
                 synthesize_witness_only(cs, &witness, layout.num_public())?;
             }
         }
@@ -259,7 +259,7 @@ impl SpartanCircuit<E> for PrepareCircuit {
         // Shared layout (must match `ShowCircuit::shared`):
         //   [KeyBindingX, KeyBindingY,
         //    normalizedClaimValues[0..n_claims],
-        //    claimIdentifierHashes[0..n_claims]]
+        //    claimIdentifierHashes[0..n_claims], issuerKeyX, issuerKeyY]
         let mut shared_values = Vec::with_capacity(2 + 2 * layout.claim_values_len);
         shared_values.push(keybinding_x_alloc);
         shared_values.push(keybinding_y_alloc);
@@ -290,6 +290,12 @@ impl SpartanCircuit<E> for PrepareCircuit {
                 move || Ok(id_scalar),
             )?);
         }
+
+        shared_values.extend(alloc_shared_issuer_key(
+            cs,
+            witness.as_deref(),
+            layout.issuer_key_x_index,
+        )?);
 
         Ok(shared_values)
     }

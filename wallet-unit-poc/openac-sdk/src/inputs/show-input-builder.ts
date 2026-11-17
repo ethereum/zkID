@@ -5,6 +5,7 @@ import { Field } from "@noble/curves/abstract/modular";
 import { base64urlToBigInt } from "../utils.js";
 import { InputError } from "../errors.js";
 import { buildShowStatementFields } from "./show-statement.js";
+import type { IssuerMembershipInputs } from "../issuer-hiding.js";
 import type {
   ShowCircuitParams,
   ShowCircuitInputs,
@@ -69,6 +70,8 @@ export interface ShowInputOptions {
   predicates?: PredicateSpec[];
   /** Postfix logic expression as [tokenType, tokenValue] pairs. Defaults to REF(0). */
   logicExpression?: Array<{ type: number; value: number }>;
+  /** Issuer registry membership (`buildIssuerMembershipInputs`). Required to prove. */
+  issuer?: IssuerMembershipInputs;
 }
 
 export function buildShowCircuitInputs(
@@ -168,6 +171,13 @@ export function buildShowCircuitInputs(
     tokenTypes: statement.tokenTypes,
     tokenValues: statement.tokenValues,
     exprLen: statement.exprLen,
+    ...(options.issuer ?? {
+      issuerKeyX: 0n,
+      issuerKeyY: 0n,
+      issuerTreeDepth: 0n,
+      issuerTreeIndex: 0n,
+      issuerTreeSiblings: Array.from({ length: params.maxIssuerDepth }, () => [0n, 0n]),
+    }),
   };
 }
 

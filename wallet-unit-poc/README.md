@@ -7,6 +7,10 @@ This PoC currently supports the following credential formats:
 | **SD-JWT** (ES256) | Implemented | [openac-sdk](./openac-sdk/README.md) |
 | **mDOC / mDL** (ISO 18013-5) | Implemented | [circom/docs/mdoc-spec.md](./circom/docs/mdoc-spec.md) |
 
+### Issuer Hiding
+
+Presentations never reveal the issuer. Show proves the issuer key is in a SHA-256 LeanIMT of approved issuers and outputs only its root, which a verifier checks on chain with `OpenACIssuerRegistry.isValidRoot` ([solidity](./solidity/README.md)). See [openac-sdk](./openac-sdk/README.md#issuer-hiding).
+
 ### Call for Feedback
 
 We're actively scoping support for additional credential formats (e.g. W3C VC-JWT, BBS+, EUDI ARF profiles). If your use case needs a format not listed above, please open an issue at [privacy-ethereum/zkID/issues](https://github.com/privacy-ethereum/zkID/issues)

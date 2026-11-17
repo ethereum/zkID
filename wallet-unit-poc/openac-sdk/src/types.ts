@@ -28,6 +28,8 @@ export interface ShowCircuitParams {
   maxPredicates: number;
   maxLogicTokens: number;
   valueBits: number;
+  /** Max issuer registry depth (issuer hiding). */
+  maxIssuerDepth: number;
 }
 
 export const DEFAULT_JWT_PARAMS: JwtCircuitParams = {
@@ -43,6 +45,7 @@ export const DEFAULT_SHOW_PARAMS: ShowCircuitParams = {
   maxPredicates: 2,
   maxLogicTokens: 8,
   valueBits: 64,
+  maxIssuerDepth: 8,
 };
 
 export interface EcdsaPublicKey {
@@ -92,9 +95,9 @@ export interface VerifyingKeys {
  * `logicExpression` here.
  *
  * Covers freshness, policy, and the claim normalization the policy is evaluated
- * over. Issuer trust is not part of the expected statement: `verify()` reports
- * the issuer key and leaves the decision to the caller. See
- * `VerificationResult.issuerKey`.
+ * over. The issuer is hidden: `verify()` reports the issuer registry root, and
+ * `isValidIssuerRoot` (or the caller) must check it, e.g. against
+ * `OpenACIssuerRegistry.isValidRoot` on chain.
  */
 export interface ExpectedStatement {
   /** The exact nonce/challenge the verifier issued for this session (freshness). */
@@ -118,56 +121,25 @@ export interface ExpectedStatement {
    */
   claimNormalization: ClaimNormalization;
   /**
-   * Optional issuer allow-list. When set (non-empty), `verify()` fails unless the
-   * credential's SNARK-authenticated issuer key (recovered from the Prepare
-   * public IO) matches one of these by (x, y). When omitted, the issuer key is
-   * still reported on the result but no trust decision is enforced (back-compat).
+   * Accepts or rejects the issuer registry root the proof was built against.
+   * When omitted, the root is only reported on the result.
    */
-  trustedIssuers?: EcdsaPublicKey[];
-}
-
-/**
- * The issuer key a presentation was built under, read out of the Prepare proof's
- * public IO. Given as both curve coordinates and a canonical P-256 JWK so it can
- * be compared against a trust store holding either form.
- */
-export interface ProvenIssuerKey {
-  /** Issuer public key x-coordinate, as proven in the circuit. */
-  x: bigint;
-  /** Issuer public key y-coordinate, as proven in the circuit. */
-  y: bigint;
-  /** The same point as a canonical P-256 JWK (32-byte base64url coordinates). */
-  jwk: EcdsaPublicKey;
+  isValidIssuerRoot?: (issuerRoot: bigint) => boolean | Promise<boolean>;
 }
 
 export interface VerificationResult {
   /**
-   * The proofs verified and are bound to the expected nonce and policy.
-   *
-   * Does not cover issuer identity. The circuit checks the credential signature
-   * against whatever key was supplied at proving time, so `valid` alone means
-   * "signed by some P-256 key", not "signed by an issuer you trust". Check
-   * `issuerKey` as well before acting on the result.
+   * The proofs verified and are bound to the expected nonce and policy, and the
+   * issuer root passed `isValidIssuerRoot` when one was given.
    */
   valid: boolean;
   expressionResult: boolean | null;
   /**
-   * The issuer key this presentation was proven under. Non-null exactly when
-   * `valid` is true.
-   *
-   * Compare it against the issuer keys your deployment trusts, resolved from
-   * your own configuration by expected `iss`/`kid`/credential type rather than
-   * from anything the holder sent. A credential signed by a key outside that set
-   * still verifies, so this comparison is what establishes issuer identity:
-   *
-   * ```ts
-   * const result = await openac.verify(proof, vks, expected);
-   * if (!result.valid || !result.issuerKey) return reject(result.error);
-   * if (!myTrustStore.isTrustedIssuer(result.issuerKey.jwk)) return reject();
-   * // only now is result.expressionResult meaningful
-   * ```
+   * Root of the issuer registry the credential's issuer was proven to be in.
+   * Non-null exactly when `valid` is true. Without `isValidIssuerRoot`, check
+   * it yourself: a root the holder built from their own key also verifies.
    */
-  issuerKey: ProvenIssuerKey | null;
+  issuerRoot: bigint | null;
   /** Always null. The device-key binding flows through comm_W_shared, not a public output. */
   deviceKey: null;
   verifyMs: number;
@@ -219,6 +191,7 @@ export type ErrorCode =
   | "BIRTHDAY_NOT_FOUND"
   | "CLAIM_NOT_FOUND"
   | "PARAMS_EXCEEDED"
+  | "INVALID_ISSUER_PROOF"
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
   | "WASM_NOT_INITIALIZED";
@@ -310,6 +283,12 @@ export interface ShowCircuitInputs {
   tokenTypes: bigint[];
   tokenValues: bigint[];
   exprLen: bigint;
+  /** Issuer hiding: key shared with Prepare via comm_W_shared, plus its registry proof. */
+  issuerKeyX: bigint;
+  issuerKeyY: bigint;
+  issuerTreeDepth: bigint;
+  issuerTreeIndex: bigint;
+  issuerTreeSiblings: bigint[][];
 }
 
 export interface PrecomputeRequest {
@@ -339,6 +318,8 @@ export interface PrecomputedCredential {
   birthdayClaimIndex: number;
   birthdayClaim: string;
   deviceKey: EcdsaPublicKey;
+  /** The issuer key the credential was verified against. Never leaves the holder. */
+  issuerPublicKey: EcdsaPublicKey;
   /**
    * Normalized claim values extracted from the JWT circuit witness. Required
    * input to the Show circuit's predicate evaluation. Consumers that use the
@@ -406,6 +387,7 @@ export interface SerializedPrecomputedCredentialJSON {
   birthdayClaimIndex: number;
   birthdayClaim: string;
   deviceKey: EcdsaPublicKey;
+  issuerPublicKey: EcdsaPublicKey;
   normalizedClaimValues: string[]; // bigints serialized as decimal strings
   claimIdentifierHashes?: string[]; // bigints serialized as decimal strings
   claimNormalization: ClaimNormalization;
@@ -419,6 +401,12 @@ export interface PresentRequest {
 
   /** Predicates to evaluate against the precomputed credential. */
   predicates: import("./predicates.js").PredicateExpression;
+
+  /**
+   * Membership proof of the credential's issuer in the issuer registry, against
+   * a root the verifier accepts. See `createIssuerRegistry`.
+   */
+  issuerProof: import("./issuer-hiding.js").IssuerProof;
 
   /** Trusted clock / profile policy for JWT validity checks (re-checked at present time). */
   profile?: import("./credential.js").CredentialProfileOptions;

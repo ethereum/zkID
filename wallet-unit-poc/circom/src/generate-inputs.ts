@@ -7,6 +7,8 @@ import * as snarkjs from "snarkjs";
 
 import { generateMockData } from "./mock-vc-generator";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce, nameToBuffer } from "./show";
+import { generateIssuerMembershipInputs } from "./issuer-hiding";
+import { base64urlToBigInt } from "./utils";
 import { PredicateFormat } from "./predicate-types";
 
 // Witness index of claimIdentifierHashes[0] per compiled JWT size (.sym column $2).
@@ -14,6 +16,7 @@ import { PredicateFormat } from "./predicate-types";
 // (the circuits are over secq256r1; no JS Poseidon matches). Mirrors
 // CLAIM_IDENTITY_WITNESS_START in openac-sdk/src/sizing.ts.
 const CLAIM_IDENTITY_WITNESS_START: Record<string, number> = {
+  default: 3871,
   "1k": 2526,
   "2k": 4074,
   "4k": 7622,
@@ -87,7 +90,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   let claimIdentifierHashes: bigint[] = [];
   const identityStart = CLAIM_IDENTITY_WITNESS_START[sizeName];
   if (identityStart !== undefined) {
-    const jwtName = `jwt_${sizeName}`;
+    const jwtName = sizeName === "default" ? "jwt" : `jwt_${sizeName}`;
     const jwtWasm = path.resolve(__dirname, "..", "build", jwtName, `${jwtName}_js`, `${jwtName}.wasm`);
     const wtnsPath = path.join(os.tmpdir(), `${jwtName}-geninputs.wtns`);
     await snarkjs.wtns.calculate(mockData.circuitInputs, jwtWasm, wtnsPath);
@@ -107,6 +110,11 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     [], // logicExpr (default)
     [], // normalizedClaimValues (derived from claims)
     claimIdentifierHashes,
+    // Issuer hiding: Show must see the same issuer key the JWT circuit verified.
+    generateIssuerMembershipInputs({
+      x: base64urlToBigInt(mockData.issuerKey.x),
+      y: base64urlToBigInt(mockData.issuerKey.y),
+    }),
   );
 
   // Show predicate: claim[ROC_BIRTHDAY_SLOT] <= 1070101 (ROC adult cutoff).

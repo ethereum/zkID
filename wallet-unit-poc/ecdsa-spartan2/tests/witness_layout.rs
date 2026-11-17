@@ -19,7 +19,7 @@ use ecdsa_spartan2::{
     circuit_size::CircuitSize,
     utils::{
         calculate_jwt_output_indices, calculate_mdoc_output_indices,
-        calculate_show_witness_indices, MDOC_CLAIM_VALUES_WITNESS_START,
+        calculate_show_witness_indices, MDOC_CLAIM_VALUES_WITNESS_START, SHOW_ISSUER_ROOT_INDEX,
     },
 };
 
@@ -103,15 +103,13 @@ fn jwt_claim_value_offsets_match_sym() {
              CLAIM_VALUES_WITNESS_START in openac-sdk/src/sizing.ts)."
         );
 
-        // The two leaks this change exists to close. The circuit publishes the
-        // issuer key and the normalization flags (2n + 2 public inputs, no public
-        // outputs), but never claim values -- which would reveal the exact
-        // attribute -- nor the device key, a constant identifier that survives
-        // reblinding and lets a verifier recognize a returning holder.
+        // Only the normalization flags are public (2n inputs, no outputs): claim
+        // values would reveal the attribute, the device key would link
+        // presentations and the issuer key would reveal the issuer.
         assert_eq!(
             layout.num_public(),
-            2 * layout.claim_values_len + 2,
-            "{size}: JWT public IO must be exactly issuer key + decodeFlags + claimFormats"
+            2 * layout.claim_values_len,
+            "{size}: JWT public IO must be exactly decodeFlags + claimFormats"
         );
         for idx in layout
             .claim_values_range()
@@ -216,4 +214,47 @@ fn show_claim_value_offsets_match_sym() {
             "show: claimValues[..] is inside the public IO"
         );
     }
+}
+
+/// Issuer hiding: the issuer key is private in every credential circuit and
+/// travels to Show through the shared segment, and Show outputs the root.
+#[test]
+fn issuer_hiding_offsets_match_sym() {
+    let key = |x: usize| vec![x, x + 1];
+    let names = || vec!["main.pubKeyX".to_string(), "main.pubKeyY".to_string()];
+    let mut checked = 0;
+
+    for size in CircuitSize::ALL {
+        let layout = calculate_jwt_output_indices(size);
+        if let Some(actual) = witness_indices(size.circuit_name(), &names()) {
+            assert_eq!(actual, key(layout.issuer_key_x_index), "{size}: issuer key moved");
+            assert!(layout.issuer_key_x_index > layout.num_public());
+            checked += 1;
+        }
+    }
+
+    let mdoc = calculate_mdoc_output_indices(MDOC_MAX_CLAIMS);
+    if let Some(actual) = witness_indices("mdoc", &names()) {
+        assert_eq!(actual, key(mdoc.issuer_key_x_index), "mdoc: issuer key moved");
+        assert!(mdoc.issuer_key_x_index > mdoc.num_public());
+        checked += 1;
+    }
+
+    let show = calculate_show_witness_indices(CircuitSize::default().n_claims());
+    let wanted: Vec<String> = [
+        "main.issuerRoot[0]",
+        "main.issuerRoot[1]",
+        "main.issuerKeyX",
+        "main.issuerKeyY",
+    ]
+    .map(String::from)
+    .to_vec();
+    if let Some(actual) = witness_indices("show", &wanted) {
+        let mut expected = key(SHOW_ISSUER_ROOT_INDEX);
+        expected.extend(key(show.issuer_key_x_index));
+        assert_eq!(actual, expected, "show: issuer root/key moved");
+        checked += 1;
+    }
+
+    assert!(checked > 0, "no circuits compiled; nothing verified");
 }

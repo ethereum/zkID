@@ -9,12 +9,13 @@ import { generateShowInputs, signDeviceNonce } from "../../src/show.ts";
 import { bindPredicateName, hashClaimName } from "../common/claim-identity.ts";
 import { uint8ArrayToBigIntArray } from "../../src/utils.ts";
 
-const SHOW_PARAMS = [2, 2, 8, 64] as const;
+const SHOW_PARAMS = [2, 2, 8, 64, 8] as const;
 const SHOW_PARAM_OBJ = {
   nClaims: SHOW_PARAMS[0],
   maxPredicates: SHOW_PARAMS[1],
   maxLogicTokens: SHOW_PARAMS[2],
   valueBits: SHOW_PARAMS[3],
+  maxIssuerDepth: SHOW_PARAMS[4],
 };
 
 type MdocInputs = ReturnType<typeof generateMdocInputs>;

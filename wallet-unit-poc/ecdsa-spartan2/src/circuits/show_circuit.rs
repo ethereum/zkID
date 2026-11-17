@@ -1,4 +1,4 @@
-use super::{bind_shared, synthesize_all_vars, synthesize_witness_only};
+use super::{alloc_shared_issuer_key, bind_shared, synthesize_all_vars, synthesize_witness_only};
 use crate::{paths::PathConfig, utils::*, Scalar, E};
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
 use circom_scotia::reader::load_r1cs;
@@ -175,7 +175,7 @@ impl SpartanCircuit<E> for ShowCircuit {
     }
 
     fn public_values(&self) -> Result<Vec<Scalar>, SynthesisError> {
-        // Public IO = expressionResult (output) followed by the bound verifier
+        // Public IO = expressionResult + issuerRoot[2] (outputs) followed by the bound verifier
         // statement (messageHash + predicate program). Circom lays these out as
         // the contiguous witness prefix `witness[1..=num_public]`.
         let num_public =
@@ -227,7 +227,7 @@ impl SpartanCircuit<E> for ShowCircuit {
         // `MdocCircuit::shared`):
         //   [KeyBindingX, KeyBindingY,
         //    claimValues[0..n_claims],
-        //    claimIdentifierHashes[0..n_claims]]
+        //    claimIdentifierHashes[0..n_claims], issuerKeyX, issuerKeyY]
         let mut shared_values = Vec::with_capacity(2 + 2 * layout.claim_values_len);
         shared_values.push(kb_x);
         shared_values.push(kb_y);
@@ -255,6 +255,12 @@ impl SpartanCircuit<E> for ShowCircuit {
             )?;
             shared_values.push(id_alloc);
         }
+
+        shared_values.extend(alloc_shared_issuer_key(
+            cs,
+            witness.as_deref(),
+            layout.issuer_key_x_index,
+        )?);
 
         Ok(shared_values)
     }

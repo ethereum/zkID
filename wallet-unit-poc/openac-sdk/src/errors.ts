@@ -21,6 +21,7 @@ export type ErrorCode =
   | "PARAMS_EXCEEDED"
   | "INVALID_NONCE"
   | "INVALID_ENCODING"
+  | "INVALID_ISSUER_PROOF"
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
   | "WASM_NOT_INITIALIZED";
@@ -78,7 +79,8 @@ export class InputError extends OpenACError {
       | "CLAIM_FORMAT_MISMATCH"
       | "PARAMS_EXCEEDED"
       | "INVALID_NONCE"
-      | "INVALID_ENCODING",
+      | "INVALID_ENCODING"
+      | "INVALID_ISSUER_PROOF",
     message: string,
     cause?: unknown
   ) {

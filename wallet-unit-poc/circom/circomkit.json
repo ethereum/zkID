@@ -3,5 +3,6 @@
   "protocol": "groth16",
   "prime": "secq256r1",
   "optimization": 2,
-  "cWitness": true
+  "cWitness": true,
+  "include": ["./node_modules", "./node_modules/circomlib/circuits"]
 }

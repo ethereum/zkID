@@ -12,7 +12,7 @@ import {
   requiredNormalization,
 } from "../src/index.js";
 import { WasmBridge } from "../src/wasm-bridge.js";
-import { generateDummyCredential } from "../src/testing/index.js";
+import { generateDummyCredential, issuerProofFor } from "../src/testing/index.js";
 import type {
   VerifyingKeys,
   KeySet,
@@ -140,6 +140,7 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
+      issuerProof: issuerProofFor(cred.issuerPublicKey),
       keys,
       predicates: claimToClaimPredicate,
     });

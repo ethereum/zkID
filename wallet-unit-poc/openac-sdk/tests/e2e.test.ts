@@ -11,6 +11,9 @@ import {
   base64urlToBigInt,
   DEFAULT_JWT_PARAMS,
   DEFAULT_SHOW_PARAMS,
+  buildIssuerMembershipInputs,
+  createIssuerRegistry,
+  issuerCommitment,
 } from "../src/index.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
@@ -322,7 +325,14 @@ describe("Show Circuit via SDK", () => {
       VERIFIER_NONCE,
       signature,
       data.devicePublicKey,
-      { normalizedClaimValues: [42n], predicates: [] },
+      {
+        normalizedClaimValues: [42n],
+        predicates: [],
+        issuer: buildIssuerMembershipInputs(
+          { x: ISSUER_POINT.x, y: ISSUER_POINT.y },
+          createIssuerRegistry([ISSUER_PUBLIC_KEY]).generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
+        ),
+      },
     );
 
     // Calculate witness via SDK WitnessCalculator
@@ -330,13 +340,11 @@ describe("Show Circuit via SDK", () => {
 
     // Witness sanity checks
     expect(witness[0]).toBe(1n); // valid constraint system
-    // Witness layout: w[1] = expressionResult, w[2..=156] = messageHash +
-    // predicate program + verifier attribute names (156 public signals now that
-    // names replaced the scalar identifier), then private signals: w[157] =
-    // deviceKeyX, w[158] = deviceKeyY (they stay in comm_W_shared with Prepare).
-    expect(witness[2]).toBe(showInputs.messageHash); // messageHash (public)
-    expect(witness[157]).toBe(base64urlToBigInt(data.devicePublicKey.x)); // deviceKeyX
-    expect(witness[158]).toBe(base64urlToBigInt(data.devicePublicKey.y)); // deviceKeyY
+    // w[1] = expressionResult, w[2..=3] = issuerRoot[hi, lo], w[4..=158] = statement,
+    // then private signals: w[159..=160] = deviceKeyX/Y (shared with Prepare).
+    expect(witness[4]).toBe(showInputs.messageHash); // messageHash (public)
+    expect(witness[159]).toBe(base64urlToBigInt(data.devicePublicKey.x)); // deviceKeyX
+    expect(witness[160]).toBe(base64urlToBigInt(data.devicePublicKey.y)); // deviceKeyY
   }, 30_000);
 
   it("proves and verifies via NativeBackend", async () => {
@@ -484,7 +492,13 @@ describe("Full Pipeline via SDK (Prepare + Show with Shared Blinds)", () => {
       VERIFIER_NONCE,
       deviceSignature,
       data.devicePublicKey,
-      { normalizedClaimValues },
+      {
+        normalizedClaimValues,
+        issuer: buildIssuerMembershipInputs(
+          { x: ISSUER_POINT.x, y: ISSUER_POINT.y },
+          createIssuerRegistry([ISSUER_PUBLIC_KEY]).generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
+        ),
+      },
     );
 
     // Step 6: Calculate Show witness and prove Show circuit

@@ -1,20 +1,19 @@
 import { WasmBridge } from "./wasm-bridge.js";
 import { deserializeProofBundle } from "./prover.js";
 import { buildShowStatementPublicValues } from "./inputs/show-statement.js";
-import {
-  extractIssuerKeyFromPreparePublicValues,
-  extractClaimNormalizationFromPreparePublicValues,
-} from "./inputs/prepare-public-io.js";
+import { extractClaimNormalizationFromPreparePublicValues } from "./inputs/prepare-public-io.js";
 import { checkNormalizationSupports } from "./predicates.js";
-import { bigintToBase64url } from "./utils.js";
+import { fromLimbs } from "./issuer-hiding.js";
 import { DEFAULT_SHOW_PARAMS } from "./types.js";
 import type {
   VerificationResult,
   VerifyingKeys,
   SerializedProof,
   ExpectedStatement,
-  ProvenIssuerKey,
 } from "./types.js";
+
+/** Show public IO: [expressionResult, issuerRoot[hi], issuerRoot[lo], ...statement]. */
+const SHOW_STATEMENT_OFFSET = 3;
 
 /**
  * Parse a Show public value (a serialized secq256r1 scalar) into a bigint.
@@ -32,32 +31,6 @@ function parseScalar(value: string): bigint {
   return 0n;
 }
 
-/**
- * Read the issuer key out of the Prepare proof's public values, in both forms a
- * trust store is likely to hold: curve coordinates, and the canonical P-256 JWK
- * (32-byte big-endian base64url), which compares field by field against a stored
- * `EcdsaPublicKey` without further conversion.
- */
-function provenIssuerKey(
-  preparePublicValues: bigint[],
-  expectedClaimCount: number,
-): ProvenIssuerKey {
-  const { x, y } = extractIssuerKeyFromPreparePublicValues(
-    preparePublicValues,
-    expectedClaimCount,
-  );
-  return {
-    x,
-    y,
-    jwk: {
-      kty: "EC",
-      crv: "P-256",
-      x: bigintToBase64url(x),
-      y: bigintToBase64url(y),
-    },
-  };
-}
-
 export class Verifier {
   private bridge: WasmBridge;
 
@@ -69,7 +42,7 @@ export class Verifier {
       valid: false,
       expressionResult: null,
       deviceKey: null,
-      issuerKey: null,
+      issuerRoot: null,
       verifyMs: performance.now() - startTime,
       error,
     };
@@ -146,10 +119,8 @@ export class Verifier {
    * same predicate over the same slot means different things under different
    * normalization.
    *
-   * Issuer identity is reported, not decided: the key the circuit ran its ES256
-   * check against is read out of the Prepare public IO and returned as
-   * `issuerKey`, leaving the trust decision to the caller. See
-   * `VerificationResult.issuerKey`.
+   * The issuer is hidden: Show outputs the issuer registry root, which is
+   * checked with `expected.isValidIssuerRoot` when given and always reported.
    */
   private async verifyInternal(
     runVerify: () => Promise<{
@@ -190,18 +161,15 @@ export class Verifier {
       );
     }
 
-    // The Prepare proof's public IO carries the (pubKeyX, pubKeyY) the ES256
-    // check inside the circuit ran against, and the decodeFlags/claimFormats the
+    // The Prepare proof's public IO carries the decodeFlags/claimFormats the
     // claim values were normalized under.
     const preparePublicValues = result.preparePublicValues.map(parseScalar);
-    let issuerKey;
     let claimNormalization;
     try {
       // Cross-check the Prepare public-IO length against the claim-slot count
       // the verifier expects (Item 10): the vector length is prover-controlled,
       // so a forked prover could truncate it to a different valid shape.
       const expectedClaimCount = DEFAULT_SHOW_PARAMS.nClaims;
-      issuerKey = provenIssuerKey(preparePublicValues, expectedClaimCount);
       claimNormalization = extractClaimNormalizationFromPreparePublicValues(
         preparePublicValues,
         expectedClaimCount,
@@ -211,17 +179,6 @@ export class Verifier {
         e instanceof Error ? e.message : String(e),
         startTime,
       );
-    }
-
-    // Item 13: if the verifier pinned a trusted-issuer set, the credential's
-    // issuer key (recovered above, SNARK-authenticated) must be one of them.
-    if (expected.trustedIssuers && expected.trustedIssuers.length > 0) {
-      const trusted = expected.trustedIssuers.some(
-        (k) => issuerKey.jwk.x === k.x && issuerKey.jwk.y === k.y,
-      );
-      if (!trusted) {
-        return Verifier.failure("Issuer key is not in the trusted set", startTime);
-      }
     }
 
     // The normalization is checked here rather than reported, because the
@@ -259,12 +216,10 @@ export class Verifier {
       }
     }
 
-    // Public IO layout: index 0 = expressionResult, indices 1.. = the bound
-    // verifier statement (messageHash + predicate program).
     const publicValues = result.showPublicValues.map(parseScalar);
     const expressionResult = (publicValues[0] ?? 0n) !== 0n;
 
-    const boundValues = publicValues.slice(1);
+    const boundValues = publicValues.slice(SHOW_STATEMENT_OFFSET);
     if (boundValues.length !== expectedStatementValues.length) {
       return Verifier.failure(
         `Statement binding size mismatch: proof exposes ${boundValues.length} bound values, expected ${expectedStatementValues.length}`,
@@ -284,11 +239,21 @@ export class Verifier {
       }
     }
 
+    let issuerRoot: bigint;
+    try {
+      issuerRoot = fromLimbs(publicValues[1] ?? 0n, publicValues[2] ?? 0n);
+    } catch (e) {
+      return Verifier.failure(e instanceof Error ? e.message : String(e), startTime);
+    }
+    if (expected.isValidIssuerRoot && !(await expected.isValidIssuerRoot(issuerRoot))) {
+      return Verifier.failure("Issuer root is not accepted", startTime);
+    }
+
     return {
       valid: true,
       expressionResult,
       deviceKey: null,
-      issuerKey,
+      issuerRoot,
       verifyMs: performance.now() - startTime,
     };
   }
