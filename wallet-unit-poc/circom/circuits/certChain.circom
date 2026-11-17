@@ -30,10 +30,6 @@ template CertChainRSA256(
     smtDepth,
     maxSerialNumberLength
 ) {
-    // Prover-supplied byte offset of the user modulus's INTEGER tag inside
-    // issuerTbs. The value offset is derived below.
-    signal input tbsModulusTagOffset;
-
     // === Issuer (cert chain) — sized to kIssuer ===
     signal input issuerTbs[maxMessageLength];
     signal input issuerTbsLength;
@@ -48,6 +44,10 @@ template CertChainRSA256(
     signal input smtOldKey;
     signal input smtOldValue;
     signal input smtIsOld0;
+
+    // === Validity ===
+    // Verifier-supplied time as the decimal integer YYMMDDHHMMSS (UTC).
+    signal input currentTime;
 
     // === Linking (private; same value used in UserSigRSA256) ===
     signal input pkBlind;
@@ -72,39 +72,66 @@ template CertChainRSA256(
     tbsLenUB.in[1] <== actualIssuerTbsLength + 128;
     tbsLenUB.out === 1;
 
+    // LocateModulus and the pinned DER prefixes below assume a 2048-bit
+    // subject key.
+    assert(modulusBitsUser == 2048);
     var modulusBytes = modulusBitsUser \ 8;  // e.g. 2048/8 = 256
-
-    AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
 
     // MOICA TBSes are always > 256 bytes, so the outer SEQUENCE header is
     // always the 4-byte form [0x30, 0x82, len_hi, len_lo]. Length bytes vary.
     issuerTbs[0] === 0x30;
     issuerTbs[1] === 0x82;
 
-    // Optional [0] EXPLICIT version block at offset 4 — canonical 5 bytes
-    // [0xa0, 0x03, 0x02, 0x01, 0x02]. When present, the serial INTEGER tag
-    // sits at offset 9; otherwise at offset 4.
-    component hasVersion = IsEqual();
-    hasVersion.in[0] <== issuerTbs[4];
-    hasVersion.in[1] <== 0xa0;
+    // Bind the prover-supplied raw length to the length the TBS itself
+    // declares, so AssertSliceInTBS bounds slices by the signed TBS rather
+    // than by a value that may reach into the SHA-256 padding.
+    issuerTbs[2] * 256 + issuerTbs[3] + 4 === actualIssuerTbsLength;
 
-    var versionBytes[4] = [0x03, 0x02, 0x01, 0x02];
-    component versionCheck[4];
-    for (var i = 0; i < 4; i++) {
-        versionCheck[i] = ForceEqualIfEnabled();
-        versionCheck[i].enabled <== hasVersion.out;
-        versionCheck[i].in[0] <== issuerTbs[5 + i];
-        versionCheck[i].in[1] <== versionBytes[i];
+    // MOICA issues v3 certs only: pin the [0] EXPLICIT version block
+    // [0xa0, 0x03, 0x02, 0x01, 0x02] at offset 4. The serial INTEGER tag is
+    // then at offset 9 and its value at offset 11.
+    var versionBytes[5] = [0xa0, 0x03, 0x02, 0x01, 0x02];
+    for (var i = 0; i < 5; i++) {
+        issuerTbs[4 + i] === versionBytes[i];
     }
 
-    signal serialTagOff <== 4 + hasVersion.out * 5;
-    signal serialValueOff <== serialTagOff + 2;
+    var serialValueOff = 11;
 
-    VerifySerialNumber(maxMessageLength, maxSerialNumberLength)(
+    VerifySerialNumber(maxMessageLength, maxSerialNumberLength, serialValueOff)(
         issuerTbs,
-        serialValueOff,
         serialNumber
     );
+
+    // Validity: offset derived from the DER structure, no prover input.
+    // Every read stays inside issuerTbs[0..256), which the pinned 0x30 0x82
+    // outer header guarantees to be part of the signed TBS.
+    component validity = VerifyValidity(maxSerialNumberLength);
+    for (var i = 0; i < 256; i++) {
+        validity.tbs[i] <== issuerTbs[i];
+    }
+    validity.currentTime <== currentTime;
+
+    // Offset of the user modulus's INTEGER tag, derived by continuing the
+    // structural walk past the subject Name. Not a prover input.
+    component locate = LocateModulus();
+    for (var i = 0; i < 512; i++) {
+        locate.tbs[i] <== issuerTbs[i];
+    }
+    locate.subjectOffset <== validity.subjectOffset;
+    locate.subjectHeader <== validity.subjectHeader;
+    signal tbsModulusTagOffset <== locate.modulusTagOffset;
+    AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
+
+    // keyUsage must be digitalSignature: rejects the card's encryption
+    // certificate, whose key would otherwise give a second nullifier.
+    component keyUsage = VerifyKeyUsage();
+    for (var i = 0; i < 1024; i++) {
+        keyUsage.tbs[i] <== issuerTbs[i];
+    }
+    keyUsage.modulusTagOffset <== tbsModulusTagOffset;
+    // The 93 bytes VerifyKeyUsage reads must lie inside the signed TBS, not
+    // in the SHA-256 padding after it.
+    AssertSliceInTBS()(tbsModulusTagOffset + 261, 93, actualIssuerTbsLength);
 
     // DER prefix for an unsigned 2048-bit RSA modulus INTEGER:
     //   [0x02, 0x82, 0x01, 0x01, 0x00]

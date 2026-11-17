@@ -16,6 +16,11 @@ pub const DEFAULT_TBS: &[u8] = b"e775f2805fb993e05a208dbff15d1c1";
 /// the verifier's value.
 pub const DEFAULT_CHALLENGE: &str = "1339673755198158349044581307228491536";
 
+/// Default `currentTime` (`YYMMDDHHMMSS`, UTC) for fixture / non-live runs:
+/// 2026-11-14 15:59:59, inside the validity period of both bundled fixture
+/// certs. Live runs use the system clock.
+pub const DEFAULT_CURRENT_TIME: &str = "261114155959";
+
 pub mod challenge_client;
 pub mod circuits;
 pub mod hipki_client;
@@ -34,6 +39,7 @@ pub use circuits::split_circuits::{
     MAX_CERT_CHAIN_LENGTH,
 };
 pub use paths::PathConfig;
+pub use zkid_input_builder::current_time_utc;
 pub use prover::{
     prove_circuit, prove_circuit_in_memory, prove_circuit_with_pk, reblind, reblind_in_memory,
     reblind_with_loaded_data, run_circuit, verify_circuit, verify_circuit_with_loaded_data,

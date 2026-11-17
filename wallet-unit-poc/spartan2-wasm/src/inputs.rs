@@ -33,6 +33,7 @@ fn build_split_inputs_core(
     max_cert_length: usize,
     pk_blind: &str,
     challenge: &str,
+    current_time: &str,
 ) -> Result<SplitInputsJs, String> {
     let user_cert = Certificate::from_der(user_cert_der)
         .map_err(|e| format!("user cert DER parse: {e}"))?;
@@ -51,6 +52,7 @@ fn build_split_inputs_core(
         max_cert_length,
         pk_blind,
         challenge,
+        current_time,
     )
     .map_err(|e| format!("generate_split_inputs: {e}"))?;
 
@@ -63,7 +65,9 @@ fn build_split_inputs_core(
 /// `smt_inputs`: `null`/`undefined` fills zero defaults; otherwise a snake_case
 /// `SmtCircuitInputs` object. `k_issuer` is 17 (RSA-2048) or 34 (RSA-4096);
 /// `k_user` must be 17. `challenge` is the verifier-issued per-session field
-/// element (decimal string) bound into the user-sig proof.
+/// element (decimal string) bound into the user-sig proof. `current_time` is
+/// the decimal integer `YYMMDDHHMMSS` (UTC) the cert-chain proof checks the
+/// certificate's validity period against.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn build_split_inputs(
@@ -76,6 +80,7 @@ pub fn build_split_inputs(
     k_issuer: u32,
     k_user: u32,
     challenge: &str,
+    current_time: &str,
 ) -> Result<JsValue, JsError> {
     if k_issuer != 17 && k_issuer != 34 {
         return Err(JsError::new(&format!(
@@ -116,6 +121,7 @@ pub fn build_split_inputs(
         MAX_CERT_CHAIN_LENGTH,
         &pk_blind,
         challenge,
+        current_time,
     )
     .map_err(|e| JsError::new(&e))?;
 
@@ -171,6 +177,7 @@ pub fn build_split_inputs_native_for_test(
     max_cert_length: usize,
     pk_blind: &str,
     challenge: &str,
+    current_time: &str,
 ) -> Result<SplitInputsJs, String> {
     build_split_inputs_core(
         user_cert_der,
@@ -184,5 +191,6 @@ pub fn build_split_inputs_native_for_test(
         max_cert_length,
         pk_blind,
         challenge,
+        current_time,
     )
 }
