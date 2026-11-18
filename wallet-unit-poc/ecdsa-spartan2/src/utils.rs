@@ -715,9 +715,9 @@ impl MdocOutputLayout {
 /// Verified against `build/mdoc/mdoc.sym` (`MDOC(1792, 256, 4, 32, 64)`):
 ///   witness[1]    = main.validUntilDate  (public output)
 ///   witness[2]    = main.pubKeyX         (public input)
-///   witness[2974] = main.normalizedClaimValues[0] (private, shared)
-///   witness[2978] = main.claimIdentifierHashes[0]  (private, shared)
-///   witness[2982] = main.deviceKeyX      (private, shared)
+///   witness[2966] = main.normalizedClaimValues[0] (private, shared)
+///   witness[2970] = main.claimIdentifierHashes[0]  (private, shared)
+///   witness[2974] = main.deviceKeyX      (private, shared)
 pub fn calculate_mdoc_output_indices(max_claims: usize) -> MdocOutputLayout {
     // The lone public output occupies witness[1]; the public inputs follow.
     let issuer_key_x_index = 2;
@@ -742,17 +742,17 @@ pub fn calculate_mdoc_output_indices(max_claims: usize) -> MdocOutputLayout {
 
 /// Witness index of `main.normalizedClaimValues[0]` in the compiled MDOC circuit.
 /// Re-derived from `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_CLAIM_VALUES_WITNESS_START: usize = 2974;
+pub const MDOC_CLAIM_VALUES_WITNESS_START: usize = 2966;
 
 /// Witness index of `main.claimIdentifierHashes[0]` in the compiled MDOC circuit.
 /// Re-derived from `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START: usize = 2978;
+pub const MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START: usize = 2970;
 
 /// Witness index of `main.deviceKeyX` in the compiled MDOC circuit; `deviceKeyY`
 /// follows it. Private since the unlinkability fix, so the index is no longer
 /// implied by the public prefix and must be re-derived from
 /// `build/mdoc/mdoc.sym` by `tests/witness_layout.rs`.
-pub const MDOC_DEVICE_KEY_WITNESS_START: usize = 2982;
+pub const MDOC_DEVICE_KEY_WITNESS_START: usize = 2974;
 
 /// Parse MDOC circuit inputs from JSON.
 ///

@@ -81,7 +81,14 @@ template MDOC(
 
     // CHECK 3: per-claim preimage authenticity + value extraction
     signal preimageHashesPoseidon[maxClaims];
-    signal idHash[maxClaims];
+
+    // Same width show.circom and jwt.circom hash at. Any other width gives a
+    // different element for the same attribute and comm_W_shared never matches.
+    var NAME_ID_LEN = 31;
+    assert(maxIdentifierLen >= NAME_ID_LEN + 1);
+    signal nameLengths[maxClaims];
+    signal boundedName[maxClaims][NAME_ID_LEN];
+    component idNameHashers[maxClaims];
 
     for (var i = 0; i < maxClaims; i++) {
         // claimFlags[i] must be 0 or 1; fractional values bypass gated assertions.
@@ -90,8 +97,20 @@ template MDOC(
         preimageHashesPoseidon[i] <== HashBytesToFieldWithLen(maxPreimageLen)(preimages[i], preimageLengths[i]);
 
         // MdocClaimVerifier already proved this identifier is in the signed preimage.
-        idHash[i] <== HashBytesToFieldWithLen(maxIdentifierLen)(identifierCbor[i], identifierLengths[i]);
-        claimIdentifierHashes[i] <== idHash[i] * claimFlags[i];
+        // identifierLengths counts the CBOR header; inactive slots stay at 0.
+        nameLengths[i] <== claimFlags[i] * (identifierLengths[i] - 1);
+
+        // Single-byte text-string header only, so the name is identifierCbor[1..].
+        // Excludes names of 24 bytes or more, which CBOR frames with two bytes.
+        claimFlags[i] * (identifierCbor[i][0] - 96 - nameLengths[i]) === 0;
+
+        for (var j = 0; j < NAME_ID_LEN; j++) {
+            boundedName[i][j] <== identifierCbor[i][j + 1];
+        }
+        idNameHashers[i] = HashBytesToFieldWithLen(NAME_ID_LEN);
+        idNameHashers[i].in  <== boundedName[i];
+        idNameHashers[i].len <== nameLengths[i];
+        claimIdentifierHashes[i] <== idNameHashers[i].hash * claimFlags[i];
 
         MdocClaimVerifier(maxCredLen, maxPreimageLen, maxIdentifierLen)(
             message,

@@ -5,6 +5,7 @@ import * as nodeCrypto from "crypto";
 import { createTestMdocCredential } from "./mdoc-fixture";
 import { generateMdocCircuitParams, generateMdocInputs, parseMdocClaims, type MdocClaimType } from "./mdoc";
 import { generateShowInputs, signDeviceNonce } from "./show";
+import { bindPredicateName, hashClaimName } from "./claim-identity.ts";
 
 // Mirrors circuits/main/mdoc.circom: MDOC(1792, 256, 4, 32, 64).
 const MDOC_PARAMS: [number, number, number, number, number] = [1792, 256, 4, 32, 64];
@@ -69,6 +70,13 @@ async function main(): Promise<void> {
   const nonce = nodeCrypto.randomBytes(24).toString("base64url");
   const deviceSignature = signDeviceNonce(nonce, cred.devPrvHex);
 
+  // Both slots: MdocCircuit::shared() commits the mdoc circuit's own identities,
+  // so Show must carry the same values or comm_W_shared will not match.
+  const claimIdentifierHashes = [
+    await hashClaimName("birth_date"),
+    await hashClaimName("resident_state"),
+  ];
+
   const showInputs = generateShowInputs(
     SHOW_PARAMS,
     nonce,
@@ -77,6 +85,7 @@ async function main(): Promise<void> {
     [],
     [],
     normalizedClaimValues,
+    claimIdentifierHashes,
   );
 
   showInputs.predicateLen = 1n;
@@ -86,6 +95,9 @@ async function main(): Promise<void> {
   showInputs.tokenTypes[0] = 0n;
   showInputs.tokenValues[0] = 0n;
   showInputs.exprLen = 1n;
+
+  // Show rejects a zero identity as a padding-slot wildcard.
+  await bindPredicateName(showInputs, 0, 0, "birth_date");
 
   const showDir = path.join(circomDir, "inputs", "show");
   fs.mkdirSync(showDir, { recursive: true });

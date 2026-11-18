@@ -6,7 +6,8 @@ import { buildMdocWitness, MDOC_PARAMS, packString, ymdToYyyymmdd } from "../com
 import { createTestMdocCredential } from "../../src/mdoc-fixture.ts";
 import { generateMdocCircuitParams, generateMdocInputs, parseMdocClaims } from "../../src/mdoc.ts";
 import { generateShowInputs, signDeviceNonce } from "../../src/show.ts";
-import { bindPredicateName } from "../common/claim-identity.ts";
+import { bindPredicateName, hashClaimName } from "../common/claim-identity.ts";
+import { witnessIndices } from "../common/witness-signals.ts";
 
 const SHOW_PARAMS = [2, 2, 8, 64] as const;
 const SHOW_PARAM_OBJ = {
@@ -93,6 +94,25 @@ describe("Complete Flow: Register (MDOC) → Show Circuit", () => {
     await bindPredicateName(showInputs, 0, 0, "birth_date");
 
     await showCircuit.expectPass(showInputs, { expressionResult: 1n });
+  });
+
+  it("mdoc's claimIdentifierHashes match H(name) as Show derives it", async () => {
+    const claimConfig = {
+      birth_date: { type: "date" as const },
+      resident_state: { type: "string" as const },
+    };
+    const { inputs: mdocInputs } = await buildMdocWitness(claimConfig);
+
+    const mdocWitness = await mdocCircuit.calculateWitness(mdocInputs);
+    await mdocCircuit.expectConstraintPass(mdocWitness);
+
+    const [birthDateIdx, residentStateIdx] = await witnessIndices(mdocCircuit, [
+      "main.claimIdentifierHashes[0]",
+      "main.claimIdentifierHashes[1]",
+    ]);
+
+    assert.equal(mdocWitness[birthDateIdx], await hashClaimName("birth_date"));
+    assert.equal(mdocWitness[residentStateIdx], await hashClaimName("resident_state"));
   });
 
   it("evaluates expressionResult=0 when the predicate is false", async () => {

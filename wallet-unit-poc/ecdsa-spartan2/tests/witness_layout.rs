@@ -19,7 +19,8 @@ use ecdsa_spartan2::{
     circuit_size::CircuitSize,
     utils::{
         calculate_jwt_output_indices, calculate_mdoc_output_indices,
-        calculate_show_witness_indices, MDOC_CLAIM_VALUES_WITNESS_START,
+        calculate_show_witness_indices, MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START,
+        MDOC_CLAIM_VALUES_WITNESS_START,
     },
 };
 
@@ -132,6 +133,7 @@ fn mdoc_claim_value_offsets_match_sym() {
     let layout = calculate_mdoc_output_indices(MDOC_MAX_CLAIMS);
     let wanted: Vec<String> = (0..MDOC_MAX_CLAIMS)
         .map(|i| format!("main.normalizedClaimValues[{i}]"))
+        .chain((0..MDOC_MAX_CLAIMS).map(|i| format!("main.claimIdentifierHashes[{i}]")))
         .chain([
             "main.validUntilDate".into(),
             "main.deviceKeyX".into(),
@@ -146,6 +148,10 @@ fn mdoc_claim_value_offsets_match_sym() {
 
     let expected: Vec<usize> = layout
         .claim_values_range()
+        .chain(
+            layout.claim_identifier_hashes_start
+                ..layout.claim_identifier_hashes_start + MDOC_MAX_CLAIMS,
+        )
         .chain([
             layout.valid_until_index,
             layout.device_key_x_index,
@@ -158,6 +164,10 @@ fn mdoc_claim_value_offsets_match_sym() {
         "mdoc witness layout drifted; update MDOC_CLAIM_VALUES_WITNESS_START"
     );
     assert_eq!(layout.claim_values_start, MDOC_CLAIM_VALUES_WITNESS_START);
+    assert_eq!(
+        layout.claim_identifier_hashes_start,
+        MDOC_CLAIM_IDENTIFIER_HASHES_WITNESS_START
+    );
 
     for idx in layout.claim_values_range() {
         assert!(
