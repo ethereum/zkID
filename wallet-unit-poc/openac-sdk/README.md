@@ -1,5 +1,10 @@
 # openac-sdk
 
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 ZK proof SDK for SD-JWT credentials. Prove predicates (`age >= 18`, `balance <= credit_limit`, etc.) without revealing claim values. Built on Spartan2 + Hyrax over secp256r1.
 
 ## Install

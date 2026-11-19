@@ -1,5 +1,10 @@
 # OpenAC Studio
 
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 A guided integration designer and interactive explainer for anonymous credential presentation flows. Design, visualize, and analyze your credential system with deterministic module selection, sequence diagrams, and threat modeling — all running locally in the browser.
 
 ## Quick Start

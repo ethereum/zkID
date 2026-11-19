@@ -1,5 +1,10 @@
 # Generalized Predicate Proofs for Verifiable Credentials
 
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 This design enables a credential holder to prove complex logical statements over multiple attributes without revealing the underlying values. Policies can express comparisons between an attribute and a constant or between two attributes of the same credential, range checks, set membership, non-membership, and arbitrary logical compositions of these. The verifier validates the proof and obtains the boolean result of the logical expression, which indicates whether the policy is satisfied.
 
 This is particularly useful for privacy-preserving identity systems where users must prove eligibility conditions such as:
