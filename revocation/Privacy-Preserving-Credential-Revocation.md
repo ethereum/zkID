@@ -65,7 +65,7 @@ The protocol requires an authenticated data structure capable of supporting non-
 
 Possible options include:
 
-* [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs)
+* [LeanIMT+](./LeanIMTPlus-Membership-NonMembership-Proofs.md)
 * [Indexed Merkle Tree](https://eprint.iacr.org/2021/1263.pdf)
 * [Sparse Merkle Tree](https://docs.iden3.io/publications/pdfs/Merkle-Tree.pdf)
 * Other non-membership tree variants
@@ -98,7 +98,7 @@ This approach is similar to Semaphore's root history mechanism, where recently v
 
 ## Reference Implementation
 
-A reference implementation of this revocation mechanism is available in the [zkID repository](https://github.com/privacy-ethereum/zkID/tree/RSA-X.509-Cert).
+A reference implementation of this revocation mechanism is available in the [zkID repository](https://github.com/ethereum/zkID/tree/RSA-X.509-Cert).
 
 The implementation demonstrates the use of zero-knowledge non-membership proofs for credential revocation and can serve as a starting point for experimentation and integration into verifiable credential systems.
 
