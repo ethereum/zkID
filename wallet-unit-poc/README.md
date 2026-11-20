@@ -9,7 +9,7 @@ This PoC currently supports the following credential formats:
 
 ### Issuer Hiding
 
-Presentations never reveal the issuer. Show proves the issuer key is in a SHA-256 LeanIMT of approved issuers and outputs only its root, which a verifier checks on chain with `OpenACIssuerRegistry.isValidRoot` ([solidity](./solidity/README.md)). See [openac-sdk](./openac-sdk/README.md#issuer-hiding).
+Presentations never reveal the issuer. Show proves the issuer key is in a SHA-256 LeanIMT of approved issuers and outputs only its root, which a verifier checks on chain with `OpenACIssuerRegistry.isValidRoot` ([solidity](./solidity/README.md)) or against an [off-chain registry server](./registry-server/README.md). See [openac-sdk](./openac-sdk/README.md#issuer-hiding).
 
 ### Call for Feedback
 
@@ -21,7 +21,7 @@ SD-JWT credentials carry `revocation_commitment`: `C = sha256(r)` (base64url, 32
 
 - The JWT circuit extracts the signed `C` and shares it with Show through `comm_W_shared`.
 - The Show circuit proves `sha256(r) = C` and that `C` is not in the tree, and outputs the root (`0` for an empty registry). Max tree depth is 10.
-- The verifier accepts the proof only if the root is valid, e.g. `OpenACRevocationRegistry.isValidRoot` on the [registry contract](./solidity/README.md).
+- The verifier accepts the proof only if the root is valid, e.g. `OpenACRevocationRegistry.isValidRoot` on the [registry contract](./solidity/README.md), or the same check on the [off-chain registry server](./registry-server/README.md).
 
 MDOC keeps a Show variant without revocation (`show_mdoc`), which still proves issuer hiding. See the [SDK](./openac-sdk/README.md#revocation) for usage.
 

@@ -7,7 +7,7 @@ On-chain registries for OpenAC presentations. The Show circuit outputs two roots
 | `OpenACIssuerRegistry`     | SHA-256 LeanIMT of approved issuer keys                | `issuerRoot`     | [`Sha256IssuerRegistry`](https://www.npmjs.com/package/@coordination-network/contracts)                  |
 | `OpenACRevocationRegistry` | SHA-256 LeanIMT+ of revoked commitments, all issuers   | `revocationRoot` | [`Sha256Revocation`](https://github.com/ethereum/coordination-network/tree/main/packages/contracts/src/revocation) |
 
-Each is a thin admin contract over a shared service that holds the tree and its root history.
+Each is a thin admin contract over a shared service that holds the tree and its root history. To run the registries without a chain, see [`registry-server`](../registry-server/README.md), which serves the same trees and roots over HTTP.
 
 ## Root limbs
 
