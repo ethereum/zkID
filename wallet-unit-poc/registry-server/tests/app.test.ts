@@ -75,49 +75,15 @@ describe("revocation writes", () => {
     return app.request("/revocation/commitments", { method: "POST", headers, body });
   }
 
-  it("checks the token before reading the body", async () => {
+  it("checks the owner token before reading the body", async () => {
     const { app } = await createRegistryApp({ revocation: { ownerToken: REVOCATION_OWNER } });
     expect((await post(app, undefined, "not json")).status).toBe(401);
-    expect((await post(app, "unknown-token", "not json")).status).toBe(401);
+    expect((await post(app, "unknown-token", "not json")).status).toBe(403);
   });
 
-  it("rejects a token replaced by a write still queued ahead of it", async () => {
-    let releaseSave = () => {};
-    let holdSaves = false;
-    const store = {
-      load: async () => undefined,
-      save: async () => {
-        if (holdSaves) await new Promise<void>((resolve) => (releaseSave = resolve));
-      },
-    };
-    const registry = await createRegistryApp({ revocation: { ownerToken: REVOCATION_OWNER, store } });
-    const { app } = registry;
-
-    const authorize = () =>
-      app.request("/revocation/revokers/issuer-a", {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${REVOCATION_OWNER}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ authorized: true }),
-      });
-    const { token: oldToken } = (await (await authorize()).json()) as { token: string };
-
-    // Replace the token, and hold that write in its save.
-    holdSaves = true;
-    const rotation = authorize();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    holdSaves = false;
-
-    // The old token still matches the current state, so it passes the early check and queues.
-    const stale = post(app, oldToken, JSON.stringify({ commitments: ["5"] }));
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    releaseSave();
-
-    const { token: newToken } = (await (await rotation).json()) as { token: string };
-    const response = await stale;
-    expect(response.status).toBe(401);
-    expect(registry.revocation!.isRevoked(5n)).toBe(false);
-
-    expect((await post(app, newToken, JSON.stringify({ commitments: ["5"] }))).status).toBe(200);
-    expect(registry.revocation!.revokedBy(5n)).toBe("issuer-a");
+  it("revokes with the owner token", async () => {
+    const registry = await createRegistryApp({ revocation: { ownerToken: REVOCATION_OWNER } });
+    expect((await post(registry.app, REVOCATION_OWNER, JSON.stringify({ commitments: ["5"] }))).status).toBe(200);
+    expect(registry.revocation!.isRevoked(5n)).toBe(true);
   });
 });

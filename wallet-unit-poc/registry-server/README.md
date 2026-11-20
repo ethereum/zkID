@@ -31,10 +31,7 @@ Revocation registry:
 
 - **One registry for all issuers.** With one registry per issuer, the revocation root in a presentation would identify the issuer and undo issuer hiding.
 - The empty root `0` is valid while current, and for `rootDuration` after the first revocation.
-- The owner authorizes revokers, one per issuer, by id. Authorizing returns a bearer token, shown once. Authorizing again rotates the token.
-- Each revoked commitment records its revoker (`revokedBy`). Only that revoker can unrevoke or update it, and only while it is still authorized. A deauthorized revoker's revocations stay in place.
-- The owner cannot revoke unless it authorizes itself as a revoker.
-- Only the owner can look up whether a revoker id is authorized, so the set of issuers with revocation rights is not public. `revokedBy` is still returned for revoked commitments, as on chain.
+- Only the owner writes (revoke, unrevoke, update, root duration), on behalf of every issuer, as on chain.
 
 ## Running the server
 
@@ -78,12 +75,10 @@ Values are uint256s, returned as decimal strings. Requests may also use `0x` hex
 | `GET`    | `/revocation`                     |         | `{ root, depth, size, rootDuration, leaves: [{ value, nextValue }] }` |
 | `GET`    | `/revocation/root`                |         | `{ root }`                                                          |
 | `GET`    | `/revocation/roots/:root`         |         | `{ root, valid }`                                                   |
-| `GET`    | `/revocation/commitments/:c`      |         | `{ commitment, isRevoked, revokedBy }`                              |
-| `POST`   | `/revocation/commitments`         | revoker | `{ commitments: [...] }` → `{ root }` (revoke)                      |
-| `PUT`    | `/revocation/commitments/:c`      | revoker | `{ newCommitment }` → `{ root }` (update)                           |
-| `DELETE` | `/revocation/commitments/:c`      | revoker | → `{ root }` (unrevoke)                                             |
-| `GET`    | `/revocation/revokers/:id`        | owner   | `{ id, authorized }`                                                |
-| `PUT`    | `/revocation/revokers/:id`        | owner   | `{ authorized }` → `{ id, authorized, token? }`                     |
+| `GET`    | `/revocation/commitments/:c`      |         | `{ commitment, isRevoked }`                                         |
+| `POST`   | `/revocation/commitments`         | owner   | `{ commitments: [...] }` → `{ root }` (revoke)                      |
+| `PUT`    | `/revocation/commitments/:c`      | owner   | `{ newCommitment }` → `{ root }` (update)                           |
+| `DELETE` | `/revocation/commitments/:c`      | owner   | → `{ root }` (unrevoke)                                             |
 | `PUT`    | `/revocation/root-duration`       | owner   | `{ rootDuration }`                                                  |
 | `GET`    | `/health`                         |         | `{ ok, issuer, revocation }`                                        |
 
@@ -112,9 +107,8 @@ const issuerProof = issuers.generateProof(issuerCommitment(issuerPublicKey))
 // Issuer registry owner
 await new RegistryClient(url, { token: issuerOwnerToken }).addIssuers([issuerCommitment(newIssuerKey)])
 
-// Revocation registry owner, then the issuer's revoker
-const { token } = await new RegistryClient(url, { token: revocationOwnerToken }).setRevoker("issuer-a", true)
-await new RegistryClient(url, { token }).revoke(computeRevocationCommitment(secret))
+// Revocation registry owner
+await new RegistryClient(url, { token: revocationOwnerToken }).revoke(computeRevocationCommitment(secret))
 ```
 
 The authorities (`IssuerRegistryAuthority`, `RevocationRegistryAuthority`) can also be used in-process without the server, with `toJSON` / `fromJSON` for persistence.

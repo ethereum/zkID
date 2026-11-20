@@ -21,28 +21,19 @@ export interface RevocationAuthorityState {
   /** `RevocationRegistry.export()` output. */
   tree: string;
   history: RootHistoryState;
-  /** `[revokerId, authorized]` pairs. */
-  revokers: [string, boolean][];
-  /** `[commitment, revokerId]` pairs, commitment as a decimal string. */
-  revokedBy: [string, string][];
 }
 
 /**
  * OpenAC's revocation registry, held off chain and shared by every issuer: a
  * SHA-256 LeanIMT+ of revoked `sha256(r)` commitments. Behaves like
- * `OpenACRevocationRegistry` over `Sha256Revocation`: the same tree and roots,
- * the same root history, authorized revokers (one per issuer), and
- * `revokedBy`, so only the revoker that revoked a commitment can unrevoke or
- * update it.
+ * `OpenACRevocationRegistry` over `Sha256Revocation`: the same tree, roots and
+ * root history. Only the owner writes, on behalf of every issuer.
  *
- * Revokers are named by an opaque id instead of an address. Every write is all
- * or nothing: on any failure the tree is restored.
+ * Every write is all or nothing: on any failure the tree is restored.
  */
 export class RevocationRegistryAuthority {
   private tree: RevocationRegistry;
   private history: RootHistory;
-  private readonly revokers = new Map<string, boolean>();
-  private readonly commitmentRevokers = new Map<bigint, string>();
   private readonly clock: Clock;
 
   constructor(options: RevocationAuthorityOptions = {}) {
@@ -81,66 +72,29 @@ export class RevocationRegistryAuthority {
     return this.tree.isRevoked(commitment);
   }
 
-  /** The revoker that revoked a commitment, or `undefined` if it is not revoked. */
-  revokedBy(commitment: BigNumberish): string | undefined {
-    return this.commitmentRevokers.get(BigInt(commitment));
+  revoke(commitment: BigNumberish): bigint {
+    return this.revokeMany([commitment]);
   }
 
-  isRevoker(revokerId: string): boolean {
-    return this.revokers.get(revokerId) === true;
-  }
-
-  /** Ids of every revoker ever configured, with whether each is authorized now. */
-  get revokerIds(): [string, boolean][] {
-    return [...this.revokers];
-  }
-
-  /**
-   * Authorizes or deauthorizes a revoker. A deauthorized revoker keeps its
-   * revocations but can no longer revoke, unrevoke or update.
-   */
-  setRevoker(revokerId: string, authorized: boolean): void {
-    checkRevokerId(revokerId);
-    this.revokers.set(revokerId, authorized);
-  }
-
-  revoke(revokerId: string, commitment: BigNumberish): bigint {
-    return this.revokeMany(revokerId, [commitment]);
-  }
-
-  revokeMany(revokerId: string, commitments: BigNumberish[]): bigint {
-    this.requireRevoker(revokerId);
+  revokeMany(commitments: BigNumberish[]): bigint {
     if (commitments.length === 0) throw new RegistryError("INVALID_INPUT", "No revocation commitments");
     const values = commitments.map((c) => parseCommitment(c));
-    const root = this.write((tree) => tree.revokeMany(values));
-    for (const value of values) this.commitmentRevokers.set(value, revokerId);
-    return root;
+    return this.write((tree) => tree.revokeMany(values));
   }
 
   /**
    * Tombstones a commitment. The credential verifies again for anyone still
    * accepting an older root, so revocation is normally permanent.
    */
-  unrevoke(revokerId: string, commitment: BigNumberish): bigint {
+  unrevoke(commitment: BigNumberish): bigint {
     const value = parseCommitment(commitment);
-    this.requireCommitmentRevoker(revokerId, value);
-    const root = this.write((tree) => tree.unrevoke(value));
-    this.commitmentRevokers.delete(value);
-    return root;
+    return this.write((tree) => tree.unrevoke(value));
   }
 
-  updateRevocationCommitment(
-    revokerId: string,
-    oldCommitment: BigNumberish,
-    newCommitment: BigNumberish,
-  ): bigint {
+  updateRevocationCommitment(oldCommitment: BigNumberish, newCommitment: BigNumberish): bigint {
     const oldValue = parseCommitment(oldCommitment);
     const newValue = parseCommitment(newCommitment);
-    this.requireCommitmentRevoker(revokerId, oldValue);
-    const root = this.write((tree) => tree.updateCommitment(oldValue, newValue));
-    this.commitmentRevokers.delete(oldValue);
-    this.commitmentRevokers.set(newValue, revokerId);
-    return root;
+    return this.write((tree) => tree.updateCommitment(oldValue, newValue));
   }
 
   updateRootDuration(rootDuration: number): void {
@@ -168,8 +122,6 @@ export class RevocationRegistryAuthority {
       version: 1,
       tree: this.tree.export(),
       history: this.history.toJSON(),
-      revokers: [...this.revokers],
-      revokedBy: [...this.commitmentRevokers].map(([c, id]) => [c.toString(), id]),
     };
   }
 
@@ -186,28 +138,7 @@ export class RevocationRegistryAuthority {
     const authority = new RevocationRegistryAuthority({ clock: options.clock });
     authority.tree = RevocationRegistry.import(state.tree, options.validate ?? true, sha256Scheme);
     authority.history = RootHistory.fromJSON(state.history);
-    for (const [id, authorized] of state.revokers) authority.setRevoker(id, authorized);
-    for (const [c, id] of state.revokedBy) {
-      const value = BigInt(c);
-      if (!authority.tree.isRevoked(value)) {
-        throw new RegistryError("INVALID_INPUT", `revokedBy lists ${c}, which is not revoked`);
-      }
-      authority.commitmentRevokers.set(value, id);
-    }
     return authority;
-  }
-
-  private requireRevoker(revokerId: string): void {
-    if (!this.isRevoker(revokerId)) {
-      throw new RegistryError("FORBIDDEN", `${revokerId} is not an authorized revoker`);
-    }
-  }
-
-  private requireCommitmentRevoker(revokerId: string, commitment: bigint): void {
-    this.requireRevoker(revokerId);
-    if (this.commitmentRevokers.get(commitment) !== revokerId) {
-      throw new RegistryError("FORBIDDEN", `${revokerId} did not revoke ${commitment}`);
-    }
   }
 
   private write(operation: (tree: RevocationRegistry) => void): bigint {
@@ -231,11 +162,5 @@ function parseCommitment(value: BigNumberish): bigint {
     return toCommitment(value, sha256Scheme);
   } catch (error) {
     throw toRegistryError(error);
-  }
-}
-
-function checkRevokerId(revokerId: unknown): void {
-  if (typeof revokerId !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(revokerId)) {
-    throw new RegistryError("INVALID_INPUT", "A revoker id must be 1 to 64 characters of [A-Za-z0-9._-]");
   }
 }

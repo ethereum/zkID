@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
-import { bearerToken, generateToken, hashToken, tokenMatches } from "./auth.js";
+import { bearerToken, hashToken, tokenMatches } from "./auth.js";
 import { RegistryError, type RegistryErrorCode } from "./errors.js";
 import { IssuerRegistryAuthority, type IssuerAuthorityState } from "./issuer-authority.js";
 import { RevocationRegistryAuthority, type RevocationAuthorityState } from "./revocation-authority.js";
@@ -21,17 +21,11 @@ export interface IssuerServiceOptions {
 }
 
 export interface RevocationServiceOptions {
-  /** Bearer token for authorizing revokers and setting the root duration. */
+  /** Bearer token for every revocation registry write. */
   ownerToken: string;
-  store?: StateStore<RevocationServiceState>;
+  store?: StateStore<RevocationAuthorityState>;
   /** Used only when the store is empty. */
   rootDuration?: number;
-}
-
-export interface RevocationServiceState {
-  registry: RevocationAuthorityState;
-  /** `[revokerId, sha256(token) hex]` pairs. */
-  revokerTokens: [string, string][];
 }
 
 export interface RegistryAppOptions {
@@ -94,38 +88,6 @@ class Persisted<T, S> {
       () => undefined,
     );
     return run;
-  }
-}
-
-class RevocationState {
-  constructor(
-    readonly authority: RevocationRegistryAuthority,
-    readonly revokerTokens: Map<string, string>,
-  ) {}
-
-  toJSON(): RevocationServiceState {
-    return { registry: this.authority.toJSON(), revokerTokens: [...this.revokerTokens] };
-  }
-
-  static fromJSON(state: RevocationServiceState, clock: Clock, validate: boolean): RevocationState {
-    return new RevocationState(
-      RevocationRegistryAuthority.fromJSON(state.registry, { clock, validate }),
-      new Map(state.revokerTokens),
-    );
-  }
-
-  /** The authorized revoker a token belongs to. */
-  revokerFor(token: string | undefined): string {
-    if (token === undefined) throw new RegistryError("UNAUTHORIZED", "Missing bearer token");
-    for (const [id, tokenHash] of this.revokerTokens) {
-      if (tokenMatches(token, tokenHash)) {
-        if (!this.authority.isRevoker(id)) {
-          throw new RegistryError("FORBIDDEN", `${id} is not an authorized revoker`);
-        }
-        return id;
-      }
-    }
-    throw new RegistryError("UNAUTHORIZED", "Unknown revoker token");
   }
 }
 
@@ -202,21 +164,18 @@ export async function createRegistryApp(options: RegistryAppOptions): Promise<Re
     app.route("/issuer", issuerRoutes(issuer, ownerTokenHash(config.ownerToken, "issuer")));
   }
 
-  let revocation: Persisted<RevocationState, RevocationServiceState> | undefined;
+  let revocation: Persisted<RevocationRegistryAuthority, RevocationAuthorityState> | undefined;
   if (options.revocation) {
     const config = options.revocation;
-    const store = config.store ?? new MemoryStore<RevocationServiceState>();
+    const store = config.store ?? new MemoryStore<RevocationAuthorityState>();
     const saved = await store.load();
     const initial = saved
-      ? RevocationState.fromJSON(saved, clock, true)
-      : new RevocationState(
-          new RevocationRegistryAuthority({ rootDuration: config.rootDuration, clock }),
-          new Map(),
-        );
+      ? RevocationRegistryAuthority.fromJSON(saved, { clock })
+      : new RevocationRegistryAuthority({ rootDuration: config.rootDuration, clock });
     revocation = new Persisted(
       initial,
-      (s) => s.toJSON(),
-      (s) => RevocationState.fromJSON(s, clock, false),
+      (a) => a.toJSON(),
+      (s) => RevocationRegistryAuthority.fromJSON(s, { clock, validate: false }),
       store,
     );
     app.route("/revocation", revocationRoutes(revocation, ownerTokenHash(config.ownerToken, "revocation")));
@@ -230,7 +189,7 @@ export async function createRegistryApp(options: RegistryAppOptions): Promise<Re
       return issuer?.current;
     },
     get revocation() {
-      return revocation?.current.authority;
+      return revocation?.current;
     },
   };
 }
@@ -300,21 +259,14 @@ function issuerRoutes(registry: Persisted<IssuerRegistryAuthority, IssuerAuthori
 }
 
 function revocationRoutes(
-  registry: Persisted<RevocationState, RevocationServiceState>,
+  registry: Persisted<RevocationRegistryAuthority, RevocationAuthorityState>,
   ownerHash: string,
 ): Hono {
   const routes = new Hono();
-  const token = (c: Context) => bearerToken(c.req.header("Authorization"));
-  const owner = (c: Context) => requireOwner(token(c), ownerHash);
-  /** Rejects a missing, unknown or deauthorized revoker token and returns the token. */
-  const revoker = (c: Context): string => {
-    const presented = token(c);
-    registry.current.revokerFor(presented);
-    return presented as string;
-  };
+  const owner = (c: Context) => requireOwner(bearerToken(c.req.header("Authorization")), ownerHash);
 
   routes.get("/", (c) => {
-    const r = registry.current.authority;
+    const r = registry.current;
     return json(c, {
       root: r.root,
       depth: r.depth,
@@ -324,74 +276,41 @@ function revocationRoutes(
     });
   });
 
-  routes.get("/root", (c) => json(c, { root: registry.current.authority.root }));
+  routes.get("/root", (c) => json(c, { root: registry.current.root }));
 
   routes.get("/roots/:root", (c) => {
     const root = parseUint256(c.req.param("root"), "root");
-    return json(c, { root, valid: registry.current.authority.isValidRoot(root) });
+    return json(c, { root, valid: registry.current.isValidRoot(root) });
   });
 
   routes.get("/commitments/:commitment", (c) => {
     const commitment = parseUint256(c.req.param("commitment"), "commitment");
-    const r = registry.current.authority;
-    const isRevoked = commitment !== 0n && r.isRevoked(commitment);
-    return json(c, { commitment, isRevoked, revokedBy: isRevoked ? (r.revokedBy(commitment) ?? null) : null });
+    return json(c, { commitment, isRevoked: commitment !== 0n && registry.current.isRevoked(commitment) });
   });
 
-  // Revoker writes check the token before reading the body, then again inside
-  // the queued write against the state it modifies, so a token replaced by an
-  // earlier queued write is rejected.
   routes.post("/commitments", async (c) => {
-    const presented = revoker(c);
+    owner(c);
     const commitments = parseUint256List((await readBody(c)).commitments, "commitments");
-    const root = await registry.write((s) => s.authority.revokeMany(s.revokerFor(presented), commitments));
-    return json(c, { root });
+    return json(c, { root: await registry.write((r) => r.revokeMany(commitments)) });
   });
 
   routes.put("/commitments/:commitment", async (c) => {
-    const presented = revoker(c);
+    owner(c);
     const oldCommitment = parseUint256(c.req.param("commitment"), "commitment");
     const newCommitment = parseUint256((await readBody(c)).newCommitment, "newCommitment");
-    const root = await registry.write((s) =>
-      s.authority.updateRevocationCommitment(s.revokerFor(presented), oldCommitment, newCommitment),
-    );
-    return json(c, { root });
+    return json(c, { root: await registry.write((r) => r.updateRevocationCommitment(oldCommitment, newCommitment)) });
   });
 
   routes.delete("/commitments/:commitment", async (c) => {
-    const presented = revoker(c);
+    owner(c);
     const commitment = parseUint256(c.req.param("commitment"), "commitment");
-    const root = await registry.write((s) => s.authority.unrevoke(s.revokerFor(presented), commitment));
-    return json(c, { root });
-  });
-
-  // Owner only, so revoker ids (one per issuer) cannot be enumerated.
-  routes.get("/revokers/:id", (c) => {
-    owner(c);
-    const id = c.req.param("id");
-    return json(c, { id, authorized: registry.current.authority.isRevoker(id) });
-  });
-
-  routes.put("/revokers/:id", async (c) => {
-    owner(c);
-    const id = c.req.param("id");
-    const authorized = (await readBody(c)).authorized;
-    if (typeof authorized !== "boolean") {
-      throw new RegistryError("INVALID_INPUT", "authorized must be a boolean");
-    }
-    // Authorizing issues a new token and invalidates the previous one.
-    const issued = authorized ? generateToken() : undefined;
-    await registry.write((s) => {
-      s.authority.setRevoker(id, authorized);
-      if (issued !== undefined) s.revokerTokens.set(id, hashToken(issued));
-    });
-    return json(c, issued === undefined ? { id, authorized } : { id, authorized, token: issued });
+    return json(c, { root: await registry.write((r) => r.unrevoke(commitment)) });
   });
 
   routes.put("/root-duration", async (c) => {
     owner(c);
     const rootDuration = checkRootDuration((await readBody(c)).rootDuration);
-    await registry.write((s) => s.authority.updateRootDuration(rootDuration));
+    await registry.write((r) => r.updateRootDuration(rootDuration));
     return json(c, { rootDuration });
   });
 

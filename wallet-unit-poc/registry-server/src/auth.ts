@@ -1,9 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-
-/** A fresh bearer token: 32 random bytes, base64url. */
-export function generateToken(): string {
-  return randomBytes(32).toString("base64url");
-}
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /** Tokens are stored as their SHA-256, hex. */
 export function hashToken(token: string): string {

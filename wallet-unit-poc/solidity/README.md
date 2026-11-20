@@ -42,15 +42,11 @@ An issuer revokes a credential by inserting its commitment `C = sha256(r)` into 
 There is **one revocation registry for all issuers**. With one registry per issuer, the revocation root in a presentation would identify the issuer and undo issuer hiding.
 
 - Constructor: `(IRevocation service, address initialOwner, uint256 rootDuration)`. Creates the registry on `service` with itself as admin.
-- Owner writes (`Ownable2Step`): `setRevoker(account, authorized)`, `updateRootDuration`. The owner authorizes one revoker account per issuer; the owner itself cannot revoke unless it authorizes itself.
-- Revoker writes: `revoke`, `revokeMany`. Each revoked commitment records its revoker in `revokedBy(commitment)`.
-- `unrevoke` and `updateRevocationCommitment` are allowed only for the revoker that revoked the commitment, while it is still authorized, so one issuer cannot undo another issuer's revocations. A deauthorized revoker's revocations stay in place.
-- Reads: `isValidRoot(root)`, `getRevocationRoot()` (zero while empty, and root 0 is valid), `isRevoked(commitment)`, `isRevoker(account)`, `revokedBy(commitment)`.
+- Owner writes (`Ownable2Step`): `revoke`, `revokeMany`, `unrevoke`, `updateRevocationCommitment`, `updateRootDuration`. The owner revokes on behalf of every issuer.
+- Reads: `isValidRoot(root)`, `getRevocationRoot()` (zero while empty, and root 0 is valid), `isRevoked(commitment)`.
 - A superseded root stays valid for `rootDuration` seconds (1 hour by default), so a revoked credential can still verify for that long.
 
-`revokedBy` is public, so anyone can see which revoker inserted a revoked commitment. Presentations expose only the root, never the commitment, so this does not link a presentation to its issuer.
-
-**Revoking (issuer).** Writes take the predecessor's slot, computed off chain with [`@coordination-network/revocation-registry`](https://www.npmjs.com/package/@coordination-network/revocation-registry) and `sha256Scheme`, against the shared tree:
+**Revoking (owner).** Writes take the predecessor's slot, computed off chain with [`@coordination-network/revocation-registry`](https://www.npmjs.com/package/@coordination-network/revocation-registry) and `sha256Scheme`, against the shared tree:
 
 ```ts
 import { RevocationRegistry, sha256Scheme } from "@coordination-network/revocation-registry"

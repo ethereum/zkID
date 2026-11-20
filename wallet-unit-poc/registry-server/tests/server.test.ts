@@ -13,7 +13,7 @@ import {
   RegistryClientError,
   type IssuerAuthorityState,
   type RegistryServer,
-  type RevocationServiceState,
+  type RevocationAuthorityState,
   type StateStore,
 } from "../src/index.js";
 
@@ -46,7 +46,7 @@ describe("registry server", () => {
       },
       revocation: {
         ownerToken: REVOCATION_OWNER,
-        store: new FileStore<RevocationServiceState>(join(dir, "revocation.json")),
+        store: new FileStore<RevocationAuthorityState>(join(dir, "revocation.json")),
         rootDuration: 60,
       },
       clock: () => now,
@@ -103,19 +103,15 @@ describe("registry server", () => {
     expect((await rejection(wrong.addIssuers([issuerKey(1)]))).status).toBe(403);
   });
 
-  it("revokes through authorized revokers and serves non-membership proofs", async () => {
+  it("revokes through the owner and serves non-membership proofs", async () => {
     const owner = new RegistryClient(url, { token: REVOCATION_OWNER });
-    const { token } = await owner.setRevoker("issuer-a", true);
-    expect(token).toBeTypeOf("string");
-
-    const issuerA = new RegistryClient(url, { token });
     const emptyRoot = await new RegistryClient(url).getRevocationRoot();
     expect(emptyRoot).toBe(0n);
 
     // The empty registry syncs too.
     expect((await new RegistryClient(url).syncRevocationRegistry()).root).toBe(0n);
 
-    const root = await issuerA.revoke([10n, 30n]);
+    const root = await owner.revoke([10n, 30n]);
     const holder = await new RegistryClient(url).syncRevocationRegistry();
     expect(holder.root).toBe(root);
     expect(holder.generateProof(20n).proofType).toBe(PROOF_TYPE.NON_MEMBERSHIP);
@@ -127,31 +123,22 @@ describe("registry server", () => {
     now += 60;
     expect(await verifier.isValidRevocationRoot(0n)).toBe(false);
 
-    expect(await verifier.getRevocationStatus(30n)).toEqual({ isRevoked: true, revokedBy: "issuer-a" });
+    expect(await verifier.isRevoked(30n)).toBe(true);
+    expect(await verifier.isRevoked(20n)).toBe(false);
+
+    await owner.updateRevocationCommitment(30n, 31n);
+    await owner.unrevoke(31n);
+    expect(await verifier.isRevoked(31n)).toBe(false);
   });
 
-  it("enforces revoker ownership and token rotation", async () => {
-    const owner = new RegistryClient(url, { token: REVOCATION_OWNER });
-    const a = new RegistryClient(url, { token: (await owner.setRevoker("issuer-a", true)).token });
-    const b = new RegistryClient(url, { token: (await owner.setRevoker("issuer-b", true)).token });
+  it("requires the owner token for revocation writes", async () => {
+    const anonymous = new RegistryClient(url);
+    expect((await rejection(anonymous.revoke(5n))).status).toBe(401);
 
-    await a.revoke(5n);
-    expect((await rejection(b.unrevoke(5n))).status).toBe(403);
-
-    // The owner is not a revoker unless it authorizes itself.
-    expect((await rejection(owner.revoke(6n))).status).toBe(401);
-
-    // Re-authorizing rotates the token.
-    const rotated = new RegistryClient(url, { token: (await owner.setRevoker("issuer-a", true)).token });
-    expect((await rejection(a.revoke(7n))).status).toBe(401);
-    await rotated.unrevoke(5n);
-
-    await owner.setRevoker("issuer-b", false);
-    expect((await rejection(b.revoke(8n))).status).toBe(403);
-    expect(await owner.isRevoker("issuer-b")).toBe(false);
-    expect(await owner.isRevoker("issuer-a")).toBe(true);
-    // Revoker ids are not public.
-    expect((await rejection(new RegistryClient(url).isRevoker("issuer-a"))).status).toBe(401);
+    const wrong = new RegistryClient(url, { token: ISSUER_OWNER });
+    expect((await rejection(wrong.revoke(5n))).status).toBe(403);
+    expect((await rejection(wrong.unrevoke(5n))).status).toBe(403);
+    expect((await rejection(wrong.updateRevocationRootDuration(10))).status).toBe(403);
   });
 
   it("validates input", async () => {
@@ -172,16 +159,14 @@ describe("registry server", () => {
     const issuerOwner = new RegistryClient(url, { token: ISSUER_OWNER });
     const revocationOwner = new RegistryClient(url, { token: REVOCATION_OWNER });
     const issuerRoot = await issuerOwner.addIssuers([issuerKey(1), issuerKey(2)]);
-    const { token } = await revocationOwner.setRevoker("issuer-a", true);
-    const revocationRoot = await new RegistryClient(url, { token }).revoke([4n, 2n]);
+    const revocationRoot = await revocationOwner.revoke([4n, 2n]);
 
     await registry.close();
     await start();
 
     expect(await new RegistryClient(url).getIssuerRoot()).toBe(issuerRoot);
     expect(await new RegistryClient(url).getRevocationRoot()).toBe(revocationRoot);
-    // The revoker token survives the restart.
-    await new RegistryClient(url, { token }).unrevoke(4n);
+    await new RegistryClient(url, { token: REVOCATION_OWNER }).unrevoke(4n);
     expect(await new RegistryClient(url).isValidRevocationRoot(revocationRoot)).toBe(true);
   });
 

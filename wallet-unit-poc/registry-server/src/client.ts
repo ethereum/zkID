@@ -4,7 +4,7 @@ import { RevocationRegistry, sha256Scheme as revocationSha256Scheme } from "@coo
 type BigNumberish = bigint | number | string;
 
 export interface RegistryClientOptions {
-  /** Bearer token: the owner token, or a revoker token for revocation writes. */
+  /** Bearer token: the owner token of the registry being written. */
   token?: string;
   fetch?: typeof globalThis.fetch;
 }
@@ -141,18 +141,11 @@ export class RegistryClient {
   };
 
   /**
-   * Whether a commitment is revoked, and by which revoker. For issuers: a
-   * holder asking this reveals its commitment to the server, so holders
-   * should sync the tree instead.
+   * Whether a commitment is revoked. A holder asking this reveals its
+   * commitment to the server, so holders should sync the tree instead.
    */
-  async getRevocationStatus(commitment: BigNumberish): Promise<{ isRevoked: boolean; revokedBy: string | null }> {
-    const body = await this.request("GET", `/revocation/commitments/${uint(commitment)}`);
-    return { isRevoked: body.isRevoked === true, revokedBy: (body.revokedBy as string | null) ?? null };
-  }
-
-  /** Needs the revocation owner token. */
-  async isRevoker(revokerId: string): Promise<boolean> {
-    return (await this.request("GET", `/revocation/revokers/${encodeURIComponent(revokerId)}`)).authorized === true;
+  async isRevoked(commitment: BigNumberish): Promise<boolean> {
+    return (await this.request("GET", `/revocation/commitments/${uint(commitment)}`)).isRevoked === true;
   }
 
   // Issuer registry owner writes. Each returns the new root.
@@ -178,19 +171,7 @@ export class RegistryClient {
     await this.request("POST", "/issuer/expire-roots");
   }
 
-  // Revocation registry owner writes.
-
-  /** Authorizing returns a new token for the revoker, shown only once; any previous token stops working. */
-  async setRevoker(revokerId: string, authorized: boolean): Promise<{ token?: string }> {
-    const body = await this.request("PUT", `/revocation/revokers/${encodeURIComponent(revokerId)}`, { authorized });
-    return typeof body.token === "string" ? { token: body.token } : {};
-  }
-
-  async updateRevocationRootDuration(rootDuration: number): Promise<void> {
-    await this.request("PUT", "/revocation/root-duration", { rootDuration });
-  }
-
-  // Revoker writes. Each returns the new root.
+  // Revocation registry owner writes. Each commitment write returns the new root.
 
   async revoke(commitments: BigNumberish | BigNumberish[]): Promise<bigint> {
     const list = Array.isArray(commitments) ? commitments : [commitments];
@@ -205,6 +186,10 @@ export class RegistryClient {
     return this.root("PUT", `/revocation/commitments/${uint(oldCommitment)}`, {
       newCommitment: uint(newCommitment),
     });
+  }
+
+  async updateRevocationRootDuration(rootDuration: number): Promise<void> {
+    await this.request("PUT", "/revocation/root-duration", { rootDuration });
   }
 
   private async root(method: string, path: string, body?: unknown): Promise<bigint> {

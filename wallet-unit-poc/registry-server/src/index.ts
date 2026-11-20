@@ -5,13 +5,7 @@ export type { RevocationAuthorityOptions, RevocationAuthorityState } from "./rev
 export { RootHistory, DEFAULT_ROOT_DURATION, systemClock } from "./root-history.js";
 export type { Clock, RootHistoryState } from "./root-history.js";
 export { createRegistryApp } from "./app.js";
-export type {
-  IssuerServiceOptions,
-  RegistryApp,
-  RegistryAppOptions,
-  RevocationServiceOptions,
-  RevocationServiceState,
-} from "./app.js";
+export type { IssuerServiceOptions, RegistryApp, RegistryAppOptions, RevocationServiceOptions } from "./app.js";
 export { createRegistryServer } from "./server.js";
 export type { RegistryServer, RegistryServerOptions } from "./server.js";
 export { RegistryClient, RegistryClientError } from "./client.js";
@@ -20,4 +14,3 @@ export { FileStore, MemoryStore } from "./store.js";
 export type { StateStore } from "./store.js";
 export { RegistryError } from "./errors.js";
 export type { RegistryErrorCode } from "./errors.js";
-export { generateToken } from "./auth.js";
