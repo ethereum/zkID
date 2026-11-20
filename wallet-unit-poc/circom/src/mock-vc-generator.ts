@@ -101,6 +101,8 @@ export interface MockDataOptions {
   kid?: string;
   targetPayloadLength?: number;
   claimFormats?: number[];
+  /** Extra top-level fields merged into the signed payload (tests only). */
+  extraPayload?: Record<string, unknown>;
 }
 
 export interface MockDataResult {
@@ -163,6 +165,7 @@ export async function generateMockData(options: MockDataOptions = {}): Promise<M
       },
     },
     nonce: nodeCrypto.randomBytes(16).toString("base64url"),
+    ...options.extraPayload,
   };
 
   if (options.targetPayloadLength) {

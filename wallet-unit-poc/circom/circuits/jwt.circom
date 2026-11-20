@@ -19,7 +19,7 @@ include "components/claim-value-normalizer.circom";
 ///         at the JSON path the substring is meant to come from. The device binding key
 ///         and the disclosure digests are only well defined when each match has a single
 ///         possible position, so the decoded payload must satisfy:
-///           - "x":" occurs exactly once, directly before cnf.jwk.x
+///           - "x":" occurs exactly once, directly before cnf.jwk.x 
 ///           - "y":" occurs exactly once, directly before cnf.jwk.y
 ///           - "_sd":[ occurs exactly once, so there is one disclosure array and no
 ///             nested ones
@@ -164,6 +164,12 @@ template JWT(
     matchSubstring[1][2] === 34;  // "
     matchSubstring[1][3] === 58;  // :
     matchSubstring[1][4] === 34;  // "
+
+    // Each anchor must occur exactly once, so slots 0/1 have only one place to point.
+    signal xAnchorCount <== CountPatternOccurrences(maxPayloadLength, 5, [34, 120, 34, 58, 34])(payload);
+    signal yAnchorCount <== CountPatternOccurrences(maxPayloadLength, 5, [34, 121, 34, 58, 34])(payload);
+    xAnchorCount === 1;
+    yAnchorCount === 1;
 
     // Extract the device binding public key from the payload
     component ecExtractor = ECPublicKeyExtractor_Optimized(maxPayloadLength, 32);
