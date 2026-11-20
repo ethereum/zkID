@@ -18,30 +18,18 @@ function newCommitment(): bigint {
 const commitments = (n: number) => Array.from({ length: n }, newCommitment)
 
 async function deploy() {
-    const [owner, issuerA, issuerB, outsider] = await viem.getWalletClients()
+    const [owner, other] = await viem.getWalletClients()
     const service = await viem.deployContract("Sha256Revocation")
     const registry = await viem.deployContract("OpenACRevocationRegistry", [
         service.address,
         owner.account.address,
         ROOT_DURATION
     ])
-    await registry.write.setRevoker([issuerA.account.address, true])
-    await registry.write.setRevoker([issuerB.account.address, true])
+    const asOther = await viem.getContractAt("OpenACRevocationRegistry", registry.address, {
+        client: { wallet: other }
+    })
 
-    const as = (client: typeof owner) =>
-        viem.getContractAt("OpenACRevocationRegistry", registry.address, { client: { wallet: client } })
-
-    return {
-        service,
-        registry,
-        owner,
-        issuerA,
-        issuerB,
-        outsider,
-        asA: await as(issuerA),
-        asB: await as(issuerB),
-        asOutsider: await as(outsider)
-    }
+    return { service, registry, owner, other, asOther }
 }
 
 /** The deployed fixture plus a fresh off-chain mirror, used to compute predecessor indices. */
@@ -50,219 +38,144 @@ async function setup() {
 }
 
 describe("OpenACRevocationRegistry", () => {
-    describe("constructor", () => {
-        it("creates one registry on the service administered by itself, empty with root 0 accepted", async () => {
-            const { service, registry, owner } = await setup()
+    it("creates one registry on the service administered by itself, empty with root 0 accepted", async () => {
+        const { service, registry, owner } = await setup()
 
-            assert.equal(await registry.read.REVOCATION(), getAddress(service.address))
-            assert.equal(await registry.read.owner(), getAddress(owner.account.address))
-            assert.equal(await service.read.getRegistryAdmin([await registry.read.REGISTRY_ID()]), getAddress(registry.address))
-            assert.equal(await registry.read.getRevocationRoot(), 0n)
-            assert.equal(await registry.read.isValidRoot([0n]), true)
-        })
-
-        it("reverts on a zero service", async () => {
-            const { registry, owner } = await setup()
-            await viem.assertions.revertWithCustomError(
-                viem.deployContract("OpenACRevocationRegistry", [zeroAddress, owner.account.address, ROOT_DURATION]),
-                registry,
-                "ZeroRevocationService"
-            )
-        })
+        assert.equal(await registry.read.REVOCATION(), getAddress(service.address))
+        assert.equal(await registry.read.owner(), getAddress(owner.account.address))
+        assert.equal(await service.read.getRegistryAdmin([await registry.read.REGISTRY_ID()]), getAddress(registry.address))
+        assert.equal(await registry.read.getRevocationRoot(), 0n)
+        assert.equal(await registry.read.isValidRoot([0n]), true)
     })
 
-    describe("revokers", () => {
-        it("lets the owner authorize and deauthorize revokers", async () => {
-            const { registry, outsider } = await setup()
-
-            await registry.write.setRevoker([outsider.account.address, true])
-            assert.equal(await registry.read.isRevoker([outsider.account.address]), true)
-            await registry.write.setRevoker([outsider.account.address, false])
-            assert.equal(await registry.read.isRevoker([outsider.account.address]), false)
-
-            await viem.assertions.revertWithCustomError(
-                registry.write.setRevoker([zeroAddress, true]),
-                registry,
-                "ZeroRevoker"
-            )
-        })
-
-        it("gates owner writes on the owner", async () => {
-            const { registry, asA, issuerA } = await setup()
-            for (const call of [asA.write.setRevoker([issuerA.account.address, true]), asA.write.updateRootDuration([1n])]) {
-                await viem.assertions.revertWithCustomErrorWithArgs(call, registry, "OwnableUnauthorizedAccount", [
-                    getAddress(issuerA.account.address)
-                ])
-            }
-        })
-
-        it("rejects revocations from accounts that are not revokers, including the owner", async () => {
-            const { registry, asOutsider, outsider, owner } = await setup()
-            await viem.assertions.revertWithCustomErrorWithArgs(
-                asOutsider.write.revoke([newCommitment(), 0n]),
-                registry,
-                "NotRevoker",
-                [getAddress(outsider.account.address)]
-            )
-            await viem.assertions.revertWithCustomErrorWithArgs(
-                registry.write.revoke([newCommitment(), 0n]),
-                registry,
-                "NotRevoker",
-                [getAddress(owner.account.address)]
-            )
-        })
-
-        it("transfers ownership in two steps", async () => {
-            const { registry, asA, issuerA } = await setup()
-
-            await registry.write.transferOwnership([issuerA.account.address])
-            await asA.write.acceptOwnership()
-            assert.equal(await registry.read.owner(), getAddress(issuerA.account.address))
-        })
+    it("reverts on a zero service", async () => {
+        const { registry, owner } = await setup()
+        await viem.assertions.revertWithCustomError(
+            viem.deployContract("OpenACRevocationRegistry", [zeroAddress, owner.account.address, ROOT_DURATION]),
+            registry,
+            "ZeroRevocationService"
+        )
     })
 
-    describe("one registry for all issuers", () => {
-        it("puts every issuer's revocations in one tree whose root matches the TypeScript registry", async () => {
-            const { registry, asA, asB, issuerA, issuerB, mirror } = await setup()
+    it("revokes commitments with the same root as the TypeScript registry", async () => {
+        const { registry, mirror } = await setup()
 
-            for (const [as, issuer] of [
-                [asA, issuerA],
-                [asB, issuerB],
-                [asA, issuerA]
-            ] as const) {
-                const c = newCommitment()
-                await as.write.revoke([c, mirror.lowLeafIndexOf(c)])
-                mirror.revoke(c)
-
-                assert.equal(await registry.read.getRevocationRoot(), mirror.root)
-                assert.equal(await registry.read.isRevoked([c]), true)
-                assert.equal(await registry.read.revokedBy([c]), getAddress(issuer.account.address))
-            }
-        })
-
-        it("revokes a batch", async () => {
-            const { registry, asA, issuerA, mirror } = await setup()
-            const batch = commitments(4)
-
-            await asA.write.revokeMany([batch, mirror.lowLeafIndicesOf(batch)])
-            mirror.revokeMany(batch)
-
-            assert.equal(await registry.read.getRevocationRoot(), mirror.root)
-            for (const c of batch) assert.equal(await registry.read.revokedBy([c]), getAddress(issuerA.account.address))
-
-            await viem.assertions.revertWithCustomError(
-                asA.write.revokeMany([commitments(2), [0n]]),
-                registry,
-                "LengthMismatch"
-            )
-        })
-
-        it("lets only the issuer that revoked a commitment unrevoke it", async () => {
-            const { registry, asA, asB, issuerB, mirror } = await setup()
-            const [a, b] = commitments(2)
-            await asA.write.revokeMany([[a, b], mirror.lowLeafIndicesOf([a, b])])
-            mirror.revokeMany([a, b])
-
-            await viem.assertions.revertWithCustomErrorWithArgs(
-                asB.write.unrevoke([a, mirror.predecessorIndexOf(a)]),
-                registry,
-                "NotCommitmentRevoker",
-                [a, getAddress(issuerB.account.address)]
-            )
-
-            await asA.write.unrevoke([a, mirror.predecessorIndexOf(a)])
-            mirror.unrevoke(a)
-            assert.equal(await registry.read.isRevoked([a]), false)
-            assert.equal(await registry.read.revokedBy([a]), zeroAddress)
-            assert.equal(await registry.read.getRevocationRoot(), mirror.root)
-        })
-
-        it("lets only the issuer that revoked a commitment update it, and moves the record", async () => {
-            const { registry, asA, asB, issuerA, issuerB, mirror } = await setup()
-            const [a, b] = commitments(2)
-            await asA.write.revoke([a, mirror.lowLeafIndexOf(a)])
-            mirror.revoke(a)
-
-            // The new commitment's predecessor is taken after the old one is unlinked.
-            const unlinked = new RevocationRegistry([a], sha256Scheme)
-            unlinked.unrevoke(a)
-            const args = () =>
-                [a, b, mirror.predecessorIndexOf(a), unlinked.lowLeafIndexOf(b)] as const
-            await viem.assertions.revertWithCustomErrorWithArgs(
-                asB.write.updateRevocationCommitment([...args()]),
-                registry,
-                "NotCommitmentRevoker",
-                [a, getAddress(issuerB.account.address)]
-            )
-
-            await asA.write.updateRevocationCommitment([...args()])
-            mirror.updateCommitment(a, b)
-            assert.equal(await registry.read.revokedBy([a]), zeroAddress)
-            assert.equal(await registry.read.revokedBy([b]), getAddress(issuerA.account.address))
-            assert.equal(await registry.read.getRevocationRoot(), mirror.root)
-        })
-
-        it("freezes a deauthorized revoker's revocations", async () => {
-            const { registry, asA, issuerA, mirror } = await setup()
+        for (let i = 0; i < 5; i++) {
             const c = newCommitment()
-            await asA.write.revoke([c, mirror.lowLeafIndexOf(c)])
+            await registry.write.revoke([c, BigInt(mirror.lowLeafIndexOf(c))])
             mirror.revoke(c)
 
-            await registry.write.setRevoker([issuerA.account.address, false])
-            await viem.assertions.revertWithCustomErrorWithArgs(
-                asA.write.unrevoke([c, mirror.predecessorIndexOf(c)]),
-                registry,
-                "NotRevoker",
-                [getAddress(issuerA.account.address)]
-            )
+            assert.equal(await registry.read.getRevocationRoot(), mirror.root)
             assert.equal(await registry.read.isRevoked([c]), true)
-        })
+        }
     })
 
-    describe("holders and verifiers", () => {
-        it("lets a holder rebuild the tree from chain and prove non-revocation", async () => {
-            const { registry, service, asA, asB, mirror } = await setup()
-            const fromA = commitments(3)
-            const fromB = commitments(3)
-            await asA.write.revokeMany([fromA, mirror.lowLeafIndicesOf(fromA)])
-            mirror.revokeMany(fromA)
-            await asB.write.revokeMany([fromB, mirror.lowLeafIndicesOf(fromB)])
-            mirror.revokeMany(fromB)
+    it("revokes a batch", async () => {
+        const { registry, mirror } = await setup()
+        const batch = commitments(4)
 
-            const registryId = await registry.read.REGISTRY_ID()
-            const leafCount = await service.read.getRevocationTreeLeafCount([registryId])
-            const leaves = []
-            for (let i = 0n; i < leafCount; i++) {
-                const [value, nextValue] = await service.read.getLeaf([registryId, i])
-                leaves.push({ value, nextValue })
-            }
-            const synced = RevocationRegistry.fromLeaves(leaves, sha256Scheme)
+        await registry.write.revokeMany([batch, mirror.lowLeafIndicesOf(batch).map(BigInt)])
+        mirror.revokeMany(batch)
 
-            assert.equal(synced.root, await registry.read.getRevocationRoot())
-            assert.equal(synced.generateProof(newCommitment()).proofType, PROOF_TYPE.NON_MEMBERSHIP)
-            assert.equal(synced.generateProof(fromB[0]!).proofType, PROOF_TYPE.MEMBERSHIP)
-        })
+        assert.equal(await registry.read.getRevocationRoot(), mirror.root)
+    })
 
-        it("keeps a superseded root valid for the root duration only", async () => {
-            const { registry, asA, mirror } = await setup()
-            const first = newCommitment()
-            await asA.write.revoke([first, mirror.lowLeafIndexOf(first)])
-            mirror.revoke(first)
-            const oldRoot = mirror.root
+    it("unrevokes a commitment", async () => {
+        const { registry, mirror } = await setup()
+        const [a, b] = commitments(2)
+        await registry.write.revokeMany([[a, b], mirror.lowLeafIndicesOf([a, b]).map(BigInt)])
+        mirror.revokeMany([a, b])
 
-            const second = newCommitment()
-            await asA.write.revoke([second, mirror.lowLeafIndexOf(second)])
+        await registry.write.unrevoke([a, BigInt(mirror.predecessorIndexOf(a))])
+        mirror.unrevoke(a)
 
-            assert.equal(await registry.read.isValidRoot([oldRoot]), true)
-            await networkHelpers.time.increase(ROOT_DURATION)
-            assert.equal(await registry.read.isValidRoot([oldRoot]), false)
-            assert.equal(await registry.read.isValidRoot([await registry.read.getRevocationRoot()]), true)
-        })
+        assert.equal(await registry.read.isRevoked([a]), false)
+        assert.equal(await registry.read.getRevocationRoot(), mirror.root)
+    })
 
-        it("updates the root duration", async () => {
-            const { service, registry } = await setup()
-            await registry.write.updateRootDuration([60n])
-            assert.equal(await service.read.getRegistryRootDuration([await registry.read.REGISTRY_ID()]), 60n)
-        })
+    it("updates a revoked commitment", async () => {
+        const { registry, mirror } = await setup()
+        const [a, b] = commitments(2)
+        await registry.write.revoke([a, BigInt(mirror.lowLeafIndexOf(a))])
+        mirror.revoke(a)
+
+        // The new commitment's predecessor is taken after the old one is unlinked.
+        const unlinked = new RevocationRegistry([a], sha256Scheme)
+        unlinked.unrevoke(a)
+        await registry.write.updateRevocationCommitment([
+            a,
+            b,
+            BigInt(mirror.predecessorIndexOf(a)),
+            BigInt(unlinked.lowLeafIndexOf(b))
+        ])
+        mirror.updateCommitment(a, b)
+
+        assert.equal(await registry.read.isRevoked([a]), false)
+        assert.equal(await registry.read.isRevoked([b]), true)
+        assert.equal(await registry.read.getRevocationRoot(), mirror.root)
+    })
+
+    it("lets a holder rebuild the tree from chain and prove non-revocation", async () => {
+        const { registry, service, mirror } = await setup()
+        const revoked = commitments(6)
+        await registry.write.revokeMany([revoked, mirror.lowLeafIndicesOf(revoked).map(BigInt)])
+
+        const registryId = await registry.read.REGISTRY_ID()
+        const leafCount = await service.read.getRevocationTreeLeafCount([registryId])
+        const leaves = []
+        for (let i = 0n; i < leafCount; i++) {
+            const [value, nextValue] = await service.read.getLeaf([registryId, i])
+            leaves.push({ value, nextValue })
+        }
+        const synced = RevocationRegistry.fromLeaves(leaves, sha256Scheme)
+
+        assert.equal(synced.root, await registry.read.getRevocationRoot())
+        assert.equal(synced.generateProof(newCommitment()).proofType, PROOF_TYPE.NON_MEMBERSHIP)
+        assert.equal(synced.generateProof(revoked[0]!).proofType, PROOF_TYPE.MEMBERSHIP)
+    })
+
+    it("keeps a superseded root valid for the root duration only", async () => {
+        const { registry, mirror } = await setup()
+        const first = newCommitment()
+        await registry.write.revoke([first, BigInt(mirror.lowLeafIndexOf(first))])
+        mirror.revoke(first)
+        const oldRoot = mirror.root
+
+        const second = newCommitment()
+        await registry.write.revoke([second, BigInt(mirror.lowLeafIndexOf(second))])
+
+        assert.equal(await registry.read.isValidRoot([oldRoot]), true)
+        await networkHelpers.time.increase(ROOT_DURATION)
+        assert.equal(await registry.read.isValidRoot([oldRoot]), false)
+        assert.equal(await registry.read.isValidRoot([await registry.read.getRevocationRoot()]), true)
+    })
+
+    it("updates the root duration", async () => {
+        const { service, registry } = await setup()
+        await registry.write.updateRootDuration([60n])
+        assert.equal(await service.read.getRegistryRootDuration([await registry.read.REGISTRY_ID()]), 60n)
+    })
+
+    it("only lets the owner write", async () => {
+        const { registry, asOther, other } = await setup()
+        for (const call of [
+            asOther.write.revoke([newCommitment(), 0n]),
+            asOther.write.revokeMany([[newCommitment()], [0n]]),
+            asOther.write.unrevoke([newCommitment(), 0n]),
+            asOther.write.updateRevocationCommitment([newCommitment(), newCommitment(), 0n, 0n]),
+            asOther.write.updateRootDuration([1n])
+        ]) {
+            await viem.assertions.revertWithCustomErrorWithArgs(call, registry, "OwnableUnauthorizedAccount", [
+                getAddress(other.account.address)
+            ])
+        }
+    })
+
+    it("transfers ownership in two steps", async () => {
+        const { registry, asOther, other } = await setup()
+
+        await registry.write.transferOwnership([other.account.address])
+        await asOther.write.acceptOwnership()
+        assert.equal(await registry.read.owner(), getAddress(other.account.address))
     })
 })
