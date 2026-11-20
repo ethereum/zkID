@@ -69,3 +69,40 @@ template CountCharOccurrences(maxLength) {
 
     count <== counter[maxLength-1];
 }
+
+/// @title CountPatternOccurrences
+/// @notice Counts the positions i where in[i..i+patLen) equals the constant `pattern`
+/// @dev Each window is packed little-endian into one field element and compared with
+///      a single IsZero. The packing is injective only when every in[j] is already
+///      constrained to a byte (e.g. Base64Decode output); callers must ensure that.
+/// @param maxLength length of `in`
+/// @param patLen number of bytes in `pattern`
+/// @param pattern the bytes to look for
+/// @input in[maxLength] byte array to search
+/// @output count number of windows equal to `pattern`
+template CountPatternOccurrences(maxLength, patLen, pattern) {
+    assert(patLen * 8 < 252);
+    assert(patLen <= maxLength);
+
+    signal input in[maxLength];
+    signal output count;
+
+    var target = 0;
+    for (var k = 0; k < patLen; k++) {
+        target += pattern[k] * 256 ** k;
+    }
+
+    var n = maxLength - patLen + 1;
+    signal match[n];
+    var acc = 0;
+    for (var i = 0; i < n; i++) {
+        var packed = 0;
+        for (var k = 0; k < patLen; k++) {
+            packed += in[i + k] * 256 ** k;
+        }
+        match[i] <== IsZero()(packed - target);
+        acc += match[i];
+    }
+
+    count <== acc;
+}
