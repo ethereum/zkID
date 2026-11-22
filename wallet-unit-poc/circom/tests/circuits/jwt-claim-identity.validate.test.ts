@@ -2,7 +2,7 @@ import { strict as assert } from "assert";
 import type { WitnessTester } from "circomkit";
 import { circomkit } from "../common/index.ts";
 import { generateMockData } from "../../src/mock-vc-generator.ts";
-import { witnessIndices } from "../common/witness-signals.ts";
+import { witnessValues } from "../common/witness-signals.ts";
 
 // Validation for Items 1 + 3 (Option B: no off-circuit hashing).
 // jwt.circom derives claimIdentifierHashes[i] = H(name_i) over a fixed 31-byte
@@ -53,16 +53,14 @@ describe("JWT claim-identity binding (Items 1+3, Option B)", () => {
       { length: MAX_CLAIMS },
       (_, i) => `main.claimIdentifierHashes[${i}]`,
     );
-    const idx = await witnessIndices(jwt, names);
-    const derived = idx.map((i) => w[i]);
+    const derived = await witnessValues(jwt, w, names);
 
     // Independently hash "roc_birthday" (slot 1) the way Show will.
     const hw = await hasher.calculateWitness({
       in: nameBuffer("roc_birthday"),
       len: 12n,
     });
-    const [hIdx] = await witnessIndices(hasher, ["main.hash"]);
-    const standalone = hw[hIdx];
+    const [standalone] = await witnessValues(hasher, hw, ["main.hash"]);
 
     assert.equal(
       derived[1],

@@ -4,7 +4,7 @@ import { p256 } from "@noble/curves/nist.js";
 import { circomkit } from "../common/index.ts";
 import { generateMockData } from "../../src/mock-vc-generator.ts";
 import { base64urlToBigInt, bigintToBase64url, stringToPaddedBigIntArray } from "../../src/utils.ts";
-import { witnessIndices } from "../common/witness-signals.ts";
+import { witnessValues } from "../common/witness-signals.ts";
 
 // PoC (FIXED: jwt.circom now pins match slots 0/1 to the '"x":"' / '"y":"'
 // literals, so the re-aiming below is rejected; the test asserts the fix).
@@ -57,11 +57,11 @@ async function outputs(circuit: WitnessTester<any, any>, w: bigint[]) {
     "main.KeyBindingY",
     ...Array.from({ length: MAX_CLAIMS }, (_, i) => `main.normalizedClaimValues[${i}]`),
   ];
-  const idx = await witnessIndices(circuit, names);
+  const values = await witnessValues(circuit, w, names);
   return {
-    KeyBindingX: w[idx[0]],
-    KeyBindingY: w[idx[1]],
-    normalizedClaimValues: idx.slice(2).map((i) => w[i]),
+    KeyBindingX: values[0],
+    KeyBindingY: values[1],
+    normalizedClaimValues: values.slice(2),
   };
 }
 
