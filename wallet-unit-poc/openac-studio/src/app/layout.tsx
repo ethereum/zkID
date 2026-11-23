@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   OpenAC Studio — a checklist-based design tool, not a formal security proof.
                 </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-1">
-                  <a href="https://github.com/privacy-ethereum/zkID" target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 transition-colors">
+                  <a href="https://github.com/ethereum/zkID" target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 transition-colors">
                     OpenAC GitHub
                   </a>
                   <a href="https://github.com/privacy-ethereum/zkspecs/tree/main/specs/5" target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 transition-colors">

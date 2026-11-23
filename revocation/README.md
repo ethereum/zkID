@@ -12,6 +12,6 @@ The goal of this work is to provide a framework that allows verifiers to reliabl
 
 - DIF Revocation Report: https://github.com/decentralized-identity/labs-privacy-preserving-revocation-mechanisms/blob/main/docs/report.md
 
-- LeanIMT+: Efficient Merkle Tree for Membership and Non-Membership Proofs: https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs
+- LeanIMT+: Efficient Merkle Tree for Membership and Non-Membership Proofs: [LeanIMTPlus-Membership-NonMembership-Proofs.md](./LeanIMTPlus-Membership-NonMembership-Proofs.md)
 
-- Privacy-Preserving Revocation for Verifiable Credentials Using Zero-Knowledge Non-Membership Proofs: https://pse.dev/blog/privacy-preserving-revocation-for-verifiable-credentials-using-zero-knowledge-non-membership-proofs
+- Privacy-Preserving Revocation for Verifiable Credentials Using Zero-Knowledge Non-Membership Proofs: [Privacy-Preserving-Credential-Revocation.md](./Privacy-Preserving-Credential-Revocation.md)

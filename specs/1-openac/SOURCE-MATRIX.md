@@ -5,7 +5,7 @@ This note records how the raw `1/OPENAC` draft was derived.
 Primary external references:
 
 - [OpenAC whitepaper](https://eprint.iacr.org/2026/251)
-- [openac-sdk reference implementation](https://github.com/privacy-ethereum/zkID/tree/main/wallet-unit-poc/openac-sdk)
+- [openac-sdk reference implementation](https://github.com/ethereum/zkID/tree/main/wallet-unit-poc/openac-sdk)
 
 ## Status Labels
 

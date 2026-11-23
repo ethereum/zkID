@@ -14,7 +14,7 @@ contributors:
 
 # Change Process
 
-This document is governed by [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1) (COSS).
+This document is governed by [1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss) (COSS).
 
 # Language
 
@@ -541,10 +541,10 @@ Specific toolchains such as mobile native bindings, WASM verifier bindings, `mop
 
 # References
 
-- [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1)
+- [1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss)
 - [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt)
 - [1/OPENAC](../1-openac/README.md)
-- [OpenAC: Open Design for Transparent and Lightweight Anonymous Credentials](https://github.com/privacy-ethereum/zkID)
+- [OpenAC: Open Design for Transparent and Lightweight Anonymous Credentials](https://github.com/ethereum/zkID)
 - [2/ZK-PROOF-OF-PERSONHOOD](../2-zk-proof-of-personhood/README.md)
 - [TWDIW-integration](https://github.com/zkmopro/TWDIW-integration)
 - [TWDIW Official App](https://github.com/moda-gov-tw/TWDIW-official-app)

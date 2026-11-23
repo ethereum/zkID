@@ -10,13 +10,11 @@
 - **PoC Documentation:** [JWT Docs (Notion)](https://www.notion.so/pse-team/Seediq-JWT-Docs-1f1d57e8dd7e80018655ccdc7332b1af)
 - **Circuit Specifications:** [SPEC.md](./SPEC.md)
 - **Demo Video:** [Loom Walkthrough](https://www.loom.com/share/83cebc44d54a47baae959a643475e9e2?sid=e7ec15c4-1ab6-4334-9830-c341d2d76e41)
-- **Live Frontend:** [https://privacy-scaling-explorations.github.io/seediq-frontend/](https://privacy-scaling-explorations.github.io/seediq-frontend/)
 
 
 ## Repositories
 
-- **Frontend Repository:** [seediq-frontend](https://github.com/privacy-scaling-explorations/seediq-frontend)
-- **Circuits Repository:** [zkID (Circuits)](https://github.com/privacy-scaling-explorations/zkID)
+- **Frontend Repository (archived):** [seediq-frontend](https://github.com/privacy-ethereum/seediq-frontend)
 
 note: This project uses [circomkit](https://github.com/erhant/circomkit) to compile, setup, prove, and verify Circom circuits
 
