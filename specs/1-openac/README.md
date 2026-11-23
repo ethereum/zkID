@@ -18,7 +18,7 @@ contributors:
 
 # Change Process
 
-This document is governed by the [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1) (COSS).
+This document is governed by the [1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss) (COSS).
 
 # Language
 
@@ -843,9 +843,9 @@ Future specifications MAY define:
 ## Implementation Status
 
 This raw specification is based on the current
-[OpenAC whitepaper](https://github.com/privacy-ethereum/zkID/tree/main/paper)
+[OpenAC whitepaper](https://github.com/ethereum/zkID/tree/main/paper)
 and the reference
-[openac-sdk](https://github.com/privacy-ethereum/zkID/tree/main/wallet-unit-poc/openac-sdk)
+[openac-sdk](https://github.com/ethereum/zkID/tree/main/wallet-unit-poc/openac-sdk)
 implementation. It remains intentionally conservative, but now resolves the
 main protocol-shape questions by:
 

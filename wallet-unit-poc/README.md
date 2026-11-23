@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 ## Supported Verifiable Credentials
 
 This PoC currently supports the following credential formats:
@@ -9,7 +14,7 @@ This PoC currently supports the following credential formats:
 
 ### Call for Feedback
 
-We're actively scoping support for additional credential formats (e.g. W3C VC-JWT, BBS+, EUDI ARF profiles). If your use case needs a format not listed above, please open an issue at [privacy-ethereum/zkID/issues](https://github.com/privacy-ethereum/zkID/issues)
+We're actively scoping support for additional credential formats (e.g. W3C VC-JWT, BBS+, EUDI ARF profiles). If your use case needs a format not listed above, please open an issue at [ethereum/zkID/issues](https://github.com/ethereum/zkID/issues)
 
 ## Setup
 

@@ -14,7 +14,7 @@ contributors:
 
 # Change Process
 
-This document is governed by the [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1) (COSS).
+This document is governed by the [1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss) (COSS).
 
 # Language
 
@@ -28,7 +28,7 @@ This specification defines a privacy-preserving protocol that allows a user to p
 
 The protocol prevents duplicate verification via a deterministic nullifier. Off-chain verification is the deployment mode for this version. On-chain verification was evaluated and is deferred (see [On-Chain Verification Status](#on-chain-verification-status)).
 
-The proof generation pipeline builds on OpenAC ([paper](https://github.com/privacy-ethereum/zkID/blob/main/paper/zkID.pdf)), adopting a minimal profile: X.509 certificate chain validation and proof-of-possession of the end-entity's private key, nullifier-based duplicate prevention, non-membership proof against the revocation list (currently a Sparse Merkle Tree; leanIMT+ is being evaluated for a future revision), and per-session blinded key commitments that link the two sub-circuits. The proof pipeline is split into two linked sub-circuits — a CertChain circuit for credential verification and a DeviceSig circuit for session binding and nullifier derivation.
+The proof generation pipeline builds on OpenAC ([paper](https://github.com/ethereum/zkID/blob/main/paper/zkID.pdf)), adopting a minimal profile: X.509 certificate chain validation and proof-of-possession of the end-entity's private key, nullifier-based duplicate prevention, non-membership proof against the revocation list (currently a Sparse Merkle Tree; leanIMT+ is being evaluated for a future revision), and per-session blinded key commitments that link the two sub-circuits. The proof pipeline is split into two linked sub-circuits — a CertChain circuit for credential verification and a DeviceSig circuit for session binding and nullifier derivation.
 
 This version (v0.1) enforces one verification per certificate instance. If the certificate is periodically renewed and renewal modifies the certificate contents, the user MAY be able to verify again (known limitation).
 
@@ -624,7 +624,7 @@ Other deployments MUST document their key-storage model and the resulting threat
 
 ## Verifier Implementations
 
-Reference verifier implementations are available across multiple deployment surfaces. Several currently live in the [`zkmopro/zkID`](https://github.com/zkmopro/zkID) fork of this repository, where ongoing implementation work happens; this spec's canonical home is `privacy-ethereum/zkID`.
+Reference verifier implementations are available across multiple deployment surfaces. Several currently live in the [`zkmopro/zkID`](https://github.com/zkmopro/zkID) fork of this repository, where ongoing implementation work happens; this spec's canonical home is `ethereum/zkID`.
 
 - **Production HTTP / gRPC server**: [zkmopro/go-zkid-verifier](https://github.com/zkmopro/go-zkid-verifier) — Go-native verifier with a CGO FFI bridge to a Rust cryptographic backend. Exposes endpoints for challenge issuance (`POST /challenge`), linked proof verification (`POST /link-verify`), revocation root status (`GET /smt-root/status`), and issuer certificate cache state (`GET /issuer-cert/status`), with gRPC equivalents on a parallel port.
 - **Portable WASM verifier**: [zkmopro/zkID/wallet-unit-poc/spartan2-wasm](https://github.com/zkmopro/zkID/tree/main/wallet-unit-poc/spartan2-wasm) — Rust-to-WASM verifier suitable for browser and mobile contexts. Exposes `verify(proof_bytes, vk_bytes)` and `link_verify(cert_pubs, device_pubs)` for cross-proof `pk_commit` matching.
@@ -683,7 +683,7 @@ When the verification flow requires PIN entry (e.g., for smartcard-based certifi
 - [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt)
 - [FIPS 180-4 (SHA-256)](https://csrc.nist.gov/publications/detail/fips/180/4/final)
 - [Poseidon Hash (circomlib)](https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom)
-- [OpenAC (paper)](https://github.com/privacy-ethereum/zkID/blob/main/paper/zkID.pdf)
+- [OpenAC (paper)](https://github.com/ethereum/zkID/blob/main/paper/zkID.pdf)
 - [ZK Circuit Specification for Human Verification (prior art)](https://github.com/zkmopro/ZK-based-Human-Verification/issues/3)
 - [Revocation in zkID: Merkle Tree Based Approaches (PSE)](https://pse.dev/blog/revocation-in-zkid-merkle-tree-based-approaches)
 - [MOICA Certificate Revocation List](https://moica.nat.gov.tw/del.html)

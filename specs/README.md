@@ -12,13 +12,14 @@ reference implementation.
 ## Change Process
 
 Specs in this directory are governed by the
-[1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1)
+[1/COSS](https://github.com/ethereum/access-layer-specs/tree/main/specs/1-coss)
 change-control process. Status promotion (`raw` → `draft` → ...) follows the
 COSS lifecycle.
 
 ## Editorial History
 
-These specs were initially incubated in `privacy-ethereum/zkspecs` and moved
+These specs were initially incubated in `privacy-ethereum/zkspecs` (now
+`ethereum/access-layer-specs`) and moved
 to this repository so they sit alongside the implementations they describe:
 
 - `1/OPENAC` — to be added under a separate PR; previously drafted as `zkspecs#23` (and earlier `zkspecs#21`).

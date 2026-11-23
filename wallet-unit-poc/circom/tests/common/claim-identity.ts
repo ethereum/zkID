@@ -1,13 +1,12 @@
 import type { WitnessTester } from "circomkit";
 import { circomkit } from "./index.ts";
-import { witnessIndices } from "./witness-signals.ts";
+import { witnessValues } from "./witness-signals.ts";
 import { nameToBuffer, NAME_ID_LEN } from "../../src/show.ts";
 
 // H(name) as the credential/Show circuits compute it: HashBytesToFieldWithLen
 // over the fixed 31-byte width. The circuits run over secq256r1, so no JS
 // Poseidon matches — run the hasher circuit itself and cache the results.
 let hasher: Promise<WitnessTester<any, any>> | undefined;
-let hashIdx: number | undefined;
 const hashes = new Map<string, bigint>();
 
 export async function hashClaimName(name: string): Promise<bigint> {
@@ -22,8 +21,7 @@ export async function hashClaimName(name: string): Promise<bigint> {
   const h = await hasher;
   const { bytes, len } = nameToBuffer(name);
   const w = await h.calculateWitness({ in: bytes, len });
-  hashIdx ??= (await witnessIndices(h, ["main.hash"]))[0];
-  const value = w[hashIdx];
+  const [value] = await witnessValues(h, w, ["main.hash"]);
   hashes.set(name, value);
   return value;
 }

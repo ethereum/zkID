@@ -1,5 +1,10 @@
 # Cross-Platform Mobile ZKPs
 
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 Flutter is a popular cross-platform mobile app development framework. Mopro Flutter shows an example of integrating ZK-proving into a Flutter app, allowing for streamlined creation of ZK-enabled mobile apps.
 
 > [!IMPORTANT]
