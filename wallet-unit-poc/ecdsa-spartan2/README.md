@@ -1,5 +1,10 @@
 # ecdsa-spartan2
 
+> [!IMPORTANT]
+> This code is a reference implementation. It has not been checked for production quality.
+>
+> Only an internal audit has been completed. The code has not had an external audit.
+
 Spartan2-based proving CLI for the zkID wallet PoC. It produces and verifies a
 two-stage split proof — `prepare` (the JWT/ES256 circuit) and `show` (the
 device-binding + generalized predicate circuit) — against the Circom inputs
