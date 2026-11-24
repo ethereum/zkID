@@ -24,7 +24,7 @@ export function signDeviceNonce(
     typeof privateKey === "string" ? hexToBytes(privateKey) : privateKey;
 
   const messageHash = sha256(new TextEncoder().encode(nonce));
-  const signature = p256.sign(messageHash, privateKeyBytes);
+  const signature = p256.sign(messageHash, privateKeyBytes, { lowS: true });
 
   return bytesToBase64url(signature.toCompactRawBytes());
 }
@@ -82,7 +82,10 @@ export function buildShowCircuitInputs(
   const sigHex = Array.from(sigBytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  const sigDecoded = p256.Signature.fromCompact(sigHex);
+  const sigParsed = p256.Signature.fromCompact(sigHex);
+  // Hardware signers emit either S; the profile requires low-S, so flip
+  // s := n - s (still a valid signature for the same message) rather than reject.
+  const sigDecoded = sigParsed.hasHighS() ? sigParsed.normalizeS() : sigParsed;
   const sigSInverse = Fq.inv(sigDecoded.s);
 
   if (deviceKey.kty !== "EC" || deviceKey.crv !== "P-256") {
