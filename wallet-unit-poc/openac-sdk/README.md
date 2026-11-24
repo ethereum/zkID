@@ -97,6 +97,12 @@ console.log(result.expressionResult);
 **Combinators**: `all`, `any`, `not` (nest arbitrarily)
 **Format**: inferred from value type (`Date` becomes date, numeric becomes uint, string becomes string). Override with `format: "date" | "uint" | "string"` on any predicate.
 
+**Numbers**: a `number` literal must be a safe integer (`Number.isSafeInteger`). Larger values throw; pass a `bigint` or a decimal string.
+
+**Operator by format**: ordering (`<=`, `>=`) is allowed over `uint` and `date`. `string` (and bool) claims accept `==` only. The compiler rejects other combinations, and `verify()` applies the same table to `expected.claimNormalization` and fails closed.
+
+**Sparse schemas**: the compiled `decodeFlags` and `claimFormats` run to the highest slot a predicate reads, not to the claim count. If a verifier builds `claimNormalization` by hand, it must cover every slot its predicates read; `verify()` fails when a referenced slot has no expected format.
+
 ### Precompute decides what a presentation can prove
 
 `precompute()` runs the JWT circuit once and caches the claim values it normalized. `present()` reuses that cache, so the predicates passed to `precompute()` fix what later presentations can evaluate:
