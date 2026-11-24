@@ -209,6 +209,7 @@ template JWT(
         claimNormalizers[i].value       <== claimExtractors[i].value;
         claimNormalizers[i].valueLength <== claimExtractors[i].valueLength;
         claimNormalizers[i].format      <== claimFormats[i];
+        claimNormalizers[i].isActive    <== decodeFlags[i];
 
         normalizedClaimValues[i] <== claimNormalizers[i].normalizedValue;
 

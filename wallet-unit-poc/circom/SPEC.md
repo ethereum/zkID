@@ -105,6 +105,14 @@ This document describes the circuits used for privacy-preserving identity verifi
 
 ## Claim Value Normalization and Hashing
 
+**ClaimValueNormalizer**
+
+- `uint`: at least one digit and at most 19, every byte a digit.
+
+- `bool`: exactly `1`, `true`, `0` or `false`. Anything else is unsatisfiable. The emptiness and spelling checks apply only to decoded slots (`decodeFlags[i] = 1`).
+
+- `iso_date`: width 10, digits everywhere except positions 4 and 7, which must be `-`.
+
 **HashModScalarField**
 
 - The 256 digest bits build the low and high 128-bit limbs directly, then one subtraction of the scalar order reduces them. A digest at or above the base-field modulus reduces correctly. Shared with the mdoc circuit.

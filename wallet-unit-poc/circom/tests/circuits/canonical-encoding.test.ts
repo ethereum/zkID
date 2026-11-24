@@ -73,7 +73,7 @@ describe("ClaimValueNormalizer rejects leading-NUL strings", () => {
   const STRING_FORMAT = 4;
   /** Explicit NUL; a literal one in the source is invisible and easy to mangle. */
   const NUL = String.fromCharCode(0);
-  let circuit: WitnessTester<["value", "valueLength", "format"], ["normalizedValue"]>;
+  let circuit: WitnessTester<["value", "valueLength", "format", "isActive"], ["normalizedValue"]>;
 
   before(async () => {
     circuit = await circomkit.WitnessTester("ClaimValueNormalizer", {
@@ -90,6 +90,7 @@ describe("ClaimValueNormalizer rejects leading-NUL strings", () => {
       value: [...bytes, ...Array(VALUE_LEN - bytes.length).fill(0)],
       valueLength: bytes.length,
       format: STRING_FORMAT,
+      isActive: 1,
     };
   }
 

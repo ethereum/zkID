@@ -11,7 +11,7 @@ const FORMAT_ROC_DATE = 3n;
 function formatInput(text: string, format: bigint) {
   const value = new Array<bigint>(VALUE_LEN).fill(0n);
   for (let i = 0; i < text.length; i++) value[i] = BigInt(text.charCodeAt(i));
-  return { value, valueLength: BigInt(text.length), format };
+  return { value, valueLength: BigInt(text.length), format, isActive: 1n };
 }
 
 function uintInput(decimal: string) {
@@ -23,7 +23,7 @@ function uintInput(decimal: string) {
 const q = 115792089210356248762697446949407573530086143415290314195533631308867097853951n;
 
 describe("ClaimValueNormalizer uint range", () => {
-  let circuit: WitnessTester<["value", "valueLength", "format"], ["normalizedValue"]>;
+  let circuit: WitnessTester<["value", "valueLength", "format", "isActive"], ["normalizedValue"]>;
 
   before(async () => {
     circuit = await circomkit.WitnessTester("claim_value_normalizer", {
@@ -118,6 +118,12 @@ describe("ClaimValueNormalizer uint range", () => {
     await circuit.expectPass(formatInput("0900101", FORMAT_ROC_DATE), {
       normalizedValue: 900101n,
     });
+  });
+
+  it("leaves an inactive slot's empty uint and empty bool unconstrained", async () => {
+    // Unused slots carry an empty value under the builder's default format.
+    await circuit.expectPass({ ...uintInput(""), isActive: 0n }, { normalizedValue: 0n });
+    await circuit.expectPass({ ...formatInput("", FORMAT_BOOL), isActive: 0n }, { normalizedValue: 0n });
   });
 
   it("rejects an empty uint", async () => {

@@ -8,12 +8,16 @@ include "../utils/utils.circom";
 /// @param valueLen: maximum length of value bytes
 /// @input value: array of extracted value bytes (ASCII)
 /// @input valueLength: actual number of meaningful bytes
-/// @input format: 0=bool, 1=uint, 2=iso_date (YYYY-MM-DD), 3=roc_date (YYYMMDD), 4=string (big-endian byte pack)
+/// @input isActive: 1 for a decoded slot. Unused slots carry an empty value under whatever
+///        format the builder defaults to (uint), so the emptiness and spelling checks below
+///        apply only to active slots.
+/// @input format: 0=bool (1|true|0|false), 1=uint, 2=iso_date (YYYY-MM-DD), 3=roc_date (YYYMMDD), 4=string (big-endian byte pack)
 /// @output normalizedValue: single integer representation suitable for numeric comparison
 template ClaimValueNormalizer(valueLen) {
     signal input value[valueLen];
     signal input valueLength;
     signal input format;
+    signal input isActive;
 
     signal output normalizedValue;
 
@@ -41,7 +45,7 @@ template ClaimValueNormalizer(valueLen) {
     signal formatSelectorSum <== isBoolFormat + isUintFormat + isIsoDateFormat + isRocDateFormat + isStringFormat;
     formatSelectorSum === 1;
 
-    // ===== Format 0: Boolean — "1" or "true" → 1, else → 0 =====
+    // ===== Format 0: Boolean — "1"/"true" → 1, "0"/"false" → 0, anything else unsatisfiable =====
     component valLenEq1 = IsEqual();
     valLenEq1.in[0] <== valueLength;
     valLenEq1.in[1] <== 1;
@@ -50,22 +54,48 @@ template ClaimValueNormalizer(valueLen) {
     valLenEq4.in[0] <== valueLength;
     valLenEq4.in[1] <== 4;
 
+    component valLenEq5 = IsEqual();
+    valLenEq5.in[0] <== valueLength;
+    valLenEq5.in[1] <== 5;
+
     component v0is1 = IsEqual();
     v0is1.in[0] <== value[0];
     v0is1.in[1] <== 49; // '1'
+
+    component v0is0 = IsEqual();
+    v0is0.in[0] <== value[0];
+    v0is0.in[1] <== 48; // '0'
 
     component vt = IsEqual(); vt.in[0] <== value[0]; vt.in[1] <== 116; // 't'
     component vr = IsEqual(); vr.in[0] <== value[1]; vr.in[1] <== 114; // 'r'
     component vu = IsEqual(); vu.in[0] <== value[2]; vu.in[1] <== 117; // 'u'
     component ve = IsEqual(); ve.in[0] <== value[3]; ve.in[1] <== 101; // 'e'
 
+    component vf  = IsEqual(); vf.in[0]  <== value[0]; vf.in[1]  <== 102; // 'f'
+    component va  = IsEqual(); va.in[0]  <== value[1]; va.in[1]  <== 97;  // 'a'
+    component vl  = IsEqual(); vl.in[0]  <== value[2]; vl.in[1]  <== 108; // 'l'
+    component vs  = IsEqual(); vs.in[0]  <== value[3]; vs.in[1]  <== 115; // 's'
+    component ve5 = IsEqual(); ve5.in[0] <== value[4]; ve5.in[1] <== 101; // 'e'
+
     signal valueTrueWordLeft  <== vt.out * vr.out;
     signal valueTrueWordRight <== vu.out * ve.out;
     signal valueTrueWord      <== valueTrueWordLeft * valueTrueWordRight;
 
+    signal valueFalseWordLeft  <== vf.out * va.out;
+    signal valueFalseWordRight <== vl.out * vs.out;
+    signal valueFalseWordHead  <== valueFalseWordLeft * valueFalseWordRight;
+    signal valueFalseWord      <== valueFalseWordHead * ve5.out;
+
     signal boolValueFromOne  <== valLenEq1.out * v0is1.out;
     signal boolValueFromWord <== valLenEq4.out * valueTrueWord;
     signal boolValue <== boolValueFromOne + boolValueFromWord;
+    signal boolFalseFromZero <== valLenEq1.out * v0is0.out;
+    signal boolFalseFromWord <== valLenEq5.out * valueFalseWord;
+
+    // The four spellings differ in length or first byte, so at most one term
+    // is 1 and the sum is a boolean.
+    signal activeBool <== isActive * isBoolFormat;
+    activeBool * (1 - boolValue - boolFalseFromZero - boolFalseFromWord) === 0;
 
     // ===== Format 1: Unsigned Integer — decimal ASCII → integer =====
     signal uintAccum[valueLen + 1];
@@ -84,6 +114,11 @@ template ClaimValueNormalizer(valueLen) {
         uintAccum[i + 1] <== uintScaled[i] + (value[i] - 48) * valueLenGt[i].out;
     }
     signal uintValue <== uintAccum[valueLen];
+
+    // An empty value activates no digit constraints and leaves the
+    // accumulator at 0, which would read as a signed zero.
+    signal activeUint <== isActive * isUintFormat;
+    activeUint * (1 - valueLenGt[0].out) === 0;
 
     // The accumulator is field arithmetic, so without the two checks below an
     // over-long decimal (>= 77 digits) or a non-digit byte wraps mod q and
@@ -147,6 +182,10 @@ template ClaimValueNormalizer(valueLen) {
     rocLenEq.in[0] <== valueLength;
     rocLenEq.in[1] <== 7; // "YYYMMDD"
     isRocDateFormat * (1 - rocLenEq.out) === 0;
+
+    // The ISO separators are not read by the date arithmetic, so pin them.
+    isIsoDateFormat * (value[4] - 45) === 0; // '-'
+    isIsoDateFormat * (value[7] - 45) === 0;
 
     // ISO reads 0-3, 5, 6, 8, 9; ROC reads 0-6. Index 7 is read by neither.
     var isoUsesDigit[10] = [1, 1, 1, 1, 0, 1, 1, 0, 1, 1];
