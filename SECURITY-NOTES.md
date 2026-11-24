@@ -3,6 +3,10 @@
 Boundaries the OpenAC circuits and SDK do not enforce, who must enforce them,
 and what a future fix would be. Finding ids are from the zkID OpenAC review.
 
+Checks named here (circuit constraints, SDK error codes, the low-S flip, the
+WASM guards) are the ones added by the OpenAC findings fixes. A tree without
+those fixes does not enforce them.
+
 ## Validity clock (1789507490)
 
 `verify()` does not attest `exp` or `nbf`. The SDK checks them on the holder
@@ -24,53 +28,13 @@ normalization it was given.
 
 Follow-up: none planned; a denser slot assignment would avoid the cost.
 
-## Accepted circuit grammar limits
+## iso_date calendar validity
 
-The Prepare circuit parses the credential with a fixed grammar. It enforces
-these:
-
-- Disclosures are compact JSON three-string arrays with no whitespace.
-- `cnf.jwk` is a flat object (no nested objects or arrays), checked inside the
-  region that follows the literal `"cnf":{"jwk":{`.
-- `_sd` is a flat array, checked inside the region that follows `"_sd":[`.
-- A disclosure's base64 form is 56 to 119 characters long.
-- `iso_date` values are checked for their lexical form in the circuit, not
-  for calendar validity (month 13, day 31 in a 30-day month). Nothing checks
-  calendar validity: neither the circuit nor the SDK. A verifier that needs
-  valid dates must check the date claim itself.
-
-The circuit does not parse JSON structure. It counts only the exact compact
-literals `"cnf":{"jwk":{` and `"_sd":[`, and does not know which object holds
-them. So the issuer MUST NOT sign a payload that breaks any of these
-preconditions:
-
-- The payload contains exactly one compact `"cnf":{"jwk":{` occurrence (no
-  whitespace). It is the holder key binding, `jwk` is the first member of that
-  `cnf`, and the jwk object is flat. If the real `cnf` is serialized any other
-  way (another member first, or whitespace) while a nested object elsewhere
-  contains a compact `"cnf":{"jwk":{`, the nested one is the only match and the
-  device key is whatever that object holds.
-- No other object in the payload contains `cnf.jwk`.
-- The payload contains exactly one `_sd` array, serialized compactly as
-  `"_sd":[`. It is the credential's disclosure array, wherever the profile
-  places it (the shipped credentials use `vc.credentialSubject._sd`), and it is
-  flat. No other object carries an `_sd` array, such as a nested `address._sd`.
-- Claim names in the issuer's schema are unique (see "Duplicate claim names").
-
-The SDK rejects non-compact disclosures before proving
-(`Invalid disclosure format ... expected compact JSON with no whitespace`).
-`assertUnambiguousPayload` (`AMBIGUOUS_PAYLOAD`, in
-`openac-sdk/src/inputs/payload-anchors.ts`) rejects a payload that has no
-P-256 `cnf.jwk`, whose `"x":"` or `"y":"` anchor does not occur exactly once
-or does not directly precede the `cnf.jwk` coordinate, that does not contain
-exactly one `"_sd":[` anchor, or in which a disclosure digest does not occur
-exactly once, quoted, inside that `_sd` array. It does not parse JSON, so it
-does not check that `cnf.jwk` is first in `cnf` or that the `_sd` array is the
-credential's disclosure array rather than one nested in another object. This pre-check rejects some of the layouts above for honest
-holders, but a malicious holder can build witnesses without the SDK, so the
-issuer must not sign such payloads. The 56 to 119 character disclosure window
-has no SDK check; a disclosure outside it fails when the witness is built or
-the circuit is run, not with a dedicated error.
+`iso_date` values are checked for their lexical form (`-` separators, digits in
+the `YYYY-MM-DD` positions) in the circuit, not for calendar validity (month
+13, day 31 in a 30-day month). Nothing checks calendar validity: neither the
+circuit nor the SDK. A verifier that needs valid dates must check the date
+claim itself.
 
 The profile text is in `specs/1-openac/README.md`.
 
@@ -87,20 +51,6 @@ obligation today.
 
 Follow-up: enforce low-S in the Show circuit at the next Show key
 regeneration.
-
-## Duplicate claim names (1789504910)
-
-If two disclosures share a claim name, a holder can still omit one of them and
-present the other. The circuit cannot tell which was meant. This residual is
-why the profile forbids duplicate claim names. The SDK rejects them at the
-credential layer (`DUPLICATE_CLAIM`) and in claim schemas.
-
-The circuit's `DistinctClaimNames` constraint rejects two active slots that
-share a name in the proved identifiers. It cannot see a duplicate the holder
-leaves out of the proof, so unique names stay a profile requirement on issuers.
-A verifier cannot see the SDK check, so issuers must be trusted to follow it.
-
-Follow-up: none.
 
 ## Claim-to-claim predicates
 

@@ -21,13 +21,11 @@ contributors:
 These edits tighten the `SD-JWT-P256` profile to match what the circuits
 accept. Each is marked by the finding id from the zkID OpenAC review.
 
-- 1789504910: claim names MUST be unique (replaces "MAY appear"; disclosure
-  order text is unchanged).
+These rules match the checks added by the OpenAC findings fixes. A conforming
+implementation needs those fixes.
+
 - 1789512268: `bool` values MUST be `true`, `false`, `1`, or `0`.
 - 1789509685: `iso_date` MUST use `-` separators.
-- 1789510435: disclosures MUST be compact JSON three-string arrays.
-- 1789506251 / 1789509076: `cnf.jwk` MUST be first in `cnf`; one `cnf.jwk`
-  and one `_sd` array.
 - 1789513951: proved device signatures MUST be low-S; implementations MUST
   NOT emit high-S and MUST normalize or reject a received high-S signature.
   The circuit does not enforce it, so it is a prover obligation. The
@@ -38,22 +36,6 @@ accept. Each is marked by the finding id from the zkID OpenAC review.
   accepted. A verifier that needs a valid calendar date MUST check the claim
   itself. This replaces the earlier requirement that verifiers and the SDK
   MUST check calendar validity.
-- Issuer preconditions on layout. The circuit matches only the exact compact
-  literals `"cnf":{"jwk":{` and `"_sd":[` and does not know which object holds
-  them, so an issuer MUST NOT sign a payload unless:
-  - it contains exactly one compact `"cnf":{"jwk":{` occurrence, which is the
-    holder key binding, with `jwk` as the first member of `cnf` and a flat jwk
-    object;
-  - no other object in the payload contains `cnf.jwk`;
-  - it contains exactly one `_sd` array, serialized compactly as `"_sd":[`,
-    which is the credential's disclosure array wherever the profile places it
-    (for example `vc.credentialSubject._sd`) and is flat;
-  - claim names are unique.
-
-  The circuit enforces that `cnf.jwk` is a flat object with no nested objects
-  or arrays, and that `_sd` is a flat array. It does not enforce the list
-  above. The SDK pre-check rejects some of these layouts for honest holders,
-  but a malicious holder can build witnesses directly.
 - 1789512824: ordering operators only over `uint`, `iso_date`, `roc_date`.
 
 # Change Process
@@ -265,15 +247,6 @@ In the `SD-JWT-P256` profile, the holder device public key is extracted from
 `payload.cnf.jwk` and MUST be a `P-256` JWK with fields `kty`, `crv`, `x`, and
 `y`.
 
-`cnf.jwk` MUST be the first member of the `cnf` object, and the payload MUST
-contain exactly one compact `"cnf":{"jwk":{` occurrence, the holder key
-binding. The `Prepare` circuit locates the key by this literal, so an issuer
-MUST NOT sign other layouts. The payload MUST also contain exactly one `_sd`
-array, and it MUST be the credential's disclosure array, wherever the profile
-places it. The circuit does not enforce first position or which object holds
-`_sd`; these are preconditions on the issuer. `cnf.jwk` MUST be a flat object,
-which the circuit enforces.
-
 ### Verifier Challenge
 
 The verifier challenge is an opaque byte string supplied out of band.
@@ -358,10 +331,6 @@ Each disclosure MUST be a base64url string that decodes to a JSON array:
 ["salt", "claim_name", "claim_value"]
 ```
 
-The array MUST be compact JSON: exactly three string elements, with no
-whitespace outside the strings. Disclosures in any other form MUST be
-rejected.
-
 For this profile, the disclosure digest is:
 
 ```text
@@ -376,10 +345,9 @@ with the SD-JWT payload commitment structure.
 
 Additional disclosure rules for this profile:
 
-- Claim names MUST be unique within the `_sd` array's disclosures. A
-  credential with two disclosures of the same `claim_name` MUST be
-  rejected. The circuit cannot tell which of two same-named disclosures a
-  holder omits, so the profile forbids them.
+- Disclosures with identical `claim_name` MAY appear in the same
+  credential. A duplicate `claim_name` value MUST NOT by itself cause
+  rejection.
 - Disclosures MUST be presented in a deterministic order fixed by the
   issuer. Verifiers MUST treat disclosure order as significant for
   matching disclosures to profile-defined claim slots.
@@ -600,11 +568,10 @@ Implementations MUST reject a predicate if any of the following holds:
 - `compareValue` is negative;
 - `compareValue >= 2^valueBits`;
 - the active `claimRef` value falls outside `[0, 2^valueBits)`;
-- the `(op, claimFormat)` pair is not supported by this profile. `LE`,
-  `GE`, and any other ordering operator (`LT`, `GT`) MUST be used only over
-  `uint`, `iso_date`, and `roc_date` claims, not over `bool` or `string`
-  claims (for example, `LE` over a `string` claim). `EQ` applies to all
-  formats.
+- the `(op, claimFormat)` pair is not supported by this profile. `LE`
+  and `GE` MUST be used only over `uint`, `iso_date`, and `roc_date` claims,
+  not over `bool` or `string` claims (for example, `LE` over a `string`
+  claim). `EQ` applies to all formats.
 
 ## Logic Expression Encoding
 
@@ -833,11 +800,7 @@ verifier outcome.
 | DER-encoded device-binding signature | rejected: signature encoding |
 | Duplicate disclosure (identical raw disclosure bytes) | rejected: duplicate disclosure |
 | High-S device-binding signature | normalized to low-S before proving, or rejected; never proved as high-S |
-| Two disclosures with the same `claim_name` | rejected: duplicate claim name |
-| Disclosure that is not a compact three-string JSON array | rejected: disclosure format |
 | `bool` claim other than `true`, `false`, `1`, `0` | rejected: normalization failure |
-| More than one `"cnf":{"jwk":{` or `"_sd":[` anchor, or a nested object or array in either region | rejected: credential layout |
-| `cnf.jwk` not the first member of `cnf` | issuer-side obligation; not rejected by the circuit or the SDK |
 | Disclosure order altered relative to issuer-fixed order | rejected: order mismatch |
 | `iso_date` claim not matching `YYYY-MM-DD` | rejected: normalization failure |
 | `uint` claim with non-decimal characters or leading whitespace | rejected: normalization failure |
