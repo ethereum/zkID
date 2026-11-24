@@ -2130,7 +2130,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "spartan2"
 version = "0.4.0"
-source = "git+https://github.com/0xVikasRushi/Spartan2.git?branch=openac-sdk#64687aff151924331cb573f66954c75d1eb20ee5"
+source = "git+https://github.com/moven0831/Spartan2.git?rev=0ea85d1b3e800ad22d33855f20486cdd8dd07d5c#0ea85d1b3e800ad22d33855f20486cdd8dd07d5c"
 dependencies = [
  "bellpepper",
  "bellpepper-core",

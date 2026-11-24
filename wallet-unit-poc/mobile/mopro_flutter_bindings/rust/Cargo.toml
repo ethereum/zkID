@@ -26,3 +26,7 @@ name = "mopro_flutter_bindings"
 version = "0.1.0"
 
 [workspace]
+
+# Patched Spartan2 verifier (mask binding and verify-side input checks).
+[patch."https://github.com/0xVikasRushi/Spartan2.git"]
+spartan2 = { git = "https://github.com/moven0831/Spartan2.git", rev = "0ea85d1b3e800ad22d33855f20486cdd8dd07d5c" }

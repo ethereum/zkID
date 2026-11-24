@@ -85,3 +85,7 @@ lto = "thin"        # Enable thin Link-Time Optimization for better cross-crate 
 strip = true        # Strip debug symbols from release binaries
 debug = false       # Disable debug info in release builds
 codegen-units = 1   # Better optimization at the cost of longer compile time
+
+# Patched Spartan2 verifier (mask binding and verify-side input checks).
+[patch."https://github.com/0xVikasRushi/Spartan2.git"]
+spartan2 = { git = "https://github.com/moven0831/Spartan2.git", rev = "0ea85d1b3e800ad22d33855f20486cdd8dd07d5c" }
