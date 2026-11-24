@@ -7,7 +7,8 @@ import * as snarkjs from "snarkjs";
 
 import { generateMockData } from "./mock-vc-generator";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce, nameToBuffer } from "./show";
-import { generateIssuerMembershipInputs } from "./issuer-hiding";
+import { generateIssuerMembershipInputs, ISSUER_TREE_MAX_DEPTH } from "./issuer-hiding";
+import { buildSeededIssuerRegistry, buildSeededRevocationRegistry, parseSeededFlags, type RegistryOptions } from "./seeded-registries";
 import { base64urlToBigInt } from "./utils";
 import { PredicateFormat } from "./predicate-types";
 import { buildRevocationWitness, createRevocationRegistry, bytesToBigInt } from "./revocation";
@@ -42,7 +43,10 @@ const OP_LE = 0;
 
 const FILL_RATIO = 0.8;
 
-async function generateInputsForSize(sizeName: string): Promise<void> {
+/** Set by --jwt-wasm: a JWT generator built outside build/<name>/. */
+let jwtWasmOverride: string | undefined;
+
+async function generateInputsForSize(sizeName: string, reg?: RegistryOptions, out?: string): Promise<void> {
   const params = CIRCUIT_SIZES[sizeName];
   if (!params) {
     throw new Error(`Unknown size '${sizeName}'. Valid sizes: ${Object.keys(CIRCUIT_SIZES).join(", ")}`);
@@ -68,6 +72,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     circuitParams: params,
     targetPayloadLength,
     claimFormats,
+    ...(reg ? { revocationSecret: new Uint8Array(nodeCrypto.createHash("sha256").update(`holder|${reg.seed}`).digest()) } : {}),
   });
 
   const actualPayloadLen = mockData.token.split(".")[1].length;
@@ -98,7 +103,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const identityStart = CLAIM_IDENTITY_WITNESS_START[sizeName];
   if (identityStart !== undefined) {
     const jwtName = sizeName === "default" ? "jwt" : `jwt_${sizeName}`;
-    const jwtWasm = path.resolve(__dirname, "..", "build", jwtName, `${jwtName}_js`, `${jwtName}.wasm`);
+    const jwtWasm = jwtWasmOverride ?? path.resolve(__dirname, "..", "build", jwtName, `${jwtName}_js`, `${jwtName}.wasm`);
     const wtnsPath = path.join(os.tmpdir(), `${jwtName}-geninputs.wtns`);
     await snarkjs.wtns.calculate(mockData.circuitInputs, jwtWasm, wtnsPath);
     const witness: (bigint | string)[] = await snarkjs.wtns.exportJson(wtnsPath);
@@ -108,6 +113,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     fs.rmSync(wtnsPath, { force: true });
   }
 
+  let issuerRegistry: ReturnType<typeof buildSeededIssuerRegistry> | undefined;
   const showInputs = generateShowInputs(
     showParams,
     nonce,
@@ -118,10 +124,12 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     [], // normalizedClaimValues (derived from claims)
     claimIdentifierHashes,
     // Issuer hiding: Show must see the same issuer key the JWT circuit verified.
-    generateIssuerMembershipInputs({
-      x: base64urlToBigInt(mockData.issuerKey.x),
-      y: base64urlToBigInt(mockData.issuerKey.y),
-    }),
+    (() => {
+      const issuer = { x: base64urlToBigInt(mockData.issuerKey.x), y: base64urlToBigInt(mockData.issuerKey.y) };
+      if (!reg) return generateIssuerMembershipInputs(issuer);
+      issuerRegistry = buildSeededIssuerRegistry(issuer, reg.issuers, reg.seed);
+      return generateIssuerMembershipInputs(issuer, issuerRegistry, ISSUER_TREE_MAX_DEPTH);
+    })(),
   );
 
   // Show predicate: claim[ROC_BIRTHDAY_SLOT] <= 1070101 (ROC adult cutoff).
@@ -140,9 +148,9 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   showInputs.predicateClaimNameLens[0] = lhsName.len;
 
   // Non-revocation proof against a registry holding a few unrelated commitments.
-  const registry = createRevocationRegistry(
-    Array.from({ length: 5 }, () => bytesToBigInt(nodeCrypto.randomBytes(32))),
-  );
+  const registry = reg
+    ? buildSeededRevocationRegistry(reg.revoked, reg.seed)
+    : createRevocationRegistry(Array.from({ length: 5 }, () => bytesToBigInt(nodeCrypto.randomBytes(32))));
   Object.assign(showInputs, buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH));
 
   const circomDir = path.resolve(__dirname, "..");
@@ -155,14 +163,30 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   fs.mkdirSync(jwtOutputDir, { recursive: true });
   fs.mkdirSync(showOutputDir, { recursive: true });
 
-  const jwtOutputPath = path.join(jwtOutputDir, "default.json");
-  const showOutputPath = path.join(showOutputDir, "default.json");
+  const showOutputPath = out ? path.resolve(out) : path.join(showOutputDir, "default.json");
+  const jwtOutputPath = out ? showOutputPath.replace(/\.json$/, ".jwt.json") : path.join(jwtOutputDir, "default.json");
+  fs.mkdirSync(path.dirname(showOutputPath), { recursive: true });
 
   const bigintReplacer = (_key: string, value: any) => (typeof value === "bigint" ? value.toString() : value);
 
   fs.writeFileSync(jwtOutputPath, JSON.stringify(mockData.circuitInputs, bigintReplacer, 2));
   fs.writeFileSync(showOutputPath, JSON.stringify(showInputs, bigintReplacer, 2));
 
+  if (reg && issuerRegistry) {
+    const showJson = fs.readFileSync(showOutputPath);
+    const roots = {
+      issuerRoot: issuerRegistry.root.toString(),
+      revocationRoot: registry.root.toString(),
+      issuers: issuerRegistry.size,
+      revoked: registry.size,
+      issuerDepth: issuerRegistry.depth,
+      revocationDepth: registry.depth,
+      seed: reg.seed,
+      input_sha256: nodeCrypto.createHash("sha256").update(showJson).digest("hex"),
+    };
+    fs.writeFileSync(showOutputPath.replace(/\.json$/, ".roots.json"), JSON.stringify(roots, null, 2));
+    console.log(`  Roots       → ${JSON.stringify(roots)}`);
+  }
   console.log(`  JWT  inputs → ${path.relative(circomDir, jwtOutputPath)}`);
   console.log(`  Show inputs → ${path.relative(circomDir, showOutputPath)}`);
 }
@@ -177,6 +201,11 @@ Usage: npx ts-node src/generate-inputs.ts [options]
 Options:
   --size <size>  Generate inputs for a specific circuit size (1k | 2k | 4k | 8k)
   --all          Generate inputs for all sizes (1k, 2k, 4k, 8k)
+  --issuers <n>  Seeded issuer registry of n leaves (default 256)
+  --revoked <n>  Seeded revocation registry of n entries (default 5)
+  --seed <s>     Registry seed (default 1)
+  --out <path>   Show input path; the JWT input and roots go beside it
+  --jwt-wasm <p> JWT wasm generator to read claim identities from
   -h, --help     Show this help message
 
 Examples:
@@ -201,7 +230,13 @@ Examples:
   }
 
   const sizeName = args[sizeIdx + 1];
-  await generateInputsForSize(sizeName);
+  const flag = (name: string): string | undefined => {
+    const i = args.indexOf(name);
+    return i === -1 ? undefined : args[i + 1];
+  };
+  jwtWasmOverride = flag("--jwt-wasm");
+  const reg = parseSeededFlags(args);
+  await generateInputsForSize(sizeName, reg, flag("--out"));
   console.log("\nDone.");
 }
 
