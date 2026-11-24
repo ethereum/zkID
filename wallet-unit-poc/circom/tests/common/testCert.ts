@@ -67,12 +67,38 @@ const SIG_ALG_SHA256_RSA = Buffer.from(
   "hex"
 );
 
-// keyUsage: critical, digitalSignature.
-const KEY_USAGE = Buffer.from("300e0603551d0f0101ff040403020780", "hex");
+// The first three extensions of a MOICA end-entity certificate, in MOICA's
+// order: authorityKeyIdentifier (keyIdentifier only), subjectKeyIdentifier,
+// keyUsage (critical).
+export const AUTHORITY_KEY_ID = Buffer.concat([
+  Buffer.from("301f0603551d23041830168014", "hex"),
+  Buffer.alloc(20, 0xa1),
+]);
+export const SUBJECT_KEY_ID = Buffer.concat([
+  Buffer.from("301d0603551d0e04160414", "hex"),
+  Buffer.alloc(20, 0xb2),
+]);
 
-/** `[3] EXPLICIT Extensions` holding keyUsage plus any `extra` extensions. */
-function extensions(extra: Buffer[] = []): Buffer {
-  return tlv(0xa3, tlv(0x30, Buffer.concat([KEY_USAGE, ...extra])));
+/** keyUsage extension (critical) with the given BIT STRING bytes. */
+export function keyUsage(bits: string): Buffer {
+  const value = tlv(0x03, Buffer.from(bits, "hex"));
+  return tlv(
+    0x30,
+    Buffer.concat([
+      Buffer.from("0603551d0f0101ff", "hex"),
+      tlv(0x04, value),
+    ])
+  );
+}
+
+/** `07 80`: 7 unused bits, digitalSignature only — MOICA's signing certificate. */
+export const KEY_USAGE_SIGNING = keyUsage("0780");
+/** `04 30`: keyEncipherment + dataEncipherment — MOICA's encryption certificate. */
+export const KEY_USAGE_ENCRYPTION = keyUsage("0430");
+
+/** `[3] EXPLICIT Extensions` holding `list`. */
+function extensions(list: Buffer[]): Buffer {
+  return tlv(0xa3, tlv(0x30, Buffer.concat(list)));
 }
 
 /** An extension with a private-arc OID wrapping `value` in its OCTET STRING. */
@@ -119,6 +145,8 @@ export interface TbsOptions {
   spki: Buffer;
   /** Extensions to add after keyUsage. */
   extraExtensions?: Buffer[];
+  /** Replaces the leading extensions (default: AKI, SKI, keyUsage signing). */
+  leadingExtensions?: Buffer[];
 }
 
 export function buildTbs(opts: TbsOptions): Buffer {
@@ -139,7 +167,18 @@ export function buildTbs(opts: TbsOptions): Buffer {
     ),
     opts.subject ?? name("Test User"),
     opts.spki,
-    extensions(opts.extraExtensions)
+    extensions([
+      ...(opts.leadingExtensions ?? [
+        AUTHORITY_KEY_ID,
+        SUBJECT_KEY_ID,
+        KEY_USAGE_SIGNING,
+      ]),
+      // MOICA certificates carry several hundred bytes of further extensions
+      // (policies, CRL and AIA URLs); pad so the Extensions length is in the
+      // two-byte long form the circuit expects.
+      opaqueExtension(Buffer.alloc(200, 0xcc)),
+      ...(opts.extraExtensions ?? []),
+    ])
   );
   return tlv(0x30, Buffer.concat(parts));
 }

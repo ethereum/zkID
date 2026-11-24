@@ -72,12 +72,20 @@ template CertChainRSA256(
     tbsLenUB.in[1] <== actualIssuerTbsLength + 128;
     tbsLenUB.out === 1;
 
+    // LocateModulus and the pinned DER prefixes below assume a 2048-bit
+    // subject key.
+    assert(modulusBitsUser == 2048);
     var modulusBytes = modulusBitsUser \ 8;  // e.g. 2048/8 = 256
 
     // MOICA TBSes are always > 256 bytes, so the outer SEQUENCE header is
     // always the 4-byte form [0x30, 0x82, len_hi, len_lo]. Length bytes vary.
     issuerTbs[0] === 0x30;
     issuerTbs[1] === 0x82;
+
+    // Bind the prover-supplied raw length to the length the TBS itself
+    // declares, so AssertSliceInTBS bounds slices by the signed TBS rather
+    // than by a value that may reach into the SHA-256 padding.
+    issuerTbs[2] * 256 + issuerTbs[3] + 4 === actualIssuerTbsLength;
 
     // MOICA issues v3 certs only: pin the [0] EXPLICIT version block
     // [0xa0, 0x03, 0x02, 0x01, 0x02] at offset 4. The serial INTEGER tag is
@@ -113,6 +121,17 @@ template CertChainRSA256(
     locate.subjectHeader <== validity.subjectHeader;
     signal tbsModulusTagOffset <== locate.modulusTagOffset;
     AssertSliceInTBS()(tbsModulusTagOffset, 1, actualIssuerTbsLength);
+
+    // keyUsage must be digitalSignature: rejects the card's encryption
+    // certificate, whose key would otherwise give a second nullifier.
+    component keyUsage = VerifyKeyUsage();
+    for (var i = 0; i < 1024; i++) {
+        keyUsage.tbs[i] <== issuerTbs[i];
+    }
+    keyUsage.modulusTagOffset <== tbsModulusTagOffset;
+    // The 93 bytes VerifyKeyUsage reads must lie inside the signed TBS, not
+    // in the SHA-256 padding after it.
+    AssertSliceInTBS()(tbsModulusTagOffset + 261, 93, actualIssuerTbsLength);
 
     // DER prefix for an unsigned 2048-bit RSA modulus INTEGER:
     //   [0x02, 0x82, 0x01, 0x01, 0x00]
