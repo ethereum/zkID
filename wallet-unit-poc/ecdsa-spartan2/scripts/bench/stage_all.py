@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage every product cell of the matrices (A1, A2, S-P, S-B, W, X2 single-thread, L5) with the current binaries.
 
-Inputs: each worktree's circom/inputs for v1..combined; Track B's headline inputs and inputs.jsonl for the
+Inputs: each worktree's circom/inputs for v1..combined; the headline inputs and inputs.jsonl for the
 headline cells (roots from the registry). Generic cells are staged separately with layout.py and stage.py generic.
 """
 import argparse

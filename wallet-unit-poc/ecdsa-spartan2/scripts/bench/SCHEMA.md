@@ -1,10 +1,10 @@
 # Row schema for openacplus-bench
 
 Both producers write JSONL with one object per line:
-- the Mac (`openac_bench` plus its driver, Track A)
-- the phones (issue-40 flow harness, Tracks B and C)
+- the Mac (`openac_bench` plus its driver)
+- the phones (issue-40 flow harness)
 
-The Track D analysis reads both with one parser.
+The analysis reads both with one parser.
 
 The phone format is the source of truth. It is schema 2 as written by `bench/issue-40-arms`, with sample rows in `wallet-unit-poc/mobile/scripts/fixtures/emulator_bench.jsonl`. The Mac copies it and adds the fields marked (mac).
 
@@ -42,7 +42,7 @@ The phone format is the source of truth. It is schema 2 as written by `bench/iss
 `CONTROL`, before each visit:
 - `power`, `low_power_mode`, `therm`, `load_avg_1m`, `idle_gate_pass`, `ts`
 
-## Round 2 additions (2026-11-19)
+## Additional fields and steps
 
 Fields on `DEVICE`, also copied onto `SHAPE` rows and `E2E` rows:
 - `config`: adds `v1` (v1.0.0) and `variant` (generic-path sweep cell). The others stay `main`, `issuer`, `revocation`, `combined`.
@@ -79,7 +79,7 @@ New row kinds:
 `CRASH`, one per failed visit attempt:
 - `cell`, `attempt`, `signal` or `exit_code`, `stderr_tail`, `ts`
 
-## Pinned 2026-11-19 (lead; producers and the analysis follow these)
+## Producer rules
 
 1. **Provenance on every producer row.** Every `DEVICE`, `SHAPE`, `REGISTRY` and `E2E` row carries:
    - `command`: the exact command line that produced it
@@ -94,27 +94,29 @@ New row kinds:
 3. **`SHAPE` counts.**
    - `constraints`, `wires`, `public_inputs`, `private_inputs`, `outputs`, `labels` are the r1cs header values.
    - `loaded_constraints` and `loaded_wires` come from `circom_scotia::load_r1cs`.
-   - The analysis check is `constraints == loaded_constraints`. A row from Track B (header only) has no `loaded_*`, and the check skips it.
+   - The analysis check is `constraints == loaded_constraints`. A header-only row has no `loaded_*`, and the check skips it.
 4. **Standalone SHA-256 gadget.** A `SHAPE` row with `circuit: "sha256"`, `matrix_id: "X2"`, and `compressions: 1`.
 5. **New `ITER` step names:**
    - `statement_check`: public-value, root and policy acceptance, timed outside `verify`
    - `state_load`: loading the prepared state
    - `batch_reblind`: B reblinds of one prepared instance
    For `S-B`, `wall_us` of `batch_reblind` is the whole batch, and `DEVICE.batch` = B. Per tuple = `wall_us / B`. Bytes per tuple = `SIZES.batch_bytes / B`.
-6. **Expected roots** for the statement check come from the registry: Track B's `*.roots.json` next to each input. They do not come from the circuit's own evaluation. Configs without registries (v1, main) take their expected nonce and policy from the frozen input.
+6. **Expected roots** for the statement check come from the registry: the `*.roots.json` next to each input. They do not come from the circuit's own evaluation. Configs without registries (v1, main) take their expected nonce and policy from the frozen input.
 7. **Hash count.** The measured number of SHA-256 compressions is `2·D_iss + 2 + 2·D_rev + 3`. The paper's prediction, read as 2 compressions per hash, is `2(D_iss + D_rev + 3)`. The one-compression gap is `sha256(secret)`, which fits in a single block. The analysis reports measured minus predicted, with that note.
 8. **`E2E` stage names for the cold path:** `key_load`, `state_load` and `registry_load`, exactly. The other stages use the `ITER` step names (`prepare_prove`, `show_prove`, `present_total`, `verify_total`, `statement_check`, and so on), plus `witness_refresh` and `root_rejected` for the registry-update and stale-root workloads.
 9. **`REGISTRY` additions.**
    - `op: "bandwidth"`, with a `method` field: `mirror` (changed leaf records plus root) or `proof_fetch` (a downloaded path). For these rows `bytes` is the per-update or per-proof size and `wall_us` is null.
    - The `E2E` stages `witness_inputs` and `witness_gen` are allowed and are summed into the workload total.
 
-## Pinned after review round 1 (2026-11-19). These override the earlier pins wherever they conflict.
+## Overrides
+
+Items 10 onward override the numbered items above wherever they conflict.
 
 10. **One name per config.** The (8,20) headline is `config: "combined"` with `d_iss: 8, d_rev: 20`; "headline" appears only in cell ids. `config` takes exactly one of `v1|main|issuer|revocation|combined|variant`. Mobile DEVICE rows must carry `config`; the analysis fails a mobile row without it and never defaults it.
 11. **Verify definition, on every platform.**
     - `verify` is proof verification plus linkage only, with the VKs already in memory. It is the cross-platform comparable step.
     - `vk_load` reads VKs from storage. The row carries `vk_loaded` (for example `["prepare","show"]`). Platforms are compared on `vk_load` only for the first or cold iteration with both VKs loaded.
-    - `vk_digest` is the Mac-only step that forces the VK digest. Spartan2 d687dbb computes it. The phones restore it from the PR #115 sidecar inside `vk_load`, and their DEVICE row says `vk_digest: "sidecar"`.
+    - `vk_digest` is the Mac-only step that forces the VK digest. Spartan2 computes it on first use. The phones restore it from the verifying-key sidecar inside `vk_load`, and their DEVICE row says `vk_digest: "sidecar"`.
     - `statement_check` is separate.
     - "Verify + acceptance" = `verify` + `statement_check`, summed per iteration.
     - `verify_total` is kept for compatibility, but no table uses it.
@@ -154,14 +156,14 @@ New row kinds:
     - `registry_update` is "wallet witness refresh, then a presentation". The authority's `revokeMany` is a separate `REGISTRY` op, not a stage of it.
     - `witness_refresh` means the same thing in `E2E` and `REGISTRY`: apply k updates to the mirror, then regenerate the proof. Run it in a GC-quiesced process (`--expose-gc`, `gc()` before each timed region).
 20. **`REGISTRY` op names.**
-    - `path_verify` replaces the old `root`, which timed a wallet-side path re-hash.
+    - `path_verify` times a wallet-side path re-hash.
     - `root_recompute` is a full root recomputation, if measured.
-    - Bandwidth `method` is `mirror_upper` (changed records, the old `mirror`), `mirror_min` (k·32 + 32 B) or `proof_fetch`.
+    - Bandwidth `method` is `mirror_upper` (changed records), `mirror_min` (k·32 + 32 B) or `proof_fetch`.
     - `bytes` is the total for that k; `bytes_per_update` = `bytes / k`.
     - Proof-fetch bytes are computed at the labelled population and depth.
-21. **`PHONECHECK` rows** (written by the lead after `verify_device_proofs.sh` and the root comparison): `device`, `config`, `session`, `proofs_valid`, `linked`, `roots_match_registry`, `command`. The `--final` gate requires one per phone session.
+21. **`PHONECHECK` rows** (written after `verify_device_proofs.sh` and the root comparison): `device`, `config`, `session`, `proofs_valid`, `linked`, `roots_match_registry`, `command`. The `--final` gate requires one per phone session.
 22. **Fixture tags** (`bench_host` and phone rows): `fixture` holds the fixture name (for example `over18`), and `fixture_expect` is `"accept"` or `"reject"`. Measured BR and phone cells use only `fixture_expect: "accept"`. The analysis excludes and reports any row whose `fixture_expect` is `"reject"`. A row without `fixture_expect` counts as accept only when `fixture` is absent.
-23. **Expected phone sessions:** `mobile/expected_sessions.json`, written by the lead, maps `{device: {config: n}}`, for example `{"iphone17pro-26-5": {"main": 3, "combined": 3}, "m2q-36": {...}}`. Under `--final`, every device/config pair must have n measured (non-smoke) sessions.
+23. **Expected phone sessions:** `mobile/expected_sessions.json` maps `{device: {config: n}}`, for example `{"iphone17pro-26-5": {"main": 3, "combined": 3}, "m2q-36": {...}}`. Under `--final`, every device/config pair must have n measured (non-smoke) sessions.
 
 `SIZES` additions:
 - `prepared_state_bytes`, split into `instance`, `witness` and `blinds`
@@ -177,9 +179,9 @@ New row kinds:
 | `laptop/peakmem.jsonl` | `PEAKMEM` |
 | `mobile/<phase>/openacplus/<run_id>/<device>/**/bench.jsonl` | phone rows, as pulled by `ddp_run.py` (the actual layout). The analysis finds `mobile/**/bench.jsonl` recursively and routes by the `DEVICE` row's `config`, `cell` and `product_model`, not by path. |
 
-## Registry rows (phase 2)
+## Registry rows
 
-The second registry run (`registry-bench.ts`) adds fields and ops, and changes what a few ops time. Readers ignore fields they do not know, and the analysis does the same.
+`registry-bench.ts` writes the fields and ops below. Readers ignore fields they do not know.
 
 New fields:
 - `calls`: 1, or 1000 for micro-ops. `wall_us` is per call and a float.
@@ -197,7 +199,7 @@ New ops:
 - `revoke_many`, with k = 1, 100 or 1000.
 - `bandwidth` with `method: "full_sync"`; `wall_us` and `k` are null.
 
-Changed semantics:
+Op semantics:
 - `insert` takes a registry from population − 1 to population.
 - `remove` removes from a fresh full tree.
 - Witnesses and `path_verify` time 1000 calls per region.

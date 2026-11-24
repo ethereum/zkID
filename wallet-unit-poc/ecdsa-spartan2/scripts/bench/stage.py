@@ -251,7 +251,7 @@ def main(argv=None):
     p.add_argument("--matrix-id", default="A1")
     p.add_argument("--r1cs-present", action="store_true")
     p.add_argument("--meta")
-    p.add_argument("--roots", help="Track B *.roots.json next to the input")
+    p.add_argument("--roots", help="*.roots.json next to the input")
     p.add_argument("--label-config", dest="label_config", help="config written on rows when the cell is a variant of a worktree config")
     p.add_argument("--population", help='JSON {"issuers", "revoked"} for inputs without a roots file')
     p.add_argument("--d-iss", type=int, default=0, dest="d_iss")

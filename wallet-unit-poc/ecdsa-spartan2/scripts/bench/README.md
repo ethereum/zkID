@@ -72,14 +72,14 @@ done
 | `main`, `issuer`, `revocation` | 1k, 2k |
 | `headline` | 1k, 2k |
 
-On branches that include PR #115 (`main`), setup also writes `*_verifying.digest` sidecars, staging copies them, and the `vk_digest` step is then near zero. The measured main numbers predate this.
+On branches that include PR #115 (`main`), setup also writes `*_verifying.digest` sidecars, staging copies them, and the `vk_digest` step is then near zero.
 
 From each worktree's `wallet-unit-poc/ecdsa-spartan2`, for every size `<S>` in its row:
 ```
 cargo run --release --bin ecdsa-spartan2 -- show setup --size <S> --input ../circom/inputs/show/<S>/default.json
 cargo run --release --bin ecdsa-spartan2 -- prepare setup --size <S> --input ../circom/inputs/jwt/<S>/default.json
 ```
-For `headline`, give the Show setup the seeded input that staging uses, not the tracked default. The tracked default Show input has registry depth 10, and the headline circuit has depth 20, so a key made from it does not fit.
+The `headline` Show keys use the headline worktree's inputs.
 ```
 cargo run --release --bin ecdsa-spartan2 -- show setup --size 1k --input "$OPENACPLUS_BENCH_ROOT/laptop/inputs/headline/show-1k.json"
 cargo run --release --bin ecdsa-spartan2 -- show setup --size 2k --input "$OPENACPLUS_BENCH_ROOT/variants/headline/show-2k.json"
@@ -155,7 +155,7 @@ Tests: `cd analysis && $PY -m unittest`. The driver tests: `python3 -m unittest 
 ## Quiet-machine rules
 
 - AC power, lid open, no Xcode, Android Studio or browsers.
-- Nothing else compiling or testing, including other Claude sessions and agent teams. Check with `ps -Ao %cpu,command -r | head`.
+- Nothing else compiling or testing. Check with `ps -Ao %cpu,command -r | head`.
 - `run_matrix.py` runs an idle gate before every visit: no `cargo`, `rustc` or emulator running, no `gradle`, `flutter` or `circom` above 5% CPU, total CPU under 100%, nominal thermal pressure. A gate that does not clear within its timeout fails the visit. Do not use `--no-gate` outside smoke runs.
 - Run Node producers from clean trees with `--expose-gc`.
 - A visit that overlaps other work is untrusted. Move that run aside and redo it.
@@ -164,7 +164,7 @@ Tests: `cd analysis && $PY -m unittest`. The driver tests: `python3 -m unittest 
 
 - Access to the Developer Device Platform (DDP) is needed. Each submit costs device time, so ask before submitting.
 - The mobile app and `bench_host` come from the PR #115 mobile tree. It is not part of these branches.
-- Protocol: 12 warm iterations with a 3 s cooldown. The first plan, 20 warm with 10 s, ran over 20 minutes per session and hit a limit of about 5 minutes of test time on DDP iPhones. Sessions now take about 6 minutes.
+- Protocol: 12 warm iterations with a 3 s cooldown, about 6 minutes per session. Longer protocols run into the DDP iPhone test-time limit.
 - After each session, check the proofs and the roots, then record a `PHONECHECK` row. `--final` needs one per session.
 - For an iOS-versus-Android comparison, use a pair of phones matched on Geekbench score and RAM.
 

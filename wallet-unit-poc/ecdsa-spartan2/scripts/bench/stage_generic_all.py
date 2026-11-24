@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the generic-path cells from Track B's inputs.jsonl: layout from the .sym, `generic setup`, then stage.py generic.
+"""Stage the generic-path cells from inputs.jsonl: layout from the .sym, `generic setup`, then stage.py generic.
 
 Show cells time Show alone; sn_jwt_* and jwt_1920 are Prepare-only (`linked: false`).
 """
@@ -38,7 +38,7 @@ def cells_for(row):
 
 
 def parse_only(argv):
-    """Cell ids from `--only a b` plus bare positionals (the older spelling); flags such as --patch-meta are skipped."""
+    """Cell ids from `--only a b` plus bare positionals; flags such as --patch-meta are skipped."""
     only, collecting = set(), False
     for a in argv:
         if a.startswith("--"):
