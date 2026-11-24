@@ -99,24 +99,44 @@ Verifiers MUST provide a 256-bit `challenge` value per verification attempt.
 
 The protocol MUST output a deterministic nullifier to prevent duplicate verification.
 
-The nullifier is derived from the card's RSA signature over the application identifier:
+The nullifier is derived from the card's RSA signature over a canonical signed message that binds the application identifier:
 
 ```
-nullifier := Poseidon( RSA_Sign_sk(app_id) )
+nullifier := Poseidon( RSA_Sign_sk(canonical_message(app_id)) )
 ```
 
 Where:
 - `RSA_Sign_sk` is the card's RSA signing operation using the user's private key `sk` (PKCS#1 v1.5, which is deterministic — same key + same message = same signature),
-- `app_id` is a platform identifier (domain separator),
+- `canonical_message(app_id)` is a deterministic, fixed-length byte sequence uniquely determined by `app_id` (see [Canonical Signed-Message Requirement](#canonical-signed-message-requirement)),
 - `Poseidon` is the Poseidon hash function (see [Cryptographic Primitives](#cryptographic-primitives)).
 
-The nullifier is computed in the DeviceSig circuit, not the CertChain circuit (see [Circuit Design](#circuit-design)).
+The nullifier is computed in the UserSig circuit, not the CertChain circuit (see [Circuit Design](#circuit-design)).
 
 Because the nullifier derivation requires the card's private key, an adversary cannot compute nullifiers without possession of the card.
 
 Each platform MUST use a unique `app_id`.
 
-A future version SHOULD add a domain-separation tag to the signed message (e.g., `"zkID-nullifier-v1" || app_id`) to prevent cross-protocol nullifier correlation when the same card key is used across multiple ZK protocols.
+#### Canonical Signed-Message Requirement
+
+Implementations MUST construct the signed message as a deterministic, fixed-length byte sequence uniquely determined by `app_id`:
+
+- The signed-message length MUST be pinned to a fixed value. The circuit MUST NOT accept prover-supplied lengths.
+- Every byte of the signed message MUST be bound to either `app_id` or a compile-time constant (e.g., canonical hash-function padding bytes). The circuit MUST NOT permit prover-controlled bytes in the signed message.
+
+Without canonicalization, a card holder can ask the card to sign multiple distinct message tails sharing the same `app_id` prefix, producing multiple distinct deterministic signatures and therefore multiple distinct nullifiers per `(card, app_id)`. This breaks per-`(card, app_id)` nullifier uniqueness and enables Sybil attacks even with a valid card. See [Nullifier Payload Canonicalization](#nullifier-payload-canonicalization).
+
+For the X.509-RSA-PKCS#1v1.5-SHA-256 profile, the canonical signed message is exactly 64 bytes (one SHA-256 block):
+
+| Bytes    | Content                                                     |
+| ---      | ---                                                         |
+| `0..31`  | The 31-byte `app_id`                                        |
+| `31`     | `0x80` (SHA-256 single-block padding marker)                |
+| `32..62` | `0x00`                                                      |
+| `63`     | `0xF8` (8-byte big-endian bit length 248 = 31 bytes × 8)    |
+
+The 31-byte `app_id` is packed little-endian into a single `app_id_packed` field element (see [Circuit Design](#circuit-design)).
+
+A future version SHOULD add a domain-separation tag to `canonical_message` (e.g., `"zkID-nullifier-v1" || app_id`) to prevent cross-protocol nullifier correlation when the same card key is used across multiple ZK protocols. The current profile reserves the entire 31-byte payload for `app_id`; adding a domain-separation tag will require either expanding the canonical signed message or hashing the tag and `app_id` together before signing.
 
 ## Cryptographic Primitives
 
@@ -145,6 +165,7 @@ Concatenation MUST be length-prefixed (e.g., `len(x)||x||len(y)||y||...`) to avo
 - Implementation: Poseidon over the secq256r1 scalar field (P-256 companion curve).
 - Implementations MUST use round constants generated for the secq256r1 field.
 - Implementations MUST use consistent round parameters (t, number of full/partial rounds) across all parties.
+- Round counts (`RF=8` full, `RP=57` for `t=3`, `RP=56` for `t=4`) target 128-bit security per Hadeshash §5.3 (α=5, |F|≈256 bits).
 
 ### Proving System
 
@@ -164,6 +185,47 @@ Implementations MUST:
 6. Construct DeviceSig circuit inputs from the TBS data, `σ_device`, user public key, `pk_blind`, and the `challenge`.
 7. Generate proofs for both circuits (see [Circuit Design](#circuit-design)).
 8. Submit both proofs and their public inputs to the verifier.
+
+The following sequence diagram is informative:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant V as Verifier / Forum
+    participant P as Prover / User
+    participant C as MOICA card
+    participant R as Revocation SMT Storage
+
+    V->>P: Send verification request
+
+    par Collect credential inputs
+        P->>C: Request credential and user signature inputs
+        C-->>P: Return credential data
+    and Collect status inputs
+        P->>R: Request revocation status data
+        R-->>P: Return revocation status data
+    end
+
+    rect rgb(245, 245, 245)
+        Note over P: Generate linked ZK proofs
+
+        P->>P: CertChain circuit:<br/>prove credential validity<br/>and revocation status
+
+        P->>P: UserSig circuit:<br/>prove user possession<br/>and derive app-specific nullifier
+
+        P->>P: Link both proofs to the same credential
+    end
+
+    P-->>V: Send proof package
+
+    V->>V: Verify proofs, linkage,<br/>revocation status, and nullifier uniqueness
+
+    alt Verification succeeds
+        V-->>P: Accept verification
+    else Verification fails
+        V-->>P: Reject verification
+    end
+```
 
 ## Circuit Design
 
@@ -213,6 +275,8 @@ The DeviceSig circuit is always RSA-2048 because user keys are always RSA-2048.
 
 The user serial number `sn` and user public-key limbs `user_pk_limbs` are extracted from `user_cert` in-circuit. The issuer modulus and issuer signature are extracted from `issuer_cert` in-circuit.
 
+Extraction of `user_pk_limbs` MUST bind the modulus INTEGER tag offset and the modulus content offset together. Implementations MUST verify the canonical DER long-form length prefix immediately after the INTEGER tag (`[0x82, 0x01, 0x01, 0x00]` for an unsigned 2048-bit RSA modulus: long-form length-of-length, two-byte length `0x0101 = 257`, sign byte `0x00`) and derive the content offset as `tag_offset + 5`. Implementations MUST NOT accept the tag offset and the content offset as independent prover-supplied inputs.
+
 #### Public Inputs
 
 - `pk_commit`: Blinded commitment to the user's public key.
@@ -237,6 +301,12 @@ The CertChain circuit MUST enforce:
    ```
    sn := ExtractSerialNumber(user_cert)
    ```
+
+   `sn` MUST be bound to the canonical X.509 serial-number position within the user certificate's TBS. Implementations MUST NOT accept prover-supplied offsets into the TBS as the binding mechanism unless those offsets are structurally derived from constant DER markers in-circuit — specifically, the outer SEQUENCE header and the optional `[0] EXPLICIT` version block.
+
+   Local tag/length checks (e.g., `tbs[offset-2] == 0x02 && 0 < tbs[offset-1] <= 20`) are insufficient: a typical X.509 TBS contains multiple ASN.1 INTEGER positions (version, modulus, exponent, extension contents) that satisfy such checks. A malicious prover could redirect the offset to any of them and obtain a non-canonical "serial number" that is provably not in the revocation tree, bypassing revocation. See [DER-Offset Structural Binding](#der-offset-structural-binding).
+
+   Implementations that restrict issuer TBSes to v3 (the typical MOICA case) SHOULD pin the version block bytes (`[0xa0, 0x03, 0x02, 0x01, 0x02]` at TBS offsets `[4..8]`) as constants. Implementations that accept additional X.509 versions SHOULD document the supported version set and the corresponding canonical serial-number offsets. The reference privacy-ethereum/zkID implementation currently accepts both v1 and v3 issuer TBSes; see [`audit_report_v3.md` INFO finding](https://github.com/privacy-ethereum/zkID/blob/b4f151dd20339cbec9f3b89f40497b6aca6bca55/wallet-unit-poc/circom/audit_report_v3.md).
 
 3. **Non-inclusion of the revocation list**
 
@@ -573,6 +643,34 @@ There is an inherent delay between a CA revoking a certificate (publishing a new
 - Snapshot publishers SHOULD include the CRL publication timestamp alongside the `revocation_root`.
 - Provers SHOULD download the latest available snapshot before each verification attempt.
 
+## DER-Offset Structural Binding
+
+Any field extracted from a structured byte buffer (e.g., an X.509 ASN.1 DER-encoded TBS certificate) via a prover-supplied offset MUST be structurally bound to the buffer's format, not just locally tag-checked.
+
+X.509 TBSes contain multiple positions whose surrounding bytes satisfy the same local pattern. For example, the byte pair `(0x02, length)` introduces every ASN.1 INTEGER in the TBS — the version field, the serial number, RSA moduli, RSA exponents, and INTEGER values inside extensions. A constraint of the form `tbs[offset-2] == 0x02` does not pin the offset to *the* serial number; it pins it to *some* INTEGER position. Without additional structural binding, a malicious prover can redirect the offset to a different INTEGER and pass every local constraint while substituting a non-canonical value.
+
+Implementations MUST derive offsets to canonical fields by walking the DER structure from constant anchors (e.g., the outer SEQUENCE header at byte 0, the optional `[0] EXPLICIT` version block whose tag byte `0xa0` is structurally fixed) rather than accepting offsets as free prover inputs.
+
+This requirement applies to:
+
+- the serial-number offset (see [Serial number extraction](#certchain-operations));
+- the SubjectPublicKeyInfo modulus tag and content offsets (see [CertChain Circuit private inputs](#private-inputs));
+- any future field added to the circuit that is extracted from a signed structured buffer.
+
+## Nullifier Payload Canonicalization
+
+Per-`(card, app_id)` nullifier uniqueness requires the signed payload to be canonically determined by `app_id` (see [Canonical Signed-Message Requirement](#canonical-signed-message-requirement)).
+
+PKCS#1 v1.5 RSA signing is deterministic in its input. If any byte of the signed message is unbound — including variable signed-message length, unconstrained padding bytes, or unconstrained trailing bytes — a card holder can request multiple distinct signatures over distinct payloads that share the same `app_id` prefix. Each distinct signature yields a distinct nullifier, and the verifier observes distinct `(pkCommit, app_id, nullifier)` triples that all pass every circuit constraint. The verifier cannot de-duplicate, and one card holder can mint unlimited Sybil identities per `app_id`.
+
+The mitigation is purely a circuit-level invariant: pin the signed-message length and constrain every byte. The protocol MUST NOT rely on prover-side honest behavior to avoid this malleability.
+
+## Format-Uniqueness Assumptions
+
+Implementations that rely on byte-pattern uniqueness within issuer-signed payloads (e.g., the canonical 5-byte DER prefix `[0x02, 0x82, 0x01, 0x01, 0x00]` for an unsigned 2048-bit RSA modulus INTEGER) MUST verify empirically that the issuer's cert-issuance template guarantees uniqueness within `actualIssuerTbsLength`, and MUST re-verify after any change to the issuer's cert template.
+
+If a future cert-template change introduces a duplicate occurrence of a pinned pattern, the prover-supplied offset to the corresponding field becomes ambiguous — the circuit will silently accept the wrong field, with consequences analogous to those in [DER-Offset Structural Binding](#der-offset-structural-binding). Implementations SHOULD include a regression test that scans a representative production TBS for occurrences of each pinned pattern and fails if the count exceeds the expected value. (The reference privacy-ethereum/zkID implementation currently relies on manual audit-time verification; an automated test is tracked as a follow-up — see [`audit_report_v3.md`](https://github.com/privacy-ethereum/zkID/blob/b4f151dd20339cbec9f3b89f40497b6aca6bca55/wallet-unit-poc/circom/audit_report_v3.md) "Areas for Further Investigation §6".)
+
 ## Known Limitations
 
 **Renewal limitation (v0.1)**
@@ -689,6 +787,8 @@ When the verification flow requires PIN entry (e.g., for smartcard-based certifi
 - [MOICA Certificate Revocation List](https://moica.nat.gov.tw/del.html)
 - [Client-side SMT proof generation for revocation privacy](https://github.com/zkmopro/ZK-based-Human-Verification/issues/16)
 - [Exploring Spartan2 Proofs for On-Chain Verification](https://github.com/zkmopro/zkID/blob/main/wallet-unit-poc/onchain-research.md)
+- [Circuit Audit Report v2 (privacy-ethereum/zkID)](https://github.com/privacy-ethereum/zkID/blob/main/wallet-unit-poc/circom/audit_report_v2.md)
+- [Circuit Audit Report v3 — post-fix re-audit (privacy-ethereum/zkID)](https://github.com/privacy-ethereum/zkID/blob/main/wallet-unit-poc/circom/audit_report_v3.md)
 
 # Glossary
 
