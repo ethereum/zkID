@@ -99,8 +99,16 @@ interface WasmVerifyResult {
   error: string | null;
 }
 
+/**
+ * Contract version between this SDK and the WASM build. Bump together with
+ * `abi_version()` in wasm/src/lib.rs whenever the exported surface or the
+ * verification semantics change.
+ */
+export const ABI_VERSION = 1;
+
 interface OpenACWasmModule {
   init(): void;
+  abi_version?: () => number;
   precompute_from_witness(
     pk: Uint8Array,
     witnessWtns: Uint8Array,
@@ -156,18 +164,50 @@ export interface VerificationResult {
   error?: string;
 }
 
+// Module objects whose instance has trapped. wasm-bindgen glue keeps one
+// instance per JS realm and hands the same module object to every importer, so
+// poisoning is keyed by module, not by bridge: a new WasmBridge over the same
+// module would otherwise reuse the trapped instance and its memory.
+const trappedModules = new WeakSet<object>();
+
+function poisonedError(cause?: unknown): WasmError {
+  return new WasmError(
+    "WASM_POISONED",
+    "WASM module trapped earlier and its memory cannot be trusted or reclaimed. Creating another WasmBridge does not help, since the module instance is shared per JS realm; run in a fresh Worker, JS realm or process.",
+    cause,
+  );
+}
+
 export class WasmBridge {
   private wasm: OpenACWasmModule | null = null;
   private initialized = false;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initWithModule(module: any): void {
     if (this.initialized) return;
-    this.wasm = module as OpenACWasmModule;
+    const wasm = module as OpenACWasmModule;
+    if (trappedModules.has(wasm)) throw poisonedError();
+    WasmBridge.assertAbi(wasm);
+    this.wasm = wasm;
     if (this.wasm?.init) {
       this.wasm.init();
     }
     this.initialized = true;
+  }
+
+  private static assertAbi(wasm: OpenACWasmModule): void {
+    if (typeof wasm?.abi_version !== "function") {
+      throw new WasmError(
+        "WASM_ABI_MISMATCH",
+        `WASM module does not export abi_version(); it is a stale build. Rebuild it (npm run build:wasm). SDK expects ABI version ${ABI_VERSION}.`,
+      );
+    }
+    const actual = wasm.abi_version();
+    if (actual !== ABI_VERSION) {
+      throw new WasmError(
+        "WASM_ABI_MISMATCH",
+        `WASM ABI version ${actual} does not match the SDK's ${ABI_VERSION}. Rebuild the WASM module or update the SDK.`,
+      );
+    }
   }
 
   async init(wasmPath?: string): Promise<void> {
@@ -204,6 +244,11 @@ export class WasmBridge {
       }
     }
 
+    if (this.wasm && trappedModules.has(this.wasm)) {
+      this.wasm = null;
+      throw poisonedError();
+    }
+    WasmBridge.assertAbi(this.wasm as OpenACWasmModule);
     if (this.wasm?.init) {
       this.wasm.init();
     }
@@ -216,6 +261,7 @@ export class WasmBridge {
   }
 
   private getWasm(): OpenACWasmModule {
+    if (this.wasm && trappedModules.has(this.wasm)) throw poisonedError();
     if (!this.wasm || !this.initialized) {
       throw new WasmError(
         "WASM_NOT_INITIALIZED",
@@ -223,6 +269,21 @@ export class WasmBridge {
       );
     }
     return this.wasm;
+  }
+
+  // Runs a WASM call and poisons the bridge if it traps. Only
+  // WebAssembly.RuntimeError counts (matched by name: the tsconfig has no
+  // WebAssembly types): an ordinary thrown Error is a wasm-bindgen-reported
+  // failure that returned cleanly.
+  private guard<T>(call: () => T): T {
+    try {
+      return call();
+    } catch (e) {
+      if (e instanceof Error && e.name === "RuntimeError") {
+        if (this.wasm) trappedModules.add(this.wasm);
+      }
+      throw e;
+    }
   }
 
   async loadKeys(baseUrl: string, vcSize: VcSize): Promise<SetupKeys> {
@@ -266,7 +327,9 @@ export class WasmBridge {
     vcSize: VcSize,
   ): Promise<PrecomputeState> {
     const wasm = this.getWasm();
-    const result = wasm.precompute_from_witness(preparePk, witnessWtns, vcSize);
+    const result = this.guard(() =>
+      wasm.precompute_from_witness(preparePk, witnessWtns, vcSize),
+    );
     return {
       proof: new Uint8Array(result.proof),
       instance: new Uint8Array(result.instance),
@@ -279,7 +342,9 @@ export class WasmBridge {
     witnessWtns: Uint8Array,
   ): Promise<PrecomputeState> {
     const wasm = this.getWasm();
-    const result = wasm.precompute_show_from_witness(showPk, witnessWtns);
+    const result = this.guard(() =>
+      wasm.precompute_show_from_witness(showPk, witnessWtns),
+    );
     return {
       proof: new Uint8Array(result.proof),
       instance: new Uint8Array(result.instance),
@@ -296,13 +361,15 @@ export class WasmBridge {
     showWitness: Uint8Array,
   ): Promise<PresentationProof> {
     const wasm = this.getWasm();
-    const result = wasm.present(
-      preparePk,
-      prepareInstance,
-      prepareWitness,
-      showPk,
-      showInstance,
-      showWitness,
+    const result = this.guard(() =>
+      wasm.present(
+        preparePk,
+        prepareInstance,
+        prepareWitness,
+        showPk,
+        showInstance,
+        showWitness,
+      ),
     );
     return {
       prepareProof: new Uint8Array(result.prepare_proof),
@@ -322,13 +389,15 @@ export class WasmBridge {
   ): Promise<VerificationResult> {
     const wasm = this.getWasm();
     try {
-      const result = wasm.verify(
-        prepareProof,
-        prepareVk,
-        prepareInstance,
-        showProof,
-        showVk,
-        showInstance,
+      const result = this.guard(() =>
+        wasm.verify(
+          prepareProof,
+          prepareVk,
+          prepareInstance,
+          showProof,
+          showVk,
+          showInstance,
+        ),
       );
       return {
         valid: result.valid,
