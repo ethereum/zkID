@@ -65,13 +65,14 @@ done
 Then, once, from `combined/wallet-unit-poc/circom`, make the headline inputs and the sweep circuits. The population matches the registry bench (256 issuers, 1,046,528 revoked).
 
 ```
-npx tsx src/generate-inputs.ts --size 2k --issuers 256 --revoked 1046528 --out "$OPENACPLUS_BENCH_ROOT/variants/headline/show-2k.json"
+npx tsx src/generate-inputs.ts --size 2k --issuers 256 --revoked 1046528 --seed 1 --out "$OPENACPLUS_BENCH_ROOT/variants/headline/show-2k.json"
+npx tsx src/generate-inputs.ts --size 1k --issuers 256 --revoked 1046528 --seed 1 --out "$OPENACPLUS_BENCH_ROOT/laptop/inputs/headline/show-1k.json"
 npx tsx scripts/benchmarks/run-sweep.ts            # compiles the sweep cells, writes variants/shape.jsonl
 npx tsx scripts/benchmarks/build-inputs.ts         # Show inputs and witnesses, variants/inputs.jsonl
 npx tsx scripts/benchmarks/build-jwt-inputs.ts     # the N = 8 and 16 Prepare inputs
 ```
 
-Run the headline `generate-inputs.ts` line in the `headline` worktree, since it reads that tree's compiled JWT wasm. `run-sweep.ts --list` and `build-inputs.ts --list` show the cells.
+Run the two `generate-inputs.ts` lines in the `headline` worktree, since they read that tree's compiled JWT wasm. Each `--out X.json` also writes `X.jwt.json` and `X.roots.json`, the three files staging reads. `run-sweep.ts --list` and `build-inputs.ts --list` show the cells.
 
 ## Run
 
