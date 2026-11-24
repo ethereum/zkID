@@ -64,6 +64,44 @@ pub struct VerifyResult {
     pub error: Option<String>,
 }
 
+#[cfg(test)]
+mod decode_tests {
+    use super::*;
+
+    #[test]
+    fn round_trips_with_default_serialize() {
+        let v: Vec<u8> = vec![1, 2, 3, 4];
+        let bytes = bincode::serialize(&v).unwrap();
+        assert_eq!(decode::<Vec<u8>>(&bytes).unwrap(), v);
+    }
+
+    #[test]
+    fn trailing_byte_is_an_error() {
+        let mut bytes = bincode::serialize(&vec![1u8, 2, 3, 4]).unwrap();
+        bytes.push(0);
+        assert!(decode::<Vec<u8>>(&bytes).is_err());
+        assert!(decode_untrusted::<Vec<u8>>(&bytes).is_err());
+    }
+
+    #[test]
+    fn byte_limit_is_enforced() {
+        // Well-formed and complete, so only the limit can make these fail.
+        let text = bincode::serialize(&"x".repeat(100)).unwrap();
+        assert!(decode_limited::<String>(&text, text.len() as u64).is_ok());
+        assert!(decode_limited::<String>(&text, 10).is_err());
+
+        let nums = bincode::serialize(&vec![7u64; 20]).unwrap();
+        assert!(decode_limited::<Vec<u64>>(&nums, nums.len() as u64).is_ok());
+        assert!(decode_limited::<Vec<u64>>(&nums, 10).is_err());
+    }
+
+    #[test]
+    fn input_over_the_untrusted_cap_is_rejected() {
+        let bytes = vec![0u8; MAX_UNTRUSTED_BYTES + 1];
+        assert!(decode_untrusted::<Vec<u8>>(&bytes).is_err());
+    }
+}
+
 /// Initialize panic hook for better error messages in WASM
 #[wasm_bindgen(start)]
 pub fn init() {
