@@ -164,7 +164,7 @@ Tests: `cd analysis && $PY -m unittest`. The driver tests: `python3 -m unittest 
 
 - Access to the Developer Device Platform (DDP) is needed. Each submit costs device time, so ask before submitting.
 - The mobile app and `bench_host` come from the PR #115 mobile tree. It is not part of these branches.
-- Protocol: 12 warm iterations with a 3 s cooldown, about 6 minutes per session. Longer protocols run into the DDP iPhone test-time limit.
+- Protocol: 12 warm iterations with a 3 s cooldown. This keeps the test run under the DDP iPhone limit of about 5 minutes; a whole session, setup included, takes about 6 minutes.
 - After each session, check the proofs and the roots, then record a `PHONECHECK` row. `--final` needs one per session.
 - For an iOS-versus-Android comparison, use a pair of phones matched on Geekbench score and RAM.
 
