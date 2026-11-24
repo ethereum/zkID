@@ -506,9 +506,13 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
 /// verification alone does not: the circuit checks the credential signature
 /// against whatever key was supplied at proving time.
 ///
+/// `expected_num_public` is the layout's `num_public()`. The length must match
+/// exactly, so a proof built for a different circuit shape is rejected.
+///
 /// Returns an error when the proof carries a key other than `expected`.
 pub fn check_issuer_key_binding(
     public_values: &[Scalar],
+    expected_num_public: usize,
     issuer_key_x_index: usize,
     expected_x: BigInt,
     expected_y: BigInt,
@@ -517,12 +521,12 @@ pub fn check_issuer_key_binding(
         .checked_sub(1)
         .ok_or_else(|| "issuer key index must be a 1-based witness index".to_string())?;
 
-    if public_values.len() < start + 2 {
+    if public_values.len() != expected_num_public || public_values.len() < start + 2 {
         return Err(format!(
-            "proof exposes {} public values, expected at least {} (issuer pubKeyX, pubKeyY at \
+            "proof exposes {} public values, expected exactly {} (issuer pubKeyX, pubKeyY at \
              witness index {})",
             public_values.len(),
-            start + 2,
+            expected_num_public,
             issuer_key_x_index,
         ));
     }
@@ -923,6 +927,7 @@ mod issuer_key_binding_tests {
     }
 
     const JWT_KEY_INDEX: usize = 1;
+    const JWT_NUM_PUBLIC: usize = 6;
 
     /// A proof carrying the expected key at the layout's index is accepted,
     /// whatever surrounds it (claim outputs, device key, normalization).
@@ -930,6 +935,7 @@ mod issuer_key_binding_tests {
     fn accepts_the_expected_issuer_key() {
         assert!(check_issuer_key_binding(
             &jwt_public_values(42, 43),
+            JWT_NUM_PUBLIC,
             JWT_KEY_INDEX,
             BigInt::from(42),
             BigInt::from(43),
@@ -944,6 +950,7 @@ mod issuer_key_binding_tests {
     fn rejects_a_different_issuer_key() {
         let err = check_issuer_key_binding(
             &jwt_public_values(999, 1000),
+            JWT_NUM_PUBLIC,
             JWT_KEY_INDEX,
             BigInt::from(42),
             BigInt::from(43),
@@ -957,6 +964,7 @@ mod issuer_key_binding_tests {
     fn rejects_a_partial_key_match() {
         assert!(check_issuer_key_binding(
             &jwt_public_values(42, 1000),
+            JWT_NUM_PUBLIC,
             JWT_KEY_INDEX,
             BigInt::from(42),
             BigInt::from(43),
@@ -970,12 +978,29 @@ mod issuer_key_binding_tests {
         let public_values = scalars(&[42]);
         let err = check_issuer_key_binding(
             &public_values,
+            JWT_NUM_PUBLIC,
             JWT_KEY_INDEX,
             BigInt::from(42),
             BigInt::from(43),
         )
         .expect_err("a vector shorter than the issuer key must be rejected");
-        assert!(err.contains("expected at least 2"), "unexpected error: {err}");
+        assert!(err.contains("expected exactly 6"), "unexpected error: {err}");
+    }
+
+    /// Extra trailing values are rejected too: the length must match exactly.
+    #[test]
+    fn rejects_an_oversized_public_value_vector() {
+        let mut public_values = jwt_public_values(42, 43);
+        public_values.push(public_values[0]);
+        let err = check_issuer_key_binding(
+            &public_values,
+            JWT_NUM_PUBLIC,
+            JWT_KEY_INDEX,
+            BigInt::from(42),
+            BigInt::from(43),
+        )
+        .expect_err("an oversized vector must be rejected");
+        assert!(err.contains("expected exactly 6"), "unexpected error: {err}");
     }
 
     /// The issuer key sits in the middle of the public IO, not at its end:

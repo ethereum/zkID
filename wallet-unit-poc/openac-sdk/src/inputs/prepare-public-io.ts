@@ -54,9 +54,8 @@ function layoutOf(
         `public IO size (expected 2n + 2 for n claim slots)`,
     );
   }
-  // The vector length is attacker-controlled (spartan2's validate() never checks
-  // it against S.num_public), so a forked prover can truncate to a different but
-  // still well-formed length. Cross-check against the count the verifier expects.
+  // spartan2's validate() requires the length to equal the verifying key's num_public,
+  // so this cross-checks that key against the claim count the verifier expects.
   if (expectedClaimCount !== undefined && claimCount !== expectedClaimCount) {
     throw new VerificationError(
       "INVALID_PROOF_FORMAT",

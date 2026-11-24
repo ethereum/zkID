@@ -5,7 +5,7 @@ use ecdsa_spartan2::{
     circuit_size::CircuitSize, parse_witness, prove_circuit_in_memory, reblind_in_memory,
     PrepareCircuit, ShowCircuit,
 };
-use ecdsa_spartan2::{Scalar, E};
+use ecdsa_spartan2::{utils::SHOW_NUM_PUBLIC, Scalar, E};
 
 use spartan2::{traits::snark::R1CSSNARKTrait, zk_spartan::R1CSSNARK};
 
@@ -405,6 +405,25 @@ pub fn verify(
                 .map_err(|e| JsError::new(&format!("JS conversion failed: {}", e)));
         }
     };
+
+    // verify() ties the length to the verifying key; pin it to the circuits this
+    // SDK ships so a mismatched key pair fails closed. Prepare carries the issuer
+    // key plus two flag/format arrays of equal length.
+    if show_pv.len() != SHOW_NUM_PUBLIC || prepare_pv.len() < 4 || prepare_pv.len() % 2 != 0 {
+        let result = VerifyResult {
+            valid: false,
+            prepare_public_values: vec![],
+            show_public_values: vec![],
+            error: Some(format!(
+                "Unexpected public value counts: prepare {}, show {} (expected {})",
+                prepare_pv.len(),
+                show_pv.len(),
+                SHOW_NUM_PUBLIC
+            )),
+        };
+        return serde_wasm_bindgen::to_value(&result)
+            .map_err(|e| JsError::new(&format!("JS conversion failed: {}", e)));
+    }
 
     // Linkage: both proofs must commit to the same shared witness. Read the
     // commitments from the verified proofs, not the caller-supplied instances.
