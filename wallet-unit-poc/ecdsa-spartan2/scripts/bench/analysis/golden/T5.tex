@@ -1,0 +1,42 @@
+\begin{tabular}{lrrr}
+\toprule
+Registry and operation & $2^{10}$ & $2^{15}$ & $\approx 2^{20}$ \\
+\midrule
+issuer: build & 9 ms & 52 ms & 293 ms \\
+issuer: export & 5 ms & 29 ms & 163 ms \\
+issuer: export size & 41.0 kB & 1.3 MB & 41.9 MB \\
+issuer: import & 7 ms & 40 ms & 228 ms \\
+issuer: import size & 41.0 kB & 1.3 MB & 41.9 MB \\
+issuer: insert & 82 µs & 462 µs & 3 ms \\
+issuer: refresh incremental after 1 & 306 µs & 2 ms & 10 ms \\
+issuer: refresh incremental after 100 & 1 ms & 7 ms & 39 ms \\
+issuer: refresh incremental after 1000 & 2 ms & 14 ms & 78 ms \\
+issuer: refresh rebuild after 1 & 9 ms & 52 ms & 293 ms \\
+issuer: refresh rebuild after 100 & 37 ms & 207 ms & 1168 ms \\
+issuer: refresh rebuild after 1000 & 73 ms & 412 ms & 2331 ms \\
+issuer: remove & 92 µs & 519 µs & 3 ms \\
+issuer: revoke & 122 µs & 692 µs & 4 ms \\
+issuer: revoke many & 4 ms & 23 ms & 130 ms \\
+issuer: root & 20 µs & 115 µs & 652 µs \\
+issuer: witness member & 61 µs & 346 µs & 2 ms \\
+issuer: witness nonmember & 92 µs & 519 µs & 3 ms \\
+revocation: build & 9 ms & 52 ms & 293 ms \\
+revocation: export & 5 ms & 29 ms & 163 ms \\
+revocation: export size & 41.0 kB & 1.3 MB & 41.9 MB \\
+revocation: import & 7 ms & 40 ms & 228 ms \\
+revocation: import size & 41.0 kB & 1.3 MB & 41.9 MB \\
+revocation: insert & 82 µs & 462 µs & 3 ms \\
+revocation: refresh incremental after 1 & 306 µs & 2 ms & 10 ms \\
+revocation: refresh incremental after 100 & 1 ms & 7 ms & 39 ms \\
+revocation: refresh incremental after 1000 & 2 ms & 14 ms & 78 ms \\
+revocation: refresh rebuild after 1 & 9 ms & 52 ms & 293 ms \\
+revocation: refresh rebuild after 100 & 37 ms & 207 ms & 1168 ms \\
+revocation: refresh rebuild after 1000 & 73 ms & 412 ms & 2331 ms \\
+revocation: remove & 92 µs & 519 µs & 3 ms \\
+revocation: revoke & 122 µs & 692 µs & 4 ms \\
+revocation: revoke many & 4 ms & 23 ms & 130 ms \\
+revocation: root & 20 µs & 115 µs & 652 µs \\
+revocation: witness member & 61 µs & 346 µs & 2 ms \\
+revocation: witness nonmember & 92 µs & 519 µs & 3 ms \\
+\bottomrule
+\end{tabular}

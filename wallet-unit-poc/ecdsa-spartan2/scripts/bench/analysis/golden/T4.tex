@@ -1,0 +1,12 @@
+\begin{tabular}{lrrrrrr}
+\toprule
+Configuration & Show constraints & Show prove (incl. witness) & Show prove (witness ready) & Presentation & Verify & Proof bytes \\
+\midrule
+OpenAC v1.0.0 (as published) & 17500 & 116 ms [116, 117] & 70 ms [70, 70] & 1029 ms [1029, 1034] & 60 ms [60, 60] & 159.5 kB \\
+OpenAC+ GP only & 19084 & 116 ms [116, 117] & 70 ms [70, 70] & 1056 ms [1056, 1061] & 60 ms [60, 60] & 159.5 kB \\
++ issuer hiding & 557284 & 624 ms [624, 627] & 375 ms [375, 376] & 1573 ms [1573, 1580] & 60 ms [60, 60] & 159.6 kB \\
++ revocation (10) & 706784 & 624 ms [624, 627] & 375 ms [375, 376] & 1573 ms [1573, 1580] & 60 ms [60, 60] & 159.6 kB \\
+OpenAC+ (8,10) as built & 1244984 & 1149 ms [1149, 1153] & 689 ms [689, 692] & 2116 ms [2116, 2124] & 60 ms [60, 60] & 159.6 kB \\
+OpenAC+ (8,20) & 1842984 & 1149 ms [1149, 1153] & 689 ms [689, 692] & 2116 ms [2116, 2124] & 60 ms [60, 60] & 159.7 kB \\
+\bottomrule
+\end{tabular}

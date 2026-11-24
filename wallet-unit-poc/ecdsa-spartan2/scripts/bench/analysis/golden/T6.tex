@@ -1,0 +1,15 @@
+\begin{tabular}{lrrrr}
+\toprule
+Workload & Mac composed & Mac orchestrated & iPhone 17 Pro & Galaxy S26+ \\
+\midrule
+import & 6000 ms & 6240 ms & 6000 ms & 6000 ms \\
+warm & 1300 ms & 1352 ms & 1300 ms & 1300 ms \\
+cold & 2500 ms & 2600 ms & 2500 ms & 2500 ms \\
+cold: key load (Mac: page-cache warm) & 750 ms & 780 ms & 750 ms & 750 ms \\
+cold: state load (Mac: page-cache warm) & 250 ms & 260 ms & 250 ms & 250 ms \\
+cold: registry load & 500 ms & 520 ms & 500 ms & 500 ms \\
+registry update & 1500 ms & 1560 ms & 1500 ms & 1500 ms \\
+stale root retry & 2900 ms & 3016 ms & 2900 ms & 2900 ms \\
+refill & 4000 ms & 4160 ms & 4000 ms & 4000 ms \\
+\bottomrule
+\end{tabular}

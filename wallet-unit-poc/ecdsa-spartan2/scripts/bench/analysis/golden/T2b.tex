@@ -1,0 +1,16 @@
+\begin{tabular}{lrrr}
+\toprule
+Component & Constraints & Non-zeros & Padded size \\
+\midrule
+Base Show (GP only) & 19084 & 95420 & 32768 \\
+Predicates (Show $-$ ECDSA) & 9684 & 48420 & -- \\
+ECDSA verification & 9400 & 47000 & 16384 \\
+ECDSA main $-$ v1 (device-binding hardening) & 400 & 2000 & -- \\
+Prepare main $-$ v1, 2048 B (all JWT-circuit changes v1.0.0 to main, including hardening and claim normalization) & 50000 & 250000 & -- \\
+Per issuer level & 59800 & 299000 & -- \\
+Per revocation level & 59800 & 299000 & -- \\
+Issuer fixed part & 59800 & 299000 & -- \\
+Revocation fixed part & 89700 & 448500 & -- \\
+Show at (8,20) & 1842984 & 9214920 & 2097152 \\
+\bottomrule
+\end{tabular}
