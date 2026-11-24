@@ -1,4 +1,4 @@
-"""Track B's generic-path rows use config "variant" and a (D_iss, D_rev) tail on every show_params."""
+"""Generic-path rows use config "variant" and a (D_iss, D_rev) tail on every show_params."""
 import unittest
 
 import synth

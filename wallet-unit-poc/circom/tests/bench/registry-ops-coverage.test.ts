@@ -44,7 +44,7 @@ function cli(args: string[]): { rows: Row[]; status: number | null; stderr: stri
 
 const pairs = (rows: Row[]) => rows.map((r) => `${r.registry}:${r.population}`);
 
-// Ops that SCHEMA.md lists for REGISTRY, plus the later pins and the server-route ops this bench adds.
+// Ops that SCHEMA.md lists for REGISTRY, plus the server-route ops this bench adds.
 const REGISTRY_OPS = [
   "build", "insert", "remove", "revoke", "revoke_many", "witness_member", "witness_nonmember", "root", "refresh_incremental", "refresh_rebuild", "export", "import",
   "bandwidth", "path_verify", "root_recompute",

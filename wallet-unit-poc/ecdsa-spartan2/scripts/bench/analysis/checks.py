@@ -1,4 +1,4 @@
-"""Acceptance checks from the plan's "Final numbers are done when" list."""
+"""Acceptance checks for the final numbers."""
 import glob
 import json
 import os
@@ -213,7 +213,7 @@ def check_composed_e2e(ds, limit=0.10):
 
 
 def loaded_counts(row):
-    """(header, loaded) counts: `constraints` against `loaded_constraints`; the older header_* names are a fallback."""
+    """(header, loaded) counts: `constraints` against `loaded_constraints`; the legacy header_* names are a fallback."""
     if row.get("loaded_constraints") is not None:
         return (row.get("constraints"), row.get("wires")), (row["loaded_constraints"], row.get("loaded_wires"))
     if row.get("header_constraints") is not None:

@@ -8,7 +8,7 @@ export interface Cell {
   matrix: "S-N" | "S-D" | "S-MT" | "S-B" | "X2" | "SHA" | "C0";
   kind: Kind;
   params: number[];
-  /** Needs a wasm witness generator (timed by Track A or used for functional checks). */
+  /** Needs a wasm witness generator (timed on the product path or used for functional checks). */
   wasm: boolean;
   /** Existing build to describe instead of compiling again. */
   reuse?: { r1cs: string; wasm?: string };

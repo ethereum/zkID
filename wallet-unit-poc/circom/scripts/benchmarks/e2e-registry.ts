@@ -1,7 +1,7 @@
 /**
  * E1 registry-update and stale-root-retry workloads. The holder starts at registry state S0, the
  * verifier accepts only S1. Present against S0 (rejected on the root check), refresh to S1,
- * present again (accepted). Proving is a subprocess through Track A's product path.
+ * present again (accepted). Proving is a subprocess through the product path.
  *
  * Prover contract: the binary is run with --prover-args (default below), where {stage} {input}
  * {roots} {out} expand to the stage dir, the Show input JSON, the accepted-roots JSON and a work dir.
