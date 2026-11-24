@@ -128,9 +128,9 @@ class TableTest(unittest.TestCase):
                 for op, us in (("lookup", 22.4), ("to_commitment", 4.25), ("insert", 640), ("build", 1000))]
         ds = Dataset.from_rows(rows)
         tex = TABLES["T5"](Ctx(ds, Prov(ds)))
-        self.assertIn("lookup & 22 µs", tex)
-        self.assertIn("to commitment & 4.2 µs", tex)
-        self.assertIn("insert & 640 µs", tex)
+        self.assertIn("lookup & 22\\,$\\mu$s", tex)
+        self.assertIn("to commitment & 4.2\\,$\\mu$s", tex)
+        self.assertIn("insert & 640\\,$\\mu$s", tex)
         self.assertIn("build & 1 ms", tex)
         self.assertNotIn("<1 ms", tex)
 

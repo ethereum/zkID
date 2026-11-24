@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from figures import FIGURES, make_all
-from pgf import EMITTERS, esc
+from pgf import CONFIG_NAMES, EMITTERS, STYLES, esc
 from provenance import Prov
 from tables import Ctx
 from test_tables import synthetic_dataset
@@ -105,6 +105,21 @@ class PgfTest(unittest.TestCase):
         t = EMITTERS["F5"](flat)
         self.assertEqual(t.count("ymode=log"), 1)
         self.assertEqual(t.count("ymin=0"), 1)
+
+    def test_a_config_has_one_style_in_every_figure(self):
+        seen = {}
+        for name in FIGURES:
+            lines = self.tex(name).splitlines()
+            for plot, legend in zip(lines, lines[1:]):
+                m = re.match(r"\s*\\addplot\[(.*)\] coordinates", plot)
+                if m and legend.strip().startswith("\\addlegendentry"):
+                    seen.setdefault(legend.strip(), set()).add(m.group(1))
+        for cfg, label in CONFIG_NAMES.items():
+            styles = seen.get("\\addlegendentry{%s}" % label)
+            if styles:
+                self.assertEqual(styles, {STYLES[cfg]}, cfg)
+        self.assertEqual(seen["\\addlegendentry{OpenAC+ (8,20)}"], {STYLES["combined"]})
+        self.assertEqual(seen["\\addlegendentry{revocation depth}"], {STYLES["revocation"]})
 
     def test_escape(self):
         self.assertEqual(esc("a_b & 5%"), "a\\_b \\& 5\\%")

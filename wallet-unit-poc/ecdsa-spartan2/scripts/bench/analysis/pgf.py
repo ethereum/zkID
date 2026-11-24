@@ -3,6 +3,9 @@ import math
 
 PANEL_WIDTH = r"0.38\linewidth"
 PANEL_GAP = "2.2cm"
+# One style per series name, so a config looks the same in every panel and figure.
+STYLES = {"v1": "color=black, mark=triangle*", "main": "color=blue, mark=*", "combined": "color=red, mark=square*",
+          "revocation": "color=orange, mark=diamond*", "issuer": "color=teal, mark=triangle*"}
 CONFIG_NAMES = {"v1": "OpenAC v1.0.0", "main": "OpenAC+ GP only", "combined": "OpenAC+ (8,20)"}
 
 
@@ -62,12 +65,12 @@ def f1(rows):
     cons, time = [], []
     for tree in ("revocation", "issuer"):
         pts = [r for r in rows if r["kind"] == "point" and r["tree"] == tree]
-        cons.append(_series(f"{tree} depth", [(r["depth"], r["constraints"]) for r in pts]))
-        time.append(_series(f"{tree} depth", [(r["depth"], r["show_prove_ms"]) for r in pts]))
+        cons.append(_series(f"{tree} depth", [(r["depth"], r["constraints"]) for r in pts], STYLES[tree]))
+        time.append(_series(f"{tree} depth", [(r["depth"], r["show_prove_ms"]) for r in pts], STYLES[tree]))
     for tree in ("revocation", "issuer"):
         prod = [r for r in rows if r["kind"] == "point_product" and r["tree"] == tree]
         time.append(_series(f"{tree}, product path (not fitted)", [(r["depth"], r["show_prove_ms"]) for r in prod],
-                            "only marks, mark=x"))
+                            STYLES[tree] + ", only marks, mark=x"))
     return _picture([(cons, "Registry depth D", "Show constraints", ""),
                      (time, "Registry depth D", "Show prove, witness precomputed (ms)", "")])
 
@@ -78,7 +81,8 @@ def f2(rows):
 
 
 def f3(rows):
-    series = [_series(CONFIG_NAMES[cfg], [(r["bytes"], r["prepare_prove_ms"]) for r in sorted(rows, key=lambda r: r["bytes"]) if r["config"] == cfg])
+    series = [_series(CONFIG_NAMES[cfg], [(r["bytes"], r["prepare_prove_ms"]) for r in sorted(rows, key=lambda r: r["bytes"]) if r["config"] == cfg],
+                    STYLES[cfg])
               for cfg in ("v1", "main", "combined")]
     extra = ("xmode=log,\n    log basis x=2,\n    xtick={1024,2048,4096,8192},\n    xticklabels={1k,2k,4k,8k},\n"
              "    minor tick num=0")
@@ -89,7 +93,7 @@ def _two_panel(rows, xcol, labels, xlabel):
     names = (("main", CONFIG_NAMES["main"]), ("combined", CONFIG_NAMES["combined"]))
     panels = []
     for ycol, ylabel in (("constraints", "Show constraints"), ("show_prove_ms", "Show prove, witness precomputed (ms)")):
-        series = [_series(name, [(labels.index(r[xcol]), r[ycol]) for r in rows if r["config"] == cfg]) for cfg, name in names]
+        series = [_series(name, [(labels.index(r[xcol]), r[ycol]) for r in rows if r["config"] == cfg], STYLES[cfg]) for cfg, name in names]
         ys = [y for sr in series if sr for _, y in sr[1]]
         scale = "ymode=log" if ys and max(ys) >= 4 * min(ys) else "ymin=0"   # a log axis over a flat range overflows TeX
         panels.append((series, xlabel, ylabel, scale + ",\n    " + _cat_ticks(labels)))

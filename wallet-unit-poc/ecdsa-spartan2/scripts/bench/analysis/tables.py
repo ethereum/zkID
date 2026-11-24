@@ -33,7 +33,7 @@ def fmt_time_us(ms):
     if ms is None or ms >= 1:
         return fmt_time(ms)
     us = ms * 1000
-    return f"{us:.1f} µs" if us < 10 else f"{round(us)} µs"
+    return f"{us:.1f}\\,$\\mu$s" if us < 10 else f"{round(us)}\\,$\\mu$s"
 
 
 def fmt_size(b):

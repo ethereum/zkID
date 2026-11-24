@@ -45,6 +45,16 @@ class CliTest(unittest.TestCase):
             with open(os.path.join(out, "checks.md")) as f:
                 self.assertIn("| iqr |", f.read())
 
+    def test_emitted_tex_is_ascii(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, out = os.path.join(d, "bench"), os.path.join(d, "out")
+            synth.write_root(root)
+            self.assertEqual(run(root, out).returncode, 0)
+            tex = [f for f in os.listdir(out) if f.endswith(".tex")]
+            self.assertTrue(any(f.startswith("F") for f in tex) and any(f.startswith("T") for f in tex))
+            for f in tex:
+                self.assertTrue(read(os.path.join(out, f)).isascii(), f)
+
     def test_root_defaults_to_the_env_var_and_is_otherwise_required(self):
         with tempfile.TemporaryDirectory() as d:
             root, out = os.path.join(d, "bench"), os.path.join(d, "out")
