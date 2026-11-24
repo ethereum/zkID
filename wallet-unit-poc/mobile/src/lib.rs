@@ -831,6 +831,53 @@ mod tests {
         assert!(config.is_mobile);
     }
 
+    fn linked(expression_result: u64) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+        Some((vec![Scalar::ONE], vec![Scalar::from(expression_result)]))
+    }
+
+    #[test]
+    fn presentation_accepted_when_linked_and_policy_true() {
+        assert!(presentation_accepted(linked(1)));
+    }
+
+    #[test]
+    fn presentation_rejected_when_policy_false() {
+        assert!(!presentation_accepted(linked(0)));
+        assert!(!presentation_accepted(linked(2)));
+        assert!(!presentation_accepted(Some((vec![], vec![]))));
+    }
+
+    #[test]
+    fn presentation_rejected_when_not_linked() {
+        assert!(!presentation_accepted(None));
+    }
+
+    #[test]
+    fn verify_presentation_false_for_missing_or_corrupt_proofs() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let docs = dir.path().to_string_lossy().into_owned();
+        assert!(!verify_presentation(docs.clone()).unwrap());
+
+        let config = make_config(&docs);
+        for (name, kind) in [
+            (PREPARE_PROOF, "proof"),
+            (SHOW_PROOF, "proof"),
+            (PREPARE_VERIFYING_KEY, "key"),
+            (SHOW_VERIFYING_KEY, "key"),
+        ] {
+            let path = if kind == "proof" {
+                config.artifact_path(name)
+            } else {
+                config.key_path(name)
+            };
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"not a proof").unwrap();
+        }
+        assert!(!verify_presentation(docs.clone()).unwrap());
+        assert!(!verify_jwt(docs.clone()).unwrap());
+        assert!(!verify_show(docs).unwrap());
+    }
+
     #[test]
     fn test_invalid_circuit_type() {
         let result = get_comm_w_shared(".".to_string(), "invalid".to_string());
