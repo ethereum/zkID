@@ -1,6 +1,16 @@
 /* @ts-self-types="./openac_wasm.d.ts" */
 
 /**
+ * Contract version checked by the SDK at load time. Keep in step with
+ * `ABI_VERSION` in src/wasm-bridge.ts.
+ * @returns {number}
+ */
+export function abi_version() {
+    const ret = wasm.abi_version();
+    return ret >>> 0;
+}
+
+/**
  * Initialize panic hook for better error messages in WASM
  */
 export function init() {

@@ -2,6 +2,12 @@
 /* eslint-disable */
 
 /**
+ * Contract version checked by the SDK at load time. Keep in step with
+ * `ABI_VERSION` in src/wasm-bridge.ts.
+ */
+export function abi_version(): number;
+
+/**
  * Initialize panic hook for better error messages in WASM
  */
 export function init(): void;
@@ -104,6 +110,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly abi_version: () => number;
     readonly init: () => void;
     readonly precompute: (a: number, b: number) => [number, number, number];
     readonly precompute_from_witness: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
