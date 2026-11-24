@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
@@ -342,8 +343,16 @@ class ReviewFixes(unittest.TestCase):
         open(r1, "wb").write(b"x")
         row = {"r1cs_path": r1, "show_params": [2, 2, 8, 64, 8, 20], "population": {"issuers": 256, "revoked": 5}, "workload": "w1",
                "roots_match_circuit": True, "commit": "abc1234"}
+        eco = os.path.join(tmp, "combined", "wallet-unit-poc", "ecdsa-spartan2")
+        os.makedirs(eco)
+        with open(os.path.join(eco, "Cargo.lock"), "w") as f:
+            f.write('[[package]]\nname = "spartan2"\nversion = "0.4.0"\nsource = "git+https://example.com/Spartan2.git?branch=b#d687dbb6aaaa"\n')
+        patch = mock.patch.dict(os.environ, {"OPENACPLUS_WORKTREES": tmp})
+        patch.start()
+        self.addCleanup(patch.stop)
         show = stage_generic_all.build_meta(row, "show", os.path.join(tmp, "none.json"))
         self.assertEqual((show["d_rev"], show["roots_source"], show["circuit_commit"]), (20, "registry", "abc1234"))
+        self.assertEqual(show["spartan2_rev"], "d687dbb")
         prep = stage_generic_all.build_meta(row, "prepare", os.path.join(tmp, "none.json"))
         self.assertEqual((prep["show_params"], prep["population"], prep["workload"], prep["linked"]), (None, None, None, False))
         names = [c for r in ("A1", "S-D") for c, _, _ in stage_generic_all.cells_for({"cell": "sn_show_n2", "matrix_id": r, "workload": "w1"})]

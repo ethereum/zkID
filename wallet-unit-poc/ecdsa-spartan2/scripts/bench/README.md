@@ -72,6 +72,8 @@ done
 | `main`, `issuer`, `revocation` | 1k, 2k |
 | `headline` | 1k, 2k |
 
+On branches that include PR #115 (`main`), setup also writes `*_verifying.digest` sidecars, staging copies them, and the `vk_digest` step is then near zero. The measured main numbers predate this.
+
 From each worktree's `wallet-unit-poc/ecdsa-spartan2`, for every size `<S>` in its row:
 ```
 cargo run --release --bin ecdsa-spartan2 -- show setup --size <S> --input ../circom/inputs/show/<S>/default.json

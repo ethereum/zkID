@@ -60,7 +60,7 @@ def main():
 
 def build_meta(row, role, setup_out):
     """meta.json fields for a generic cell. Prepare-only cells carry no Show parameters, population or workload."""
-    meta = {"role": role, "r1cs_sha256": sl.sha256_file(row["r1cs_path"]), "spartan2_rev": "d687dbb",
+    meta = {"role": role, "r1cs_sha256": sl.sha256_file(row["r1cs_path"]), "spartan2_rev": sl.spartan2_rev(sl.worktree("combined")),
             "input_json_sha256": row.get("jwt_input_sha256") or row.get("input_sha256"),
             "wtns_sha256": row.get("jwt_wtns_sha256") or row.get("wtns_sha256"),
             "circuit_commit": row.get("circuit_commit") or row.get("commit") or CIRCUIT_COMMIT_FALLBACK,

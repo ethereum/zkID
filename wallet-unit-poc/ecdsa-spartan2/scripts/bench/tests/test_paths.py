@@ -97,6 +97,7 @@ class Refs(unittest.TestCase):
             for k in ("base_sha", "bench_sha", "circuit_commit"):
                 self.assertRegex(c[k], r"^[0-9a-f]{40}$", f"{name}.{k}")
             self.assertTrue(c["r1cs"], name)
+            self.assertRegex(c["spartan2_rev"], r"^[0-9a-f]{7}$", f"{name}.spartan2_rev")
             for r in c["r1cs"]:
                 self.assertRegex(r["r1cs_sha256"], r"^[0-9a-f]{64}$", f"{name}.{r['circuit']}")
 
@@ -147,6 +148,63 @@ class Only(unittest.TestCase):
         self.assertEqual(sg.parse_only(["--only", "S-N-sn_show_n2", "W-w2"]), {"S-N-sn_show_n2", "W-w2"})
         self.assertEqual(sg.parse_only(["W-w2", "--patch-meta"]), {"W-w2"})
         self.assertEqual(sg.parse_only([]), set())
+
+
+LOCK = """\
+[[package]]
+name = "spartan2"
+version = "0.4.0"
+source = "git+https://github.com/0xVikasRushi/Spartan2.git?branch=openac-sdk#64687aff151924331cb573f66954c75d1eb20ee5"
+
+[[package]]
+name = "serde"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+"""
+
+
+class Spartan2Rev(unittest.TestCase):
+    def worktree_with(self, d, lock):
+        eco = os.path.join(d, "wallet-unit-poc", "ecdsa-spartan2")
+        os.makedirs(eco)
+        if lock is not None:
+            with open(os.path.join(eco, "Cargo.lock"), "w") as f:
+                f.write(lock)
+        return d
+
+    def test_reads_the_short_git_rev_of_the_spartan2_package(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(sl.spartan2_rev(self.worktree_with(d, LOCK)), "64687af")
+
+    def test_missing_lock_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(SystemExit) as cm:
+            sl.spartan2_rev(self.worktree_with(d, None))
+        self.assertIn("Cargo.lock", str(cm.exception))
+
+    def test_lock_without_a_spartan2_git_source_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(SystemExit) as cm:
+            sl.spartan2_rev(self.worktree_with(d, '[[package]]\nname = "serde"\nversion = "1.0.0"\n'))
+        self.assertIn("spartan2", str(cm.exception))
+
+
+class DigestSidecar(unittest.TestCase):
+    def test_sidecar_is_copied_next_to_the_staged_key(self):
+        import stage
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = os.path.join(d, "2k_show_verifying.key"), os.path.join(d, "out", "show_verifying.key")
+            os.makedirs(os.path.dirname(dst))
+            with open(os.path.join(d, "2k_show_verifying.digest"), "wb") as f:
+                f.write(b"x" * 32)
+            stage.stage_digest(src, dst)
+            with open(os.path.join(d, "out", "show_verifying.digest"), "rb") as f:
+                self.assertEqual(f.read(), b"x" * 32)
+
+    def test_absent_sidecar_is_skipped_silently(self):
+        import stage
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "out"))
+            stage.stage_digest(os.path.join(d, "2k_show_verifying.key"), os.path.join(d, "out", "show_verifying.key"))
+            self.assertEqual(os.listdir(os.path.join(d, "out")), [])
 
 
 if __name__ == "__main__":

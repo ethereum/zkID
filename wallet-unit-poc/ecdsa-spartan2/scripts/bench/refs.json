@@ -49,10 +49,11 @@
       ]
     },
     "main": {
-      "base_sha": "da94431a9a9952e18746c9ec30895b2e128cb2c4",
+      "base_sha": "b605ca40e52ff6767fa038bb2393385aa5189ca7",
       "bench_sha": "9805435f76e5d5150048ab6e2957c9b5b2570691",
       "circuit_commit": "9557067768ee610de56be0a26e9ff97842ed9b26",
       "spartan2_rev": "d687dbb",
+      "base_spartan2_rev": "64687af",
       "r1cs": [
         {
           "circuit": "ecdsa",

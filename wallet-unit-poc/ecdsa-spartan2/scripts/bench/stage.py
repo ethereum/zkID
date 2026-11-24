@@ -85,6 +85,13 @@ def stage_key(src, dst, store):
     return digest
 
 
+def stage_digest(src_key, dst_key):
+    """Copy the `.digest` sidecar written next to a verifying key by setup; branches without it have none."""
+    src, dst = os.path.splitext(src_key)[0] + ".digest", os.path.splitext(dst_key)[0] + ".digest"
+    if os.path.exists(src):
+        shutil.copy2(src, dst)
+
+
 def check_runs_standalone(cell):
     """The staged binary must start with no circom/build next to it or in the working directory."""
     meta = json.load(open(os.path.join(cell, "meta.json")))
@@ -143,6 +150,8 @@ def stage_product(a):
     keys = {}
     for k in KEY_FILES:
         keys[f"{a.size}_{k}"] = stage_key(os.path.join(eco, "keys", f"{a.size}_{k}"), os.path.join(docs, "keys", k), store)
+        if k.endswith("verifying.key"):
+            stage_digest(os.path.join(eco, "keys", f"{a.size}_{k}"), os.path.join(docs, "keys", k))
     shutil.copy2(a.jwt_input, os.path.join(docs, "jwt_input.json"))
     shutil.copy2(a.show_input, os.path.join(docs, "show_input.json"))
     meta = {
@@ -150,7 +159,7 @@ def stage_product(a):
         "keys_sha256": keys, "input_sha256": {"jwt": sl.sha256_file(a.jwt_input), "show": sl.sha256_file(a.show_input)},
         "bench_sha": sl.sh(["git", "-C", a.worktree, "rev-parse", "--short", "HEAD"]).strip(),
         "r1cs_present": bool(a.r1cs_present), "witness_artifacts_bytes": artifacts,
-        "spartan2_rev": "d687dbb", "d_iss": a.d_iss, "d_rev": a.d_rev,
+        "spartan2_rev": sl.spartan2_rev(a.worktree), "d_iss": a.d_iss, "d_rev": a.d_rev,
     }
     meta["iss_path_len"], meta["rev_path_len"] = sl.path_lens(a.show_input)
     meta["show_params"], meta["jwt_params"] = sl.product_params(a.config, a.size)
@@ -192,6 +201,7 @@ def stage_generic(a):
     artifacts = bundle_binary(a.binary, cell)
     store = os.path.join(sl.stage_root(), "_store")
     keys = {n: stage_key(os.path.join(a.keys, n), os.path.join(cell, "keys", n), store) for n in ("generic_proving.key", "generic_verifying.key")}
+    stage_digest(os.path.join(a.keys, "generic_verifying.key"), os.path.join(cell, "keys", "generic_verifying.key"))
     shutil.copy2(a.wtns, os.path.join(cell, "generic.wtns"))
     shutil.copy2(a.layout, os.path.join(cell, "layout.json"))
     meta = {"config": "variant", "cell": a.cell, "matrix_id": a.matrix_id, "path": "generic", "keys_sha256": keys,

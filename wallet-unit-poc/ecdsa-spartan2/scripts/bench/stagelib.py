@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import tomllib
 
 BIN_NAME = "openac_bench"
 
@@ -55,6 +56,20 @@ def require_worktree(config):
     if not os.path.isdir(path):
         sys.exit(f"worktree for config '{config}' not found: expected {path} (under OPENACPLUS_WORKTREES)")
     return path
+
+
+def spartan2_rev(worktree):
+    """Short git rev of the `spartan2` package pinned in the worktree's ecdsa-spartan2/Cargo.lock."""
+    lock = os.path.join(worktree, "wallet-unit-poc", "ecdsa-spartan2", "Cargo.lock")
+    if not os.path.exists(lock):
+        sys.exit(f"cannot read the Spartan2 rev: {lock} not found")
+    with open(lock, "rb") as f:
+        packages = tomllib.load(f).get("package", [])
+    for p in packages:
+        m = re.search(r"#([0-9a-f]{7,40})$", p.get("source", "")) if p.get("name") == "spartan2" else None
+        if m:
+            return m.group(1)[:7]
+    sys.exit(f"no spartan2 git source with a rev in {lock}")
 
 
 def worktree_binary(config):
