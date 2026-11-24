@@ -227,53 +227,21 @@ template HashModScalarField() {
     signal input hash[256];  
     signal output out;       
     
-    component hashNum = Bits2Num(256);
-    for (var i = 0; i < 256; i++) {
-        hashNum.in[i] <== hash[255 - i];
-    }
-    
     var q = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551;
     var qlo = q & ((2 ** 128) - 1);
     var qhi = q >> 128;
     
-    // 128 bit each
-    signal hashLo <-- hashNum.out & (2 ** (128) - 1);
-    signal hashHi <-- hashNum.out >> 128;
-    
-    component verifyLo = Num2Bits(128);
-    verifyLo.in <== hashLo;
-    component verifyHi = Num2Bits(128);
-    verifyHi.in <== hashHi;
-
-    // checks above only range-check each limb; without this recomposition
-    hashNum.out === hashLo + hashHi * (2 ** 128);
-
-    // Recomposition alone is mod P, so hashLo + hashHi*2^128 = hashNum.out + P
-    // also satisfies it whenever that stays under 2^256, shifting the reduced
-    // hash by (P mod q). Pin the recomposed integer to the canonical range.
-    var plo = 0x00000000ffffffffffffffffffffffff;
-    var phi = 0xffffffff000000010000000000000000;
-
-    component canonHi = LessThan(129);
-    canonHi.in[0] <== hashHi;
-    canonHi.in[1] <== phi;
-
-    component canonHiEq = IsEqual();
-    canonHiEq.in[0] <== hashHi;
-    canonHiEq.in[1] <== phi;
-
-    component canonLo = LessThan(129);
-    canonLo.in[0] <== hashLo;
-    canonLo.in[1] <== plo;
-
-    component canonTie = AND();
-    canonTie.a <== canonHiEq.out;
-    canonTie.b <== canonLo.out;
-
-    component isCanonical = OR();
-    isCanonical.a <== canonHi.out;
-    isCanonical.b <== canonTie.out;
-    isCanonical.out === 1;
+    // The limbs are built straight from the digest bits. Packing all 256 bits
+    // into one field element first would wrap a digest >= P (the circuit's own
+    // modulus) and lose its value before the reduction below.
+    component loNum = Bits2Num(128);
+    component hiNum = Bits2Num(128);
+    for (var i = 0; i < 128; i++) {
+        loNum.in[i] <== hash[255 - i];
+        hiNum.in[i] <== hash[127 - i];
+    }
+    signal hashLo <== loNum.out;
+    signal hashHi <== hiNum.out;
 
     // hash >= q
     component alpha = GreaterThan(129);
