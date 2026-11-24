@@ -102,6 +102,33 @@ function inferFormat(p: Predicate, claimName: string): ClaimFormatHint {
   return isClaimNameLikelyDate(claimName) ? "date" : "uint";
 }
 
+const ALL_OPS: readonly number[] = [PredicateOp.LE, PredicateOp.GE, PredicateOp.EQ];
+
+// Which operators each circuit format code may be compared with. Ordering is
+// only defined over numeric encodings; strings and bools are packed into an
+// integer, so LE/GE over them would order an arbitrary byte packing.
+const ALLOWED_OPS_BY_FORMAT_CODE: Record<number, readonly number[]> = {
+  0: [PredicateOp.EQ],
+  1: ALL_OPS,
+  2: ALL_OPS,
+  3: ALL_OPS,
+  4: [PredicateOp.EQ],
+};
+
+const OP_NAMES: Record<number, string> = {
+  [PredicateOp.LE]: "<=",
+  [PredicateOp.GE]: ">=",
+  [PredicateOp.EQ]: "==",
+};
+
+function opFormatError(op: number, formatCode: number): string | null {
+  const allowed = ALLOWED_OPS_BY_FORMAT_CODE[formatCode];
+  if (allowed?.includes(op)) return null;
+  return `Operator ${OP_NAMES[op] ?? `code ${op}`} is not allowed over ${
+    FORMAT_CODE_NAMES[formatCode] ?? `format ${formatCode}`
+  } claims`;
+}
+
 function formatToCircuitCodes(f: ClaimFormatHint): { decodeFlag: number; claimFormat: number } {
   switch (f) {
     case "date":
@@ -148,8 +175,13 @@ function normalizeLiteralValueUnchecked(
   }
   if (typeof v === "bigint") return v;
   if (typeof v === "number") {
-    if (!Number.isFinite(v) || !Number.isInteger(v)) {
-      throw new InputError("INVALID_KEY", `Predicate value ${v} is not a safe integer`);
+    // Above 2^53 - 1 a JS number has already been rounded by the time it gets
+    // here, so BigInt(v) would silently compile a different constant.
+    if (!Number.isSafeInteger(v)) {
+      throw new InputError(
+        "INVALID_KEY",
+        `Predicate value ${v} is not a safe integer; pass a bigint or a decimal string to keep full precision`,
+      );
     }
     return BigInt(v);
   }
@@ -211,6 +243,8 @@ export function compilePredicateExpression(
     const claimIdx = lookupClaim(p.claim);
     const format = inferFormat(p, p.claim);
     recordFormat(claimIdx, p.claim, format);
+    const formatError = opFormatError(OP_MAP[p.op], formatToCircuitCodes(format).claimFormat);
+    if (formatError) throw new InputError("CLAIM_FORMAT_MISMATCH", `${formatError} (claim "${p.claim}")`);
 
     if ("compareTo" in p) {
       const rhsIdx = lookupClaim(p.compareTo.claim);
@@ -270,10 +304,19 @@ export function compilePredicateExpression(
 
   walk(expr);
 
-  // Build per-claim decodeFlags / claimFormats arrays sized to the credential.
+  // Sized by the highest slot a predicate reads, not claims.length: a sparse
+  // schema's referenced index can exceed its claim count, and the verifier
+  // fails closed on any referenced slot these arrays do not cover.
   const decodeFlags: number[] = [];
   const claimFormats: number[] = [];
-  for (let i = 0; i < claims.length; i++) {
+  // Unreachable through the DSL (every leaf references a claim and empty
+  // all/any throw), but Math.max() of nothing is -Infinity and would silently
+  // yield zero slots.
+  if (claimFormatChosen.size === 0) {
+    throw new InputError("PARAMS_EXCEEDED", "Policy does not read any claim");
+  }
+  const slotCount = Math.max(...claimFormatChosen.keys()) + 1;
+  for (let i = 0; i < slotCount; i++) {
     const chosen = claimFormatChosen.get(i);
     const { decodeFlag, claimFormat } = formatToCircuitCodes(chosen ?? "uint");
     // Decode only claims referenced by a predicate; unreferenced slots stay
@@ -326,6 +369,43 @@ export function claimNamesByIndex(compiled: CompiledPredicates): Map<number, str
     names.set(index, name);
   }
   return names;
+}
+
+/**
+ * Check that every slot the predicates read is expected to be decoded and has
+ * an expected format, and that each operator is allowed over that format. This
+ * is the verifier's own copy of the compiler's table, applied to the
+ * expectation it was handed, so a hand-built or tampered `ExpectedStatement`
+ * cannot reintroduce a combination the compiler rejects.
+ *
+ * @returns an error message, or null when the predicates are well-formed.
+ */
+export function checkPredicateFormats(
+  predicates: PredicateSpec[],
+  normalization: ClaimNormalization,
+): string | null {
+  const slotError = (slot: number, name: string, op: number): string | null => {
+    // checkNormalizationSupports only compares slots the expectation marks as
+    // decoded, so an undecoded read slot would never have its format checked.
+    if (normalization.decodeFlags[slot] !== 1) {
+      return `Policy reads claim "${name}" (slot ${slot}), but the expected normalization leaves it undecoded`;
+    }
+    const code = normalization.claimFormats[slot];
+    if (code === undefined) {
+      return `Policy reads claim "${name}" (slot ${slot}), but the expected normalization has no expected format for that slot`;
+    }
+    const err = opFormatError(op, code);
+    return err ? `${err} (claim "${name}")` : null;
+  };
+  for (const spec of predicates) {
+    const lhs = slotError(spec.claimRef, spec.claimName, spec.op);
+    if (lhs) return lhs;
+    if (spec.rhs.kind === "claimRef") {
+      const rhs = slotError(spec.rhs.index, spec.rhs.name, spec.op);
+      if (rhs) return rhs;
+    }
+  }
+  return null;
 }
 
 /**

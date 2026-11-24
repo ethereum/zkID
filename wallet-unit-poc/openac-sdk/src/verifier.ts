@@ -5,7 +5,7 @@ import {
   extractIssuerKeyFromPreparePublicValues,
   extractClaimNormalizationFromPreparePublicValues,
 } from "./inputs/prepare-public-io.js";
-import { checkNormalizationSupports } from "./predicates.js";
+import { checkNormalizationSupports, checkPredicateFormats } from "./predicates.js";
 import { bigintToBase64url } from "./utils.js";
 import { DEFAULT_SHOW_PARAMS } from "./types.js";
 import type {
@@ -179,6 +179,15 @@ export class Verifier {
         `Invalid expected statement: ${e instanceof Error ? e.message : String(e)}`,
         startTime,
       );
+    }
+
+    // Fail closed on an expectation the compiler would not have produced.
+    const formatError = checkPredicateFormats(
+      expected.predicates,
+      expected.claimNormalization,
+    );
+    if (formatError) {
+      return Verifier.failure(`Invalid expected statement: ${formatError}`, startTime);
     }
 
     const result = await runVerify();
