@@ -2,6 +2,7 @@
 name = "ecdsa-spartan2"
 version = "0.0.1"
 edition = "2021"
+default-run = "ecdsa-spartan2"
 
 [lib]
 name = "ecdsa_spartan2"
@@ -34,6 +35,9 @@ memmap2 = "0.9.8"
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }
 num-bigint = "0.4.6"
 base64 = "0.22"
+
+[dev-dependencies]
+sha3 = "0.10"
 
 [build-dependencies]
 witnesscalc-adapter = { git = "https://github.com/zkmopro/witnesscalc_adapter.git", branch = "secq256r1-support", optional = true }

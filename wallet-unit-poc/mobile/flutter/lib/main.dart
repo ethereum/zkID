@@ -44,11 +44,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
+Future<BenchmarkResults> _runCompleteBenchmark() async =>
+    runCompleteBenchmark(documentsPath: await getDocumentsPath());
+
 class BenchmarkScreen extends StatefulWidget {
-  const BenchmarkScreen({super.key, this.busy});
+  const BenchmarkScreen({
+    super.key,
+    this.busy,
+    this.runBenchmark = _runCompleteBenchmark,
+  });
 
   /// Set while a Rust call runs, so the shell can lock its navigation.
   final ValueNotifier<bool>? busy;
+
+  final Future<BenchmarkResults> Function() runBenchmark;
 
   @override
   State<BenchmarkScreen> createState() => _BenchmarkScreenState();
@@ -73,10 +82,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
       _benchmarkResults = null;
     });
     try {
-      final docs = await getDocumentsPath();
-      final results = await runCompleteBenchmark(
-        documentsPath: docs,
-      );
+      final results = await widget.runBenchmark();
       setState(() {
         _benchmarkResults = results;
         _isOperating = false;
@@ -150,7 +156,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Runs all 9 operations and reports timing + artifact sizes.',
+                      'Runs every operation and reports timing + artifact sizes.',
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -247,8 +253,12 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                 _timingRow('Reblind Prepare', r.reblindJwtMs),
                 _timingRow('Prove Show', r.proveShowMs),
                 _timingRow('Reblind Show', r.reblindShowMs),
-                _timingRow('Verify Prepare', r.verifyJwtMs),
-                _timingRow('Verify Show', r.verifyShowMs),
+                _timingRow('Verify Prepare (in memory)', r.verifyJwtMs),
+                _timingRow('Verify Show (in memory)', r.verifyShowMs),
+                _timingRow('Load Prepare VK', r.jwtVkLoadMs),
+                _timingRow('Load Show VK', r.showVkLoadMs),
+                _timingRow('Verify Prepare (first)', r.verifyJwtFirstMs),
+                _timingRow('Verify Show (first)', r.verifyShowFirstMs),
               ],
             ),
 
