@@ -31,6 +31,7 @@ use ecdsa_spartan2::{
     verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
     E,
 };
+use ecdsa_spartan2::prover::verify_linked;
 use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
@@ -700,6 +701,12 @@ fn run_mdoc_prove_pipeline(
         let expression_result = show_public_values[0] == Field::ONE;
         println!("  expressionResult: {}\n", expression_result);
     }
+
+    // Both proofs must commit to the same shared witness.
+    if verify_linked(&mdoc_proof, &mdoc_vk, &show_proof, &show_vk).is_none() {
+        return Err("MDOC and Show proofs are not linked: comm_W_shared differs".into());
+    }
+    println!("✓ MDOC and Show proofs linked\n");
 
     Ok(BenchmarkResults {
         size,
