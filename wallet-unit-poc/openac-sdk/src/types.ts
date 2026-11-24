@@ -48,7 +48,7 @@ export const DEFAULT_SHOW_PARAMS: ShowCircuitParams = {
   maxLogicTokens: 8,
   valueBits: 64,
   maxIssuerDepth: 8,
-  revocationMaxDepth: 10,
+  revocationMaxDepth: 20,
 };
 
 export interface EcdsaPublicKey {

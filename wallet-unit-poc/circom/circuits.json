@@ -32,7 +32,7 @@
   "show": {
     "file": "show",
     "template": "Show",
-    "params": [2, 2, 8, 64, 8, 10],
+    "params": [2, 2, 8, 64, 8, 20],
     "pubs": [
       "messageHash",
       "predicateLen",

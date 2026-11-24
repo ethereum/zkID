@@ -20,7 +20,7 @@ import { toLimbs } from "./limbs.js";
 import { base64Decode, bigintToBase64url, bytesToBigInt } from "./utils.js";
 
 /** Max tree depth compiled into the Show circuit (`revocationMaxDepth`). */
-export const REVOCATION_MAX_DEPTH = 10;
+export const REVOCATION_MAX_DEPTH = 20;
 
 /** JWT payload claim carrying the base64url-encoded 32-byte commitment. */
 export const REVOCATION_COMMITMENT_CLAIM = "revocation_commitment";
