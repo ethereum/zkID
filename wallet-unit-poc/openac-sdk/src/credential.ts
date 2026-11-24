@@ -138,7 +138,12 @@ export class Credential {
 }
 
 export interface CredentialProfileOptions {
-  /** Trusted current time in seconds since epoch. Defaults to the local clock. */
+  /**
+   * Current time in seconds since epoch for the holder-side exp/nbf check.
+   * Defaults to the local clock. The caller controls this value and validity is
+   * not part of the proven statement, so a relying party must enforce exp/nbf
+   * itself.
+   */
   now?: number;
   /** Tolerated clock skew in seconds for nbf/exp. Default 60. */
   clockSkewSec?: number;
