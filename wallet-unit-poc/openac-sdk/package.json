@@ -1,6 +1,6 @@
 {
   "name": "openac-sdk",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "OpenAC SDK — Privacy-preserving identity verification using zero-knowledge proofs. Create and verify ZK proofs from JWT credentials.",
   "type": "module",
   "main": "./dist/index.js",

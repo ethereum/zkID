@@ -2,11 +2,6 @@
 /* eslint-disable */
 
 /**
- * Compare comm_W_shared between two instances (use verify() instead)
- */
-export function compare_comm_w_shared(instance1_bytes: Uint8Array, instance2_bytes: Uint8Array): boolean;
-
-/**
  * Initialize panic hook for better error messages in WASM
  */
 export function init(): void;
@@ -33,7 +28,7 @@ export function precompute(pk_bytes: Uint8Array): any;
  *
  * Returns: PrecomputeResult { proof, instance, witness } — all as serialized bytes
  */
-export function precompute_from_witness(pk_bytes: Uint8Array, witness_wtns_bytes: Uint8Array): any;
+export function precompute_from_witness(pk_bytes: Uint8Array, witness_wtns_bytes: Uint8Array, vc_size: string): any;
 
 /**
  * Prove the Show circuit using externally generated witness bytes.
@@ -109,10 +104,9 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly compare_comm_w_shared: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly init: () => void;
     readonly precompute: (a: number, b: number) => [number, number, number];
-    readonly precompute_from_witness: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly precompute_from_witness: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly precompute_show_from_witness: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly present: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly setup: () => [number, number, number];

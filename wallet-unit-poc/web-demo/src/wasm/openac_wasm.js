@@ -1,24 +1,6 @@
 /* @ts-self-types="./openac_wasm.d.ts" */
 
 /**
- * Compare comm_W_shared between two instances (use verify() instead)
- * @param {Uint8Array} instance1_bytes
- * @param {Uint8Array} instance2_bytes
- * @returns {boolean}
- */
-export function compare_comm_w_shared(instance1_bytes, instance2_bytes) {
-    const ptr0 = passArray8ToWasm0(instance1_bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(instance2_bytes, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.compare_comm_w_shared(ptr0, len0, ptr1, len1);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return ret[0] !== 0;
-}
-
-/**
  * Initialize panic hook for better error messages in WASM
  */
 export function init() {
@@ -58,14 +40,17 @@ export function precompute(pk_bytes) {
  * Returns: PrecomputeResult { proof, instance, witness } — all as serialized bytes
  * @param {Uint8Array} pk_bytes
  * @param {Uint8Array} witness_wtns_bytes
+ * @param {string} vc_size
  * @returns {any}
  */
-export function precompute_from_witness(pk_bytes, witness_wtns_bytes) {
+export function precompute_from_witness(pk_bytes, witness_wtns_bytes, vc_size) {
     const ptr0 = passArray8ToWasm0(pk_bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passArray8ToWasm0(witness_wtns_bytes, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.precompute_from_witness(ptr0, len0, ptr1, len1);
+    const ptr2 = passStringToWasm0(vc_size, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.precompute_from_witness(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
