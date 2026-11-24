@@ -27,7 +27,7 @@ One git worktree per config. `combined` is the branch you clone; the other five 
 
 ```
 export OPENACPLUS_WORKTREES=<dir that will hold the six worktrees>
-export OPENACPLUS_BENCH_ROOT=<empty dir outside any git tree>
+export OPENACPLUS_BENCH_ROOT=<dir outside any git tree; it may start empty>
 mkdir -p "$OPENACPLUS_WORKTREES"
 
 git worktree add "$OPENACPLUS_WORKTREES/combined"   bench/openacplus/combined
@@ -50,19 +50,41 @@ Where each command runs:
 
 ## Build
 
-In every worktree (`v1 main issuer revocation combined headline`), install, compile the circuits, generate the default inputs, and build the binary:
+In every worktree (`v1 main issuer revocation combined headline`), install, compile the circuits and build the binary:
 
 ```
 for c in v1 main issuer revocation combined headline; do
   W="$OPENACPLUS_WORKTREES/$c/wallet-unit-poc"
-  (cd "$W/circom" && yarn install --immutable && yarn compile:all && yarn generate:inputs --all)
+  (cd "$W/circom" && yarn install --immutable && yarn compile:all)
   (cd "$W/ecdsa-spartan2" && cargo build --release --bin openac_bench)
 done
 ```
 
 `yarn compile:all` runs circom and takes a long time. Do not run `target/release/openac_bench` directly: it fails with a dylib rpath error. Staging copies the binary together with its dylibs, and every measurement uses that staged copy.
 
-Then, once, from `combined/wallet-unit-poc/circom`, make the headline inputs and the sweep circuits. The population matches the registry bench (256 issuers, 1,046,528 revoked).
+**Inputs.** Use the tracked `wallet-unit-poc/circom/inputs/{jwt,show}/<size>/default.json` as they are. Never run `yarn generate:inputs` in a measurement worktree: it rewrites those tracked files. If you did, restore them with `git checkout -- wallet-unit-poc/circom/inputs`. Only the headline's seeded inputs are generated, and they are written outside git (next section).
+
+**Keys.** Staging copies keys from `<worktree>/wallet-unit-poc/ecdsa-spartan2/keys/<size>_*.key`, so set them up first. `keys/` is in `ecdsa-spartan2/.gitignore`. The package has two binaries, so `--bin ecdsa-spartan2` is required. These are the sizes each config stages:
+
+| Config | Sizes |
+|---|---|
+| `v1`, `combined` | 1k, 2k, 4k, 8k |
+| `main`, `issuer`, `revocation` | 1k, 2k |
+| `headline` | 1k, 2k |
+
+From each worktree's `wallet-unit-poc/ecdsa-spartan2`, for every size `<S>` in its row:
+```
+cargo run --release --bin ecdsa-spartan2 -- show setup --size <S> --input ../circom/inputs/show/<S>/default.json
+cargo run --release --bin ecdsa-spartan2 -- prepare setup --size <S> --input ../circom/inputs/jwt/<S>/default.json
+```
+For `headline`, give the Show setup the seeded input that staging uses, not the tracked default. The tracked default Show input has registry depth 10, and the headline circuit has depth 20, so a key made from it does not fit.
+```
+cargo run --release --bin ecdsa-spartan2 -- show setup --size 1k --input "$OPENACPLUS_BENCH_ROOT/laptop/inputs/headline/show-1k.json"
+cargo run --release --bin ecdsa-spartan2 -- show setup --size 2k --input "$OPENACPLUS_BENCH_ROOT/variants/headline/show-2k.json"
+```
+Make those two files first (below). The headline Prepare setup uses the tracked default JWT input like the other configs.
+
+**Headline and variant inputs.** Once, from `combined/wallet-unit-poc/circom` (the first two lines from the `headline` worktree, since they read that tree's compiled JWT wasm). The population matches the registry bench (256 issuers, 1,046,528 revoked).
 
 ```
 npx tsx src/generate-inputs.ts --size 2k --issuers 256 --revoked 1046528 --seed 1 --out "$OPENACPLUS_BENCH_ROOT/variants/headline/show-2k.json"
@@ -72,7 +94,7 @@ npx tsx scripts/benchmarks/build-inputs.ts         # Show inputs and witnesses, 
 npx tsx scripts/benchmarks/build-jwt-inputs.ts     # the N = 8 and 16 Prepare inputs
 ```
 
-Run the two `generate-inputs.ts` lines in the `headline` worktree, since they read that tree's compiled JWT wasm. Each `--out X.json` also writes `X.jwt.json` and `X.roots.json`, the three files staging reads. `run-sweep.ts --list` and `build-inputs.ts --list` show the cells.
+Each `--out X.json` also writes `X.jwt.json` and `X.roots.json`, the three files staging reads. `run-sweep.ts --list` and `build-inputs.ts --list` show the cells.
 
 ## Run
 
@@ -84,13 +106,14 @@ python3 constraints.py --config combined --circom-dir "$OPENACPLUS_WORKTREES/com
 python3 stage_all.py
 python3 stage_generic_all.py
 ```
-`stage_all.py` takes `chain` and `headline` to stage only part of the cells.
+`stage_all.py` takes the groups `chain` and `headline`, and `--only CELL [CELL ...]` to stage single cells; `--only` needs a group, for example `python3 stage_all.py chain --only A1-combined-2k`. `stage_generic_all.py` also takes `--only CELL ...`. A selected cell needs only its own worktree.
 
 **2. Smoke run.** One short visit, written under `laptop/smoke/` and marked `smoke: true`. Check it before spending hours.
 ```
-python3 run_matrix.py --smoke --no-gate --run-id smoke-$(date +%Y%m%d) --warm 1 --visits 1 matrices/A1.json
+python3 run_matrix.py --smoke --no-gate --run-id smoke-$(date +%Y%m%d) --warm 1 --visits 1 matrices/A1.json --only A1-combined-2k
 python3 run_matrix.py --dry-run --run-id w1 matrices/A1.json matrices/A2.json   # visit order and time estimate
 ```
+Matrix files go before `--only`, because `--only` takes many cell ids. The smoke passes when every proving or verifying `ITER` row has `ok: true` and the `DONE` row shows `errors: 0`. Key-load rows (`key_load_prepare`, `key_load_show`, `load_keys_total`) carry no `ok`.
 
 **3. Window 1** (about 2 h) and **window 2** (about 4 h). Rows go to `laptop/runs/<run-id>/`.
 ```
@@ -119,12 +142,14 @@ done
 
 **6. Analysis.**
 ```
-python3 analysis/analyze.py --root "$OPENACPLUS_BENCH_ROOT" --out "$OPENACPLUS_BENCH_ROOT/out"
-python3 analysis/analyze.py --root "$OPENACPLUS_BENCH_ROOT" --out "$OPENACPLUS_BENCH_ROOT/out" --final
+PY=<python with matplotlib, e.g. your venv's bin/python>
+$PY analysis/analyze.py --root "$OPENACPLUS_BENCH_ROOT" --out "$OPENACPLUS_BENCH_ROOT/out"
+$PY analysis/analyze.py --root "$OPENACPLUS_BENCH_ROOT" --out "$OPENACPLUS_BENCH_ROOT/out" --final
 ```
+The analysis needs a Python with matplotlib; a bare `python3` without it fails.
 `--root` defaults to `$OPENACPLUS_BENCH_ROOT`, and `--matrices` to `../matrices`. Without `--final`, missing data is skipped. With it, every gate must pass (visit counts, peak memory, provenance, phone checks, GC flag, expected phone sessions) or the exit code is 1. Read `checks.md` first. Reruns on the same rows give identical files.
 
-Tests: `cd analysis && python3 -m unittest`. The driver tests: `python3 -m unittest discover tests` from this directory.
+Tests: `cd analysis && $PY -m unittest`. The driver tests: `python3 -m unittest discover tests` from this directory.
 
 ## Quiet-machine rules
 
