@@ -3,6 +3,7 @@ import type { WitnessTester } from "circomkit";
 import { circomkit } from "../common/index.ts";
 
 const VALUE_LEN = 96;
+const FORMAT_BOOL = 0n;
 const FORMAT_UINT = 1n;
 const FORMAT_ISO_DATE = 2n;
 const FORMAT_ROC_DATE = 3n;
@@ -107,11 +108,45 @@ describe("ClaimValueNormalizer uint range", () => {
     await circuit.expectFail(formatInput("090+101", FORMAT_ROC_DATE));
   });
 
-  it("still ignores the ISO separators", async () => {
-    // Positions 4 and 7 are not read by the date arithmetic, so they must not
-    // be constrained to digits -- otherwise every real ISO date fails.
-    await circuit.expectPass(formatInput("2010/01/01", FORMAT_ISO_DATE), {
-      normalizedValue: 20100101n,
+  it("rejects a wrong separator byte in an ISO date", async () => {
+    await circuit.expectFail(formatInput("2010/01/01", FORMAT_ISO_DATE));
+    await circuit.expectFail(formatInput("2010-01/01", FORMAT_ISO_DATE));
+    await circuit.expectFail(formatInput("2010/01-01", FORMAT_ISO_DATE));
+  });
+
+  it("does not constrain the ROC date, which has no separators", async () => {
+    await circuit.expectPass(formatInput("0900101", FORMAT_ROC_DATE), {
+      normalizedValue: 900101n,
     });
+  });
+
+  it("rejects an empty uint", async () => {
+    // Normalized to 0 before the fix, satisfying any zero-favorable policy.
+    await circuit.expectFail(uintInput(""));
+  });
+
+  it("still accepts a uint of one or more digits", async () => {
+    await circuit.expectPass(uintInput("100"), { normalizedValue: 100n });
+    await circuit.expectPass(uintInput("0"), { normalizedValue: 0n });
+  });
+
+  describe("bool", () => {
+    for (const [text, expected] of [
+      ["1", 1n],
+      ["true", 1n],
+      ["0", 0n],
+      ["false", 0n],
+    ] as const) {
+      it(`accepts ${text}`, async () => {
+        await circuit.expectPass(formatInput(text, FORMAT_BOOL), { normalizedValue: expected });
+      });
+    }
+
+    for (const text of ["banana", "", "2", "True", "tru", "falsy", "00", "10", "truee", "fals"]) {
+      it(`rejects ${JSON.stringify(text)}`, async () => {
+        // Normalized to 0 before the fix, satisfying a false-favorable policy.
+        await circuit.expectFail(formatInput(text, FORMAT_BOOL));
+      });
+    }
   });
 });
