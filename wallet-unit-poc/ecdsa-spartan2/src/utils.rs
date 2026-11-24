@@ -567,7 +567,7 @@ pub fn revocation_root_from_show_public_values(public_values: &[Scalar]) -> Resu
 /// Show circuit template parameters
 /// (`Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth, revocationMaxDepth)`),
 /// fixed across all VC sizes (see `circom/circuits.json`): `show` is
-/// `Show(2, 2, 8, 64, 8, 10)` and `show_mdoc` is `Show(2, 2, 8, 64, 8, 0)`. `nClaims`
+/// `Show(2, 2, 8, 64, 8, 20)` and `show_mdoc` is `Show(2, 2, 8, 64, 8, 0)`. `nClaims`
 /// is always `2` because every JWT size uses `maxMatches = 4`.
 pub const SHOW_MAX_PREDICATES: usize = 2;
 pub const SHOW_MAX_LOGIC_TOKENS: usize = 8;
@@ -576,7 +576,7 @@ pub const SHOW_NAME_ID_LEN: usize = 31;
 /// Max issuer registry depth (Show `maxIssuerDepth`), at most 2^8 issuers.
 pub const SHOW_MAX_ISSUER_DEPTH: usize = 8;
 /// Max LeanIMT+ depth of the revocation tree in the `show` circuit.
-pub const SHOW_REVOCATION_MAX_DEPTH: usize = 10;
+pub const SHOW_REVOCATION_MAX_DEPTH: usize = 20;
 /// Witness index of `issuerRoot[0]` (hi limb); `issuerRoot[1]` (lo) follows.
 pub const SHOW_ISSUER_ROOT_INDEX: usize = 2;
 /// Witness index of `revocationRoot[0]` (hi limb) in `show`; `revocationRoot[1]` follows.

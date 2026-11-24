@@ -36,7 +36,7 @@ export const CIRCUIT_SIZES: Record<string, number[]> = {
 };
 
 // Max revocation tree depth of the compiled Show circuit (circuits.json).
-const REVOCATION_MAX_DEPTH = 10;
+const REVOCATION_MAX_DEPTH = 20;
 
 // Predicate operator codes (see eval-predicate.circom).
 const OP_LE = 0;
