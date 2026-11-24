@@ -28,12 +28,16 @@ Circuit A and Circuit B are linked via `pkCommit`: the verifier checks
 1. **Cert chain verify** — `issuerRsaModulus` (MOICA) verifies
    `issuerRsaSignature` over `issuerTbs` (the TBS portion of the user's
    cert). Proves that MOICA certified the user's public key.
-2. **DER parsing** — `VerifyTBSinCert`, `VerifySerialNumber`
-   check that the user cert contains the claimed TBS and serial number at the
-   prover-supplied offsets.
+2. **DER parsing** — the circuit walks the TBS from its first byte:
+   `VerifySerialNumber` reads the serial at its fixed offset, `VerifyValidity`
+   continues to the `Validity` field, and `LocateModulus` continues past the
+   subject Name to the `SubjectPublicKeyInfo`. Every offset is derived from
+   the DER structure; the prover supplies none. See §"Structural walk" below.
 3. **Revocation** — `SMTNonMembershipVerifier` proves `serialNumber` is **not**
    in the revocation tree rooted at `smtRoot`.
-4. **Linking** — `pkCommit = ChunkedPoseidonP256(userRsaExtractedModulus ‖ pkBlind)`,
+4. **Validity period** — `VerifyValidity` asserts
+   `notBefore <= currentTime <= notAfter`. See §"Validity period" below.
+5. **Linking** — `pkCommit = ChunkedPoseidonP256(userRsaExtractedModulus ‖ pkBlind)`,
    where `pkBlind` is a per-session uniform 248-bit value sampled by the
    prover. The same value is used in Circuit B; the verifier checks
    `pkCommit_A == pkCommit_B`. See §"Why per-session randomness for `pkBlind`"
@@ -62,11 +66,12 @@ Circuit A and Circuit B are linked via `pkCommit`: the verifier checks
 | ----------------------- | ------------- | ------------------------------------------------------ |
 | `issuerRsaModulus[k]`   | public input  | MOICA's RSA public key (trust anchor)                  |
 | `smtRoot`               | public input  | Revocation SMT root                                    |
+| `currentTime`           | public input  | Verifier's time as the decimal integer `YYMMDDHHMMSS` (UTC) |
 | `pkCommit`              | public output | Links to Circuit B                                     |
 
 Public-value vector layout (in declaration order, outputs first):
-- RS2048: `[pkCommit, issuerRsaModulus[17], smtRoot]` — 19 elements
-- RS4096: `[pkCommit, issuerRsaModulus[34], smtRoot]` — 36 elements
+- RS2048: `[pkCommit, issuerRsaModulus[17], smtRoot, currentTime]` — 20 elements
+- RS4096: `[pkCommit, issuerRsaModulus[34], smtRoot, currentTime]` — 37 elements
 
 ### Circuit B — UserSig
 
@@ -89,6 +94,74 @@ maintained by the
 [`moica-revocation-smt`](https://github.com/privacy-ethereum/moica-revocation-smt)
 service. Circuit A verifies that the cert's `serialNumber` is not present in
 the tree rooted at `smtRoot`.
+
+## Validity period
+
+Revocation alone does not exclude expired certificates: MOICA's CPS keeps a
+revoked certificate on the CRL only until it expires, and the revocation SMT
+mirrors the current CRL. Circuit A therefore checks the validity period itself.
+
+`currentTime` is a public input, the decimal integer `YYMMDDHHMMSS` in UTC —
+the same 12 digits a DER `UTCTime` carries, so the two compare as integers.
+The verifier MUST check `currentTime` against its own clock; the circuit only
+proves `notBefore <= currentTime <= notAfter`.
+
+### Verifier time window
+
+The verifier accepts a proof only if, at the moment it verifies,
+
+```
+now - maxAge <= currentTime <= now + maxAhead
+```
+
+where `now` is the verifier's own clock. The two bounds do different jobs:
+
+- `maxAge` is the security-relevant bound. A certificate that expired less
+  than `maxAge` ago still passes, so `maxAge` SHOULD be no longer than the
+  challenge lifetime plus the clock skew the verifier tolerates. Recommended:
+  10 minutes.
+- `maxAhead` can be generous. A `currentTime` in the future makes the expiry
+  check stricter: the certificate must stay valid until then. The cost is on
+  the other end: a certificate whose `notBefore` is still in the future can
+  pass up to `maxAhead` early. Recommended: 24 hours.
+
+`currentTime` is public, so an exact timestamp reveals the prover's clock to
+anyone who sees the proof. A generous `maxAhead` lets the prover use a coarse
+value instead, such as the last second of the current UTC day, which every
+prover on that day shares.
+
+## Structural walk
+
+The offsets of `Validity` and of the user's RSA modulus are derived inside the
+circuit, never supplied by the prover:
+
+| Offset                         | Bytes                                   | Constraint                         |
+| ------------------------------ | --------------------------------------- | ---------------------------------- |
+| 0                              | `30 82 hh ll` outer SEQUENCE            | `30 82` pinned                     |
+| 4                              | `a0 03 02 01 02` version v3             | pinned (v1 TBSes are rejected)     |
+| 9                              | `02 LL` serial INTEGER                  | `1 <= LL <= 20`                    |
+| `p1 = 11 + LL`                 | AlgorithmIdentifier, 15 bytes           | pinned to `sha256WithRSAEncryption` |
+| `p1 + 15`                      | `30 NN` issuer Name                     | short-form length, `NN < 128`      |
+| `p3 = p1 + 17 + NN`            | `30 1e 17 0d <12 digits> 5a 17 0d <12 digits> 5a` | tags pinned, digits range-checked |
+| `p3 + 32`                      | `30 SS` or `30 81 SS` subject Name      | `SS < 128`, or `81` with `SS >= 128` |
+| `q` = end of subject Name      | 28-byte head of an RSA-2048 `SubjectPublicKeyInfo` | pinned                  |
+| `q + 28`                       | `02 82 01 01 00` modulus INTEGER        | pinned; 256 modulus bytes follow   |
+
+`p3 + 35 <= 210` and `q + 28 <= 493`, so the walk reads only the first 512
+bytes of `issuerTbs`. The modulus INTEGER that follows the pinned bytes is
+bounded by `actualIssuerTbsLength` through `AssertSliceInTBS`.
+
+Deriving the modulus offset closes audit v3 Finding 1: the circuit no longer
+relies on the byte pattern `02 82 01 01 00` being unique within a MOICA TBS.
+
+Limits, all of which fail closed:
+
+- Only `UTCTime` is accepted. A certificate whose `notBefore` or `notAfter` is
+  in 2050 or later uses `GeneralizedTime` and is rejected.
+- An issuer Name longer than 127 content bytes is rejected.
+- A subject Name longer than 255 content bytes is rejected.
+- A subject key that is not 2048-bit RSA is rejected.
+- A TBS without the explicit v3 version block is rejected.
 
 ## Why per-session randomness for `pkBlind`
 
@@ -114,4 +187,4 @@ whose secrecy rests on the RSA private key never leaving the card.
 - `circuits/components/smtVerifierP256.circom` — SMT verifier with Poseidon-P256 hash
 - `circuits/components/poseidonP256.circom` — Poseidon hash over secq256r1
 - `circuits/components/pkCommit.circom` — `ChunkedPoseidonP256` for `pkCommit`
-- `circuits/utils/utils.circom` — cert parsing helpers (`VerifyTBSinCert`, `VerifySerialNumber`, `ExtractModulus`, `PackBytes`, `PoseidonBytes`)
+- `circuits/utils/utils.circom` — cert parsing helpers (`VerifySerialNumber`, `VerifyValidity`, `LocateModulus`, `ExtractModulus`, `PackBytes`, `PoseidonBytes`)

@@ -37,6 +37,27 @@ export interface SplitInputs {
 }
 
 /**
+ * The current time as the decimal integer `YYMMDDHHMMSS` (UTC). The cert-chain
+ * proof checks the certificate's validity period against it, and the verifier
+ * checks it against its own clock.
+ */
+export function currentTimeUtc(now: Date = new Date()): string {
+  const year = now.getUTCFullYear();
+  if (year < 2000 || year > 2049) {
+    throw new Error(`year ${year} is outside the UTCTime range 2000..2049`);
+  }
+  const two = (n: number) => String(n).padStart(2, "0");
+  return (
+    two(year - 2000) +
+    two(now.getUTCMonth() + 1) +
+    two(now.getUTCDate()) +
+    two(now.getUTCHours()) +
+    two(now.getUTCMinutes()) +
+    two(now.getUTCSeconds())
+  );
+}
+
+/**
  * Returns stringified JSON (not objects) because the circom witness calculator
  * accepts a JSON string; serialising once here avoids a round trip through
  * `JSON.stringify` in the Worker, and lets us `postMessage` without
@@ -57,6 +78,7 @@ export async function buildInputs(
     card.kIssuer,
     17,
     challenge,
+    currentTimeUtc(),
   ) as { cert_chain: unknown; user_sig: unknown };
   return {
     certJson: JSON.stringify(out.cert_chain),
