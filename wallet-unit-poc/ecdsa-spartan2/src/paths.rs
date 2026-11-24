@@ -76,13 +76,14 @@ impl PathConfig {
 
     /// Resolve the input JSON path for a circuit.
     ///
-    /// MDOC has no size variants, so its input lives at `inputs/mdoc/default.json`.
+    /// MDOC and JSON-LD have no size variants, so their inputs live at
+    /// `inputs/<circuit>/default.json`.
     pub fn input_json(&self, circuit: &str) -> PathBuf {
         if self.is_mobile {
             self.base_dir.join(format!("{}_input.json", circuit))
-        } else if circuit == "mdoc" {
+        } else if circuit == "mdoc" || circuit == "jsonld" {
             self.base_dir
-                .join("../circom/inputs/mdoc/default.json")
+                .join(format!("../circom/inputs/{}/default.json", circuit))
         } else {
             self.base_dir.join(format!(
                 "../circom/inputs/{}/{}/default.json",
@@ -181,6 +182,11 @@ pub mod keys {
     pub const MDOC_PROOF: &str = "mdoc_proof.bin";
     pub const MDOC_WITNESS: &str = "mdoc_witness.bin";
     pub const MDOC_INSTANCE: &str = "mdoc_instance.bin";
+    pub const JSONLD_PROVING_KEY: &str = "jsonld_proving.key";
+    pub const JSONLD_VERIFYING_KEY: &str = "jsonld_verifying.key";
+    pub const JSONLD_PROOF: &str = "jsonld_proof.bin";
+    pub const JSONLD_WITNESS: &str = "jsonld_witness.bin";
+    pub const JSONLD_INSTANCE: &str = "jsonld_instance.bin";
 }
 
 #[cfg(test)]
@@ -263,6 +269,19 @@ mod tests {
         assert_eq!(
             config.r1cs_path("mdoc"),
             PathBuf::from("/project/../circom/build/mdoc/mdoc_js/mdoc.r1cs")
+        );
+    }
+
+    #[test]
+    fn test_jsonld_paths_skip_size_subdir() {
+        let config = PathConfig::new("/project", false);
+        assert_eq!(
+            config.input_json("jsonld"),
+            PathBuf::from("/project/../circom/inputs/jsonld/default.json")
+        );
+        assert_eq!(
+            config.r1cs_path("jsonld"),
+            PathBuf::from("/project/../circom/build/jsonld/jsonld_js/jsonld.r1cs")
         );
     }
 

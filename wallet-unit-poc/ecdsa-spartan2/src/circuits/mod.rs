@@ -1,3 +1,4 @@
+pub mod jsonld_circuit;
 pub mod mdoc_circuit;
 pub mod prepare_circuit;
 pub mod show_circuit;

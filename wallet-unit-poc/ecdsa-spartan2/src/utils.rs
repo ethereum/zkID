@@ -838,6 +838,197 @@ pub fn mdoc_hashmap_to_json_string(
     serde_json::to_string(&json_map).map_err(|_| SynthesisError::Unsatisfiable)
 }
 
+/// Layout of the JSON-LD (Prepare) circuit's public IO within the witness vector.
+///
+/// The circuit has no public outputs, so the public inputs, in template
+/// declaration order, start at witness[1]:
+///   witness[1]              = main.pubKeyX
+///   witness[2]              = main.pubKeyY
+///   witness[3..3+maxClaims] = main.claimFormats[..]
+///   witness[3+maxClaims..]  = main.claimFlags[..]
+/// `normalizedClaimValues`, `claimIdentifierHashes` and `deviceKeyX`/`deviceKeyY`
+/// are private and reach Show through the shared witness segment; their indices
+/// are hardcoded constants below and re-derived by `tests/witness_layout.rs`.
+#[derive(Debug, Clone, Copy)]
+pub struct JsonLdOutputLayout {
+    pub claim_values_start: usize,
+    pub claim_values_len: usize,
+    pub claim_identifier_hashes_start: usize,
+    pub device_key_x_index: usize,
+    pub device_key_y_index: usize,
+    /// Witness index of the public issuer key coordinate `pubKeyX`.
+    pub issuer_key_x_index: usize,
+    /// Witness index of the public issuer key coordinate `pubKeyY`.
+    pub issuer_key_y_index: usize,
+    /// Witness index of `claimFormats[0]`. The array is `claim_values_len` long.
+    pub claim_formats_start: usize,
+    /// Witness index of `claimFlags[0]`. The array is `claim_values_len` long.
+    pub claim_flags_start: usize,
+}
+
+impl JsonLdOutputLayout {
+    pub fn claim_values_range(&self) -> Range<usize> {
+        self.claim_values_start..self.claim_values_start + self.claim_values_len
+    }
+
+    pub fn claim_formats_range(&self) -> Range<usize> {
+        self.claim_formats_start..self.claim_formats_start + self.claim_values_len
+    }
+
+    pub fn claim_flags_range(&self) -> Range<usize> {
+        self.claim_flags_start..self.claim_flags_start + self.claim_values_len
+    }
+
+    /// Public IO: issuer pubKeyX/Y + claimFormats + claimFlags, all inputs.
+    pub fn num_public(&self) -> usize {
+        2 * self.claim_values_len + 2
+    }
+
+    /// Witness indices the shared partition must equal, in the order
+    /// `JsonLdCircuit::shared` pushes them.
+    pub fn shared_witness_indices(&self, shared_claims: usize) -> Vec<usize> {
+        let mut idx = vec![self.device_key_x_index, self.device_key_y_index];
+        idx.extend(self.claim_values_start..self.claim_values_start + shared_claims);
+        idx.extend(
+            self.claim_identifier_hashes_start
+                ..self.claim_identifier_hashes_start + shared_claims,
+        );
+        idx
+    }
+}
+
+/// Calculate JSON-LD circuit witness layout from `maxClaims`.
+pub fn calculate_jsonld_output_indices(max_claims: usize) -> JsonLdOutputLayout {
+    let claim_formats_start = 3;
+    JsonLdOutputLayout {
+        claim_values_start: JSONLD_CLAIM_VALUES_WITNESS_START,
+        claim_values_len: max_claims,
+        claim_identifier_hashes_start: JSONLD_CLAIM_IDENTIFIER_HASHES_WITNESS_START,
+        device_key_x_index: JSONLD_DEVICE_KEY_WITNESS_START,
+        device_key_y_index: JSONLD_DEVICE_KEY_WITNESS_START + 1,
+        issuer_key_x_index: 1,
+        issuer_key_y_index: 2,
+        claim_formats_start,
+        claim_flags_start: claim_formats_start + max_claims,
+    }
+}
+
+// Re-derived from `build/jsonld/jsonld.sym` by `tests/witness_layout.rs`.
+
+/// Witness index of `main.normalizedClaimValues[0]` in the compiled JSON-LD circuit.
+pub const JSONLD_CLAIM_VALUES_WITNESS_START: usize = 2794;
+
+/// Witness index of `main.claimIdentifierHashes[0]` in the compiled JSON-LD circuit.
+pub const JSONLD_CLAIM_IDENTIFIER_HASHES_WITNESS_START: usize = 2796;
+
+/// Witness index of `main.deviceKeyX` in the compiled JSON-LD circuit; `deviceKeyY`
+/// follows it.
+pub const JSONLD_DEVICE_KEY_WITNESS_START: usize = 2798;
+
+/// Normalize JSON-LD circuit inputs to the decimal-string JSON witnesscalc expects.
+///
+/// Generic on purpose: every key passes through with its array nesting intact,
+/// numbers become decimal strings, and string values must already be decimal
+/// integers. Only the public inputs are required, so circuit-side helper inputs
+/// need no change here.
+pub fn parse_jsonld_inputs(
+    json_value: &Value,
+) -> Result<serde_json::Map<String, Value>, SynthesisError> {
+    const REQUIRED: [&str; 4] = ["pubKeyX", "pubKeyY", "claimFormats", "claimFlags"];
+
+    fn normalize(v: &Value) -> Result<Value, SynthesisError> {
+        match v {
+            Value::String(s) => {
+                BigInt::from_str(s).map_err(|_| SynthesisError::AssignmentMissing)?;
+                Ok(Value::String(s.clone()))
+            }
+            Value::Number(n) => {
+                let n = n.as_u64().ok_or(SynthesisError::AssignmentMissing)?;
+                Ok(Value::String(n.to_string()))
+            }
+            Value::Array(items) => items
+                .iter()
+                .map(normalize)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Array),
+            _ => Err(SynthesisError::AssignmentMissing),
+        }
+    }
+
+    let object = json_value
+        .as_object()
+        .ok_or(SynthesisError::AssignmentMissing)?;
+    if REQUIRED.iter().any(|k| !object.contains_key(*k)) {
+        return Err(SynthesisError::AssignmentMissing);
+    }
+
+    object
+        .iter()
+        .map(|(k, v)| Ok((k.clone(), normalize(v)?)))
+        .collect()
+}
+
+#[cfg(test)]
+mod jsonld_input_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn sample() -> Value {
+        json!({
+            "pubKeyX": "11",
+            "pubKeyY": "12",
+            "claimFormats": ["0", 1],
+            "claimFlags": ["1", "0"],
+            "names": [["104", "0"], ["97", "0"]],
+            "docLength": 7
+        })
+    }
+
+    #[test]
+    fn keeps_nesting_and_stringifies_numbers() {
+        let parsed = parse_jsonld_inputs(&sample()).unwrap();
+        assert_eq!(parsed["names"], json!([["104", "0"], ["97", "0"]]));
+        assert_eq!(parsed["claimFormats"], json!(["0", "1"]));
+        assert_eq!(parsed["docLength"], json!("7"));
+        assert_eq!(parsed.len(), 6);
+    }
+
+    #[test]
+    fn passes_unknown_keys_through() {
+        let mut v = sample();
+        v["digestInputsPaddedLen"] = json!(["3"]);
+        assert!(parse_jsonld_inputs(&v).unwrap().contains_key("digestInputsPaddedLen"));
+    }
+
+    #[test]
+    fn rejects_missing_public_input() {
+        let mut v = sample();
+        v.as_object_mut().unwrap().remove("claimFlags");
+        assert!(parse_jsonld_inputs(&v).is_err());
+    }
+
+    #[test]
+    fn rejects_non_decimal_string_and_bad_types() {
+        let mut v = sample();
+        v["pubKeyX"] = json!("0xabc");
+        assert!(parse_jsonld_inputs(&v).is_err());
+        let mut v = sample();
+        v["docLength"] = json!(true);
+        assert!(parse_jsonld_inputs(&v).is_err());
+        assert!(parse_jsonld_inputs(&json!([1])).is_err());
+    }
+
+    #[test]
+    fn layout_places_public_inputs_contiguously() {
+        let l = calculate_jsonld_output_indices(4);
+        assert_eq!((l.issuer_key_x_index, l.issuer_key_y_index), (1, 2));
+        assert_eq!(l.claim_formats_range(), 3..7);
+        assert_eq!(l.claim_flags_range(), 7..11);
+        assert_eq!(l.num_public(), 10);
+        assert_eq!(l.device_key_y_index, l.device_key_x_index + 1);
+    }
+}
+
 #[cfg(test)]
 mod show_witness_indices_tests {
     use super::*;

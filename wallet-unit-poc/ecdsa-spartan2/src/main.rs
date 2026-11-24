@@ -20,7 +20,9 @@ use ecdsa_spartan2::{
     circuit_size::CircuitSize,
     generate_shared_blinds, load_instance, load_proof, load_proving_key, load_shared_blinds,
     load_verifying_key, load_witness,
+    linked_report::{build_report, canonical_decimal, verify_linked_detailed, Expectations},
     paths::keys::{
+        JSONLD_INSTANCE, JSONLD_PROOF, JSONLD_PROVING_KEY, JSONLD_VERIFYING_KEY, JSONLD_WITNESS,
         MDOC_INSTANCE, MDOC_PROOF, MDOC_PROVING_KEY, MDOC_VERIFYING_KEY, MDOC_WITNESS,
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
         PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
@@ -28,10 +30,13 @@ use ecdsa_spartan2::{
     },
     prove_circuit, prove_circuit_with_pk, reblind, reblind_with_loaded_data, run_circuit,
     save_keys, setup_circuit_keys, setup_circuit_keys_no_save, verify_circuit,
-    verify_circuit_with_loaded_data, MdocCircuit, PathConfig, PrepareCircuit, Scalar, ShowCircuit,
-    E,
+    verify_circuit_with_loaded_data, JsonLdCircuit, MdocCircuit, PathConfig, PrepareCircuit,
+    Scalar, ShowCircuit, E,
 };
-use ecdsa_spartan2::utils::{calculate_jwt_output_indices, calculate_mdoc_output_indices};
+use ecdsa_spartan2::circuits::jsonld_circuit::JSONLD_MAX_CLAIMS;
+use ecdsa_spartan2::utils::{
+    calculate_jsonld_output_indices, calculate_jwt_output_indices, calculate_mdoc_output_indices,
+};
 use ff::Field;
 use std::{env::args, fs, ops::Range, path::PathBuf, process, time::Instant};
 use tracing::info;
@@ -733,6 +738,198 @@ fn run_mdoc_prove_pipeline(
     })
 }
 
+/// Prove + reblind + verify pipeline for the JSON-LD → Show flow.
+fn run_jsonld_prove_pipeline(
+    path_config: &PathConfig,
+    jsonld_input: Option<PathBuf>,
+) -> Result<BenchmarkResults, String> {
+    let size = path_config.circuit_size;
+
+    let show_jsonld_input = path_config
+        .base_dir
+        .join("../circom/inputs/show/jsonld.json");
+    let resolved_jsonld_input = jsonld_input.unwrap_or_else(|| path_config.input_json("jsonld"));
+    if !resolved_jsonld_input.exists() {
+        return Err(format!(
+            "JSON-LD inputs not found:\n  {}\nRun: yarn generate:inputs:jsonld",
+            resolved_jsonld_input.display()
+        ));
+    }
+    if !show_jsonld_input.exists() {
+        return Err(format!(
+            "Show inputs for jsonld flow not found:\n  {}\nRun: yarn generate:inputs:jsonld",
+            show_jsonld_input.display()
+        ));
+    }
+
+    let jsonld_pk_path = path_config.key_path(JSONLD_PROVING_KEY);
+    let jsonld_vk_path = path_config.key_path(JSONLD_VERIFYING_KEY);
+    let show_pk_path = path_config.key_path(SHOW_PROVING_KEY);
+    let show_vk_path = path_config.key_path(SHOW_VERIFYING_KEY);
+
+    if !jsonld_pk_path.exists() || !jsonld_vk_path.exists() {
+        return Err("JSON-LD keys not found. Run: cargo run --release -- jsonld setup".into());
+    }
+    if !show_pk_path.exists() || !show_vk_path.exists() {
+        return Err(format!(
+            "Show keys not found for size {size}.\n\
+             Run:  cargo run --release -- show setup --size {size}"
+        ));
+    }
+
+    let jsonld_pk = load_proving_key(&jsonld_pk_path)
+        .map_err(|e| format!("Failed to load jsonld proving key: {e}"))?;
+    let t0 = Instant::now();
+    let jsonld_vk = load_verifying_key(&jsonld_vk_path)
+        .map_err(|e| format!("Failed to load jsonld verifying key: {e}"))?;
+    let load_prepare_vk_ms = t0.elapsed().as_millis();
+    let show_pk = load_proving_key(&show_pk_path)
+        .map_err(|e| format!("Failed to load show proving key: {e}"))?;
+    let t0 = Instant::now();
+    let show_vk = load_verifying_key(&show_vk_path)
+        .map_err(|e| format!("Failed to load show verifying key: {e}"))?;
+    let load_show_vk_ms = t0.elapsed().as_millis();
+
+    info!("Generating shared blinds...");
+    let t0 = Instant::now();
+    generate_shared_blinds::<E>(path_config.artifact_path(SHARED_BLINDS), NUM_SHARED);
+    let generate_blinds_ms = t0.elapsed().as_millis();
+    println!("✓ Shared blinds generated: {} ms\n", generate_blinds_ms);
+
+    info!("Proving JSON-LD circuit...");
+    let t0 = Instant::now();
+    let jsonld_circuit = JsonLdCircuit::new(path_config.clone(), Some(resolved_jsonld_input.clone()));
+    prove_circuit_with_pk(
+        jsonld_circuit,
+        &jsonld_pk,
+        path_config.artifact_path(JSONLD_INSTANCE),
+        path_config.artifact_path(JSONLD_WITNESS),
+        path_config.artifact_path(JSONLD_PROOF),
+    );
+    let prove_jsonld_ms = t0.elapsed().as_millis();
+    println!("✓ JSON-LD proof generated: {} ms\n", prove_jsonld_ms);
+
+    let jsonld_instance = load_instance(path_config.artifact_path(JSONLD_INSTANCE))
+        .expect("load jsonld instance failed");
+    let jsonld_witness =
+        load_witness(path_config.artifact_path(JSONLD_WITNESS)).expect("load jsonld witness failed");
+    let shared_blinds = load_shared_blinds::<E>(path_config.artifact_path(SHARED_BLINDS))
+        .expect("load shared_blinds failed");
+
+    info!("Reblinding JSON-LD proof...");
+    let t0 = Instant::now();
+    reblind_with_loaded_data(
+        &jsonld_pk,
+        jsonld_instance,
+        jsonld_witness,
+        &shared_blinds,
+        path_config.artifact_path(JSONLD_INSTANCE),
+        path_config.artifact_path(JSONLD_WITNESS),
+        path_config.artifact_path(JSONLD_PROOF),
+    );
+    let reblind_jsonld_ms = t0.elapsed().as_millis();
+    println!("✓ JSON-LD proof reblinded: {} ms\n", reblind_jsonld_ms);
+
+    info!("Proving Show circuit (jsonld flow)...");
+    let t0 = Instant::now();
+    let show_circuit = ShowCircuit::new(path_config.clone(), Some(show_jsonld_input.clone()));
+    prove_circuit_with_pk(
+        show_circuit,
+        &show_pk,
+        path_config.artifact_path(SHOW_INSTANCE),
+        path_config.artifact_path(SHOW_WITNESS),
+        path_config.artifact_path(SHOW_PROOF),
+    );
+    let prove_show_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof generated: {} ms\n", prove_show_ms);
+
+    let show_instance =
+        load_instance(path_config.artifact_path(SHOW_INSTANCE)).expect("load show instance failed");
+    let show_witness =
+        load_witness(path_config.artifact_path(SHOW_WITNESS)).expect("load show witness failed");
+
+    info!("Reblinding Show proof...");
+    let t0 = Instant::now();
+    reblind_with_loaded_data(
+        &show_pk,
+        show_instance,
+        show_witness,
+        &shared_blinds,
+        path_config.artifact_path(SHOW_INSTANCE),
+        path_config.artifact_path(SHOW_WITNESS),
+        path_config.artifact_path(SHOW_PROOF),
+    );
+    let reblind_show_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof reblinded: {} ms\n", reblind_show_ms);
+
+    let jsonld_proof =
+        load_proof(path_config.artifact_path(JSONLD_PROOF)).expect("load jsonld proof failed");
+    info!("Verifying JSON-LD proof...");
+    let t0 = Instant::now();
+    let jsonld_public_values = verify_circuit_with_loaded_data(&jsonld_proof, &jsonld_vk);
+    let verify_jsonld_ms = t0.elapsed().as_millis();
+    println!("✓ JSON-LD proof verified: {} ms", verify_jsonld_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&jsonld_proof, &jsonld_vk);
+    let verify_prepare_warm_ms = t0.elapsed().as_millis();
+    println!("✓ JSON-LD proof verified (warm): {} ms", verify_prepare_warm_ms);
+    let jsonld_layout = calculate_jsonld_output_indices(JSONLD_MAX_CLAIMS);
+    print_public_statement(
+        &jsonld_public_values,
+        jsonld_layout.issuer_key_x_index,
+        jsonld_layout.claim_flags_range(),
+        jsonld_layout.claim_formats_range(),
+    );
+
+    let show_proof =
+        load_proof(path_config.artifact_path(SHOW_PROOF)).expect("load show proof failed");
+    info!("Verifying Show proof...");
+    let t0 = Instant::now();
+    let show_public_values = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    let verify_show_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof verified: {} ms", verify_show_ms);
+    let t0 = Instant::now();
+    let _ = verify_circuit_with_loaded_data(&show_proof, &show_vk);
+    let verify_show_warm_ms = t0.elapsed().as_millis();
+    println!("✓ Show proof verified (warm): {} ms", verify_show_warm_ms);
+    if !show_public_values.is_empty() {
+        let expression_result = show_public_values[0] == Field::ONE;
+        println!("  expressionResult: {}\n", expression_result);
+    }
+
+    Ok(BenchmarkResults {
+        size,
+        prepare_setup_ms: None,
+        show_setup_ms: None,
+        generate_blinds_ms,
+        prove_prepare_ms: prove_jsonld_ms,
+        reblind_prepare_ms: reblind_jsonld_ms,
+        prove_show_ms,
+        reblind_show_ms,
+        verify_prepare_ms: verify_jsonld_ms,
+        verify_show_ms,
+        load_prepare_vk_ms,
+        load_show_vk_ms,
+        verify_prepare_warm_ms,
+        verify_show_warm_ms,
+        prepare_proving_key_bytes: get_file_size(&jsonld_pk_path.to_string_lossy()),
+        prepare_verifying_key_bytes: get_file_size(&jsonld_vk_path.to_string_lossy()),
+        show_proving_key_bytes: get_file_size(&show_pk_path.to_string_lossy()),
+        show_verifying_key_bytes: get_file_size(&show_vk_path.to_string_lossy()),
+        prepare_proof_bytes: get_file_size(
+            &path_config.artifact_path(JSONLD_PROOF).to_string_lossy(),
+        ),
+        show_proof_bytes: get_file_size(&path_config.artifact_path(SHOW_PROOF).to_string_lossy()),
+        prepare_witness_bytes: get_file_size(
+            &path_config.artifact_path(JSONLD_WITNESS).to_string_lossy(),
+        ),
+        show_witness_bytes: get_file_size(
+            &path_config.artifact_path(SHOW_WITNESS).to_string_lossy(),
+        ),
+    })
+}
+
+
 /// Full 9-step benchmark: setup → prove → reblind → verify.
 fn run_complete_pipeline(path_config: PathConfig, input_path: Option<PathBuf>) -> BenchmarkResults {
     let size = path_config.circuit_size;
@@ -791,6 +988,7 @@ enum CircuitKind {
     Prepare,
     Show,
     Mdoc,
+    JsonLd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -799,6 +997,7 @@ enum CircuitAction {
     Setup,
     Prove,
     Verify,
+    VerifyLinked,
     Reblind,
     GenerateSharedBlinds,
     Benchmark,
@@ -808,6 +1007,18 @@ enum CircuitAction {
 struct CommandOptions {
     input: Option<PathBuf>,
     size: Option<CircuitSize>,
+    linked: LinkedOptions,
+}
+
+/// Options of `jsonld verify-linked`; unset paths default to the PathConfig locations.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct LinkedOptions {
+    json: bool,
+    prepare_proof: Option<PathBuf>,
+    prepare_vk: Option<PathBuf>,
+    show_proof: Option<PathBuf>,
+    show_vk: Option<PathBuf>,
+    expect: Expectations,
 }
 
 impl CommandOptions {
@@ -824,13 +1035,19 @@ struct ParsedCommand {
 }
 
 fn main() {
-    tracing_subscriber::fmt()
+    let args: Vec<String> = args().collect();
+
+    let subscriber = tracing_subscriber::fmt()
         .with_target(false)
         .with_ansi(true)
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+        .with_env_filter(EnvFilter::from_default_env());
+    // `verify-linked --json` owns stdout: logs must not corrupt the JSON object.
+    if args.iter().any(|a| a == "verify-linked") {
+        subscriber.with_writer(std::io::stderr).init();
+    } else {
+        subscriber.init();
+    }
 
-    let args: Vec<String> = args().collect();
     let command_args: &[String] = if args.len() > 1 { &args[1..] } else { &[] };
 
     let command = match parse_command(command_args) {
@@ -846,6 +1063,7 @@ fn main() {
         CircuitKind::Prepare => execute_prepare(command.action, command.options),
         CircuitKind::Show => execute_show(command.action, command.options),
         CircuitKind::Mdoc => execute_mdoc(command.action, command.options),
+        CircuitKind::JsonLd => execute_jsonld(command.action, command.options),
     }
 }
 
@@ -903,6 +1121,7 @@ fn execute_prepare(action: CircuitAction, options: CommandOptions) {
             let results = run_complete_pipeline(path_config, options.input);
             results.print_summary();
         }
+        CircuitAction::VerifyLinked => unreachable!("verify-linked is rejected for prepare"),
     }
 }
 
@@ -967,6 +1186,7 @@ fn execute_show(action: CircuitAction, options: CommandOptions) {
             let results = run_complete_pipeline(path_config, options.input);
             results.print_summary();
         }
+        CircuitAction::VerifyLinked => unreachable!("verify-linked is rejected for show"),
     }
 }
 
@@ -1027,7 +1247,114 @@ fn execute_mdoc(action: CircuitAction, options: CommandOptions) {
                 process::exit(1);
             }
         },
+        CircuitAction::VerifyLinked => unreachable!("verify-linked is rejected for mdoc"),
     }
+}
+
+fn execute_jsonld(action: CircuitAction, options: CommandOptions) {
+    let path_config = options.path_config();
+
+    match action {
+        CircuitAction::Setup => {
+            info!(input = ?options.input, "Setting up keys for JSON-LD");
+            let circuit = JsonLdCircuit::new(path_config.clone(), options.input.clone());
+            setup_circuit_keys(
+                circuit,
+                path_config.key_path(JSONLD_PROVING_KEY),
+                path_config.key_path(JSONLD_VERIFYING_KEY),
+            );
+        }
+        CircuitAction::Run => {
+            let circuit = JsonLdCircuit::new(path_config, options.input.clone());
+            info!("Running JSON-LD circuit");
+            run_circuit(circuit);
+        }
+        CircuitAction::Prove => {
+            let circuit = JsonLdCircuit::new(path_config.clone(), options.input.clone());
+            info!("Proving JSON-LD circuit");
+            prove_circuit(
+                circuit,
+                path_config.key_path(JSONLD_PROVING_KEY),
+                path_config.artifact_path(JSONLD_INSTANCE),
+                path_config.artifact_path(JSONLD_WITNESS),
+                path_config.artifact_path(JSONLD_PROOF),
+            );
+        }
+        CircuitAction::Verify => {
+            info!("Verifying JSON-LD proof");
+            let _public_values = verify_circuit(
+                path_config.artifact_path(JSONLD_PROOF),
+                path_config.key_path(JSONLD_VERIFYING_KEY),
+            );
+        }
+        CircuitAction::VerifyLinked => {
+            let ok = execute_verify_linked(&path_config, &options.linked);
+            process::exit(if ok { 0 } else { 1 });
+        }
+        CircuitAction::Reblind => {
+            info!("Reblinding JSON-LD proof");
+            reblind(
+                path_config.key_path(JSONLD_PROVING_KEY),
+                path_config.artifact_path(JSONLD_INSTANCE),
+                path_config.artifact_path(JSONLD_WITNESS),
+                path_config.artifact_path(JSONLD_PROOF),
+                path_config.artifact_path(SHARED_BLINDS),
+            );
+        }
+        CircuitAction::GenerateSharedBlinds => {
+            info!("Generating shared blinds (jsonld)");
+            generate_shared_blinds::<E>(path_config.artifact_path(SHARED_BLINDS), NUM_SHARED);
+        }
+        CircuitAction::Benchmark => match run_jsonld_prove_pipeline(&path_config, options.input) {
+            Ok(results) => {
+                results.print_summary();
+                let linked = LinkedOptions::default();
+                if !execute_verify_linked(&path_config, &linked) {
+                    eprintln!("Error: linked verification failed");
+                    process::exit(1);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
+        },
+    }
+}
+
+/// Verify the Prepare + Show pair, print the report, and return whether every
+/// check passed. In `--json` mode stdout carries exactly one JSON object.
+fn execute_verify_linked(path_config: &PathConfig, opts: &LinkedOptions) -> bool {
+    let pick = |explicit: &Option<PathBuf>, default: PathBuf| {
+        explicit
+            .as_ref()
+            .map(|p| path_config.resolve(p))
+            .unwrap_or(default)
+    };
+    let result = verify_linked_detailed(
+        pick(&opts.prepare_proof, path_config.artifact_path(JSONLD_PROOF)),
+        pick(&opts.prepare_vk, path_config.key_path(JSONLD_VERIFYING_KEY)),
+        pick(&opts.show_proof, path_config.artifact_path(SHOW_PROOF)),
+        pick(&opts.show_vk, path_config.key_path(SHOW_VERIFYING_KEY)),
+    );
+    let (report, ok) = build_report(&result, JSONLD_MAX_CLAIMS, &opts.expect);
+
+    if opts.json {
+        println!("{report}");
+    } else {
+        println!(
+            "prepareValid: {}\nshowValid: {}\ncommWSharedEqual: {}\nexpressionResult: {}\n\
+             issuerKeyMatches: {}\nmessageHashMatches: {}\nlinked verification: {}",
+            report["prepareValid"],
+            report["showValid"],
+            report["commWSharedEqual"],
+            report["expressionResult"],
+            report["issuerKeyMatches"],
+            report["messageHashMatches"],
+            if ok { "OK" } else { "FAILED" }
+        );
+    }
+    ok
 }
 
 fn parse_command(args: &[String]) -> Result<ParsedCommand, String> {
@@ -1043,6 +1370,7 @@ fn parse_command(args: &[String]) -> Result<ParsedCommand, String> {
         "prepare" => parse_circuit_command(CircuitKind::Prepare, &args[1..]),
         "show" => parse_circuit_command(CircuitKind::Show, &args[1..]),
         "mdoc" => parse_circuit_command(CircuitKind::Mdoc, &args[1..]),
+        "jsonld" => parse_circuit_command(CircuitKind::JsonLd, &args[1..]),
         "benchmark" => Ok(ParsedCommand {
             circuit: CircuitKind::Prepare,
             action: CircuitAction::Benchmark,
@@ -1151,6 +1479,7 @@ fn parse_circuit_command(circuit: CircuitKind, tail: &[String]) -> Result<Parsed
         "setup"                 => (CircuitAction::Setup, 1),
         "prove"                 => (CircuitAction::Prove, 1),
         "verify"                => (CircuitAction::Verify, 1),
+        "verify-linked"         => (CircuitAction::VerifyLinked, 1),
         "reblind"               => (CircuitAction::Reblind, 1),
         "generate_shared_blinds"=> (CircuitAction::GenerateSharedBlinds, 1),
         "benchmark"             => (CircuitAction::Benchmark, 1),
@@ -1163,12 +1492,20 @@ fn parse_circuit_command(circuit: CircuitKind, tail: &[String]) -> Result<Parsed
         }
     };
 
-    if action == CircuitAction::GenerateSharedBlinds && circuit != CircuitKind::Prepare {
-        return Err("generate_shared_blinds is only supported for the Prepare circuit".into());
+    if action == CircuitAction::GenerateSharedBlinds
+        && !matches!(circuit, CircuitKind::Prepare | CircuitKind::JsonLd)
+    {
+        return Err(
+            "generate_shared_blinds is only supported for the Prepare and jsonld circuits".into(),
+        );
+    }
+    if action == CircuitAction::VerifyLinked && circuit != CircuitKind::JsonLd {
+        return Err("verify-linked is only supported for the jsonld circuit".into());
     }
 
     let options_slice = &tail[option_start..];
     let options = match action {
+        CircuitAction::VerifyLinked => parse_options_linked(options_slice)?,
         CircuitAction::Run
         | CircuitAction::Prove
         | CircuitAction::Setup
@@ -1262,10 +1599,69 @@ fn parse_options_size_only(args: &[String]) -> Result<CommandOptions, String> {
     Ok(opts)
 }
 
+fn parse_options_linked(args: &[String]) -> Result<CommandOptions, String> {
+    let mut opts = CommandOptions::default();
+    let (mut expect_x, mut expect_y) = (None, None);
+    let mut i = 0;
+    while i < args.len() {
+        let arg = args[i].as_str();
+        let (flag, inline) = match arg.split_once('=') {
+            Some((f, v)) if f.starts_with("--") => (f, Some(v.to_string())),
+            _ => (arg, None),
+        };
+        let value = |i: &mut usize| -> Result<String, String> {
+            if let Some(v) = &inline {
+                return Ok(v.clone());
+            }
+            *i += 1;
+            args.get(*i)
+                .cloned()
+                .ok_or_else(|| format!("Missing value for {flag}"))
+        };
+        let decimal = |i: &mut usize| -> Result<String, String> {
+            canonical_decimal(&value(i)?).map_err(|e| format!("{flag}: {e}"))
+        };
+        match flag {
+            "--json" => opts.linked.json = true,
+            "--prepare-proof" => opts.linked.prepare_proof = Some(value(&mut i)?.into()),
+            "--prepare-vk" => opts.linked.prepare_vk = Some(value(&mut i)?.into()),
+            "--show-proof" => opts.linked.show_proof = Some(value(&mut i)?.into()),
+            "--show-vk" => opts.linked.show_vk = Some(value(&mut i)?.into()),
+            "--expect-issuer-x" => expect_x = Some(decimal(&mut i)?),
+            "--expect-issuer-y" => expect_y = Some(decimal(&mut i)?),
+            "--expect-message-hash" => opts.linked.expect.message_hash = Some(decimal(&mut i)?),
+            "--size" | "-s" => {
+                opts.size = Some(
+                    value(&mut i)?
+                        .parse::<CircuitSize>()
+                        .map_err(|e| format!("Invalid --size: {e}"))?,
+                );
+            }
+            "--help" | "-h" => {
+                print_usage();
+                process::exit(0);
+            }
+            other => return Err(format!("Unknown option '{other}'")),
+        }
+        i += 1;
+    }
+    opts.linked.expect.issuer_key = match (expect_x, expect_y) {
+        (Some(x), Some(y)) => Some((x, y)),
+        (None, None) => None,
+        _ => return Err("--expect-issuer-x and --expect-issuer-y must be given together".into()),
+    };
+    Ok(opts)
+}
+
 fn print_usage() {
     eprintln!(
         "Usage:
   ecdsa-spartan2 <prepare|show> [run|setup|prove|verify|reblind|benchmark] [options]
+  ecdsa-spartan2 <mdoc|jsonld>  [run|setup|prove|verify|reblind|benchmark] [options]
+  ecdsa-spartan2 jsonld verify-linked [--json] [--prepare-proof P] [--prepare-vk P]
+                                      [--show-proof P] [--show-vk P] [--size SZ]
+                                      [--expect-issuer-x N --expect-issuer-y N]
+                                      [--expect-message-hash N]
   ecdsa-spartan2 benchmark      [options]
   ecdsa-spartan2 benchmark-all
 
@@ -1308,4 +1704,91 @@ Typical workflow:
 Legacy commands: prove_prepare, prove_show, setup_prepare, setup_show,
 verify_prepare, verify_show, reblind_prepare, reblind_show, generate_shared_blinds"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(s: &str) -> Vec<String> {
+        s.split_whitespace().map(String::from).collect()
+    }
+
+    #[test]
+    fn jsonld_actions_parse() {
+        for (arg, action) in [
+            ("setup", CircuitAction::Setup),
+            ("prove", CircuitAction::Prove),
+            ("reblind", CircuitAction::Reblind),
+            ("verify", CircuitAction::Verify),
+            ("run", CircuitAction::Run),
+            ("benchmark", CircuitAction::Benchmark),
+        ] {
+            let cmd = parse_command(&argv(&format!("jsonld {arg}"))).unwrap();
+            assert_eq!(cmd.circuit, CircuitKind::JsonLd);
+            assert_eq!(cmd.action, action);
+        }
+    }
+
+    #[test]
+    fn generate_shared_blinds_parses_for_jsonld_only_besides_prepare() {
+        let cmd = parse_command(&argv("jsonld generate_shared_blinds --size 2k")).unwrap();
+        assert_eq!(cmd.circuit, CircuitKind::JsonLd);
+        assert_eq!(cmd.action, CircuitAction::GenerateSharedBlinds);
+        assert_eq!(cmd.options.size, Some(CircuitSize::Kb2));
+        assert!(parse_command(&argv("prepare generate_shared_blinds")).is_ok());
+        assert!(parse_command(&argv("show generate_shared_blinds")).is_err());
+        assert!(parse_command(&argv("jsonld generate_shared_blinds --input x.json")).is_err());
+    }
+
+    #[test]
+    fn verify_linked_defaults_and_flags() {
+        let cmd = parse_command(&argv("jsonld verify-linked --json")).unwrap();
+        assert_eq!(cmd.action, CircuitAction::VerifyLinked);
+        assert_eq!(
+            cmd.options.linked,
+            LinkedOptions {
+                json: true,
+                ..Default::default()
+            }
+        );
+
+        let cmd = parse_command(&argv(
+            "jsonld verify-linked --prepare-proof a.bin --prepare-vk=b.key --show-proof c.bin --show-vk d.key --size 2k",
+        ))
+        .unwrap();
+        let l = cmd.options.linked;
+        assert!(!l.json);
+        assert_eq!(l.prepare_proof, Some("a.bin".into()));
+        assert_eq!(l.prepare_vk, Some("b.key".into()));
+        assert_eq!(l.show_proof, Some("c.bin".into()));
+        assert_eq!(l.show_vk, Some("d.key".into()));
+        assert_eq!(cmd.options.size, Some(CircuitSize::Kb2));
+    }
+
+    #[test]
+    fn verify_linked_rejects_bad_usage() {
+        assert!(parse_command(&argv("mdoc verify-linked")).is_err());
+        assert!(parse_command(&argv("jsonld verify-linked --bogus")).is_err());
+        assert!(parse_command(&argv("jsonld verify-linked --show-vk")).is_err());
+    }
+
+    #[test]
+    fn verify_linked_expect_flags() {
+        let cmd = parse_command(&argv(
+            "jsonld verify-linked --expect-issuer-x 007 --expect-issuer-y=8 --expect-message-hash 99",
+        ))
+        .unwrap();
+        let e = cmd.options.linked.expect;
+        assert_eq!(e.issuer_key, Some(("7".to_string(), "8".to_string())));
+        assert_eq!(e.message_hash, Some("99".to_string()));
+
+        let cmd = parse_command(&argv("jsonld verify-linked")).unwrap();
+        assert_eq!(cmd.options.linked.expect, Expectations::default());
+
+        assert!(parse_command(&argv("jsonld verify-linked --expect-issuer-x 1")).is_err());
+        assert!(parse_command(&argv("jsonld verify-linked --expect-issuer-y 1")).is_err());
+        assert!(parse_command(&argv("jsonld verify-linked --expect-message-hash 0x1")).is_err());
+        assert!(parse_command(&argv("jsonld verify-linked --expect-message-hash")).is_err());
+    }
 }

@@ -17,9 +17,11 @@ use std::{
 
 use ecdsa_spartan2::{
     circuit_size::CircuitSize,
+    circuits::jsonld_circuit::{JSONLD_MAX_CLAIMS, JSONLD_SHARED_CLAIMS},
     utils::{
-        calculate_jwt_output_indices, calculate_mdoc_output_indices,
-        calculate_show_witness_indices, MDOC_CLAIM_VALUES_WITNESS_START,
+        calculate_jsonld_output_indices, calculate_jwt_output_indices,
+        calculate_mdoc_output_indices, calculate_show_witness_indices,
+        JSONLD_CLAIM_VALUES_WITNESS_START, MDOC_CLAIM_VALUES_WITNESS_START,
     },
 };
 
@@ -173,6 +175,76 @@ fn mdoc_claim_value_offsets_match_sym() {
         assert!(
             idx > layout.num_public(),
             "mdoc: deviceKey is inside the public IO — unlinkability is broken"
+        );
+    }
+}
+
+#[test]
+fn jsonld_witness_offsets_match_sym() {
+    let layout = calculate_jsonld_output_indices(JSONLD_MAX_CLAIMS);
+    let n = JSONLD_MAX_CLAIMS;
+
+    // Every shared slot must be one of the compiled claim slots.
+    assert!(JSONLD_SHARED_CLAIMS <= n);
+    assert_eq!(JSONLD_SHARED_CLAIMS, CircuitSize::default().n_claims());
+
+    let array = |name: &str| (0..n).map(|i| format!("main.{name}[{i}]")).collect::<Vec<_>>();
+    let wanted: Vec<String> = ["main.pubKeyX".to_string(), "main.pubKeyY".to_string()]
+        .into_iter()
+        .chain(array("claimFormats"))
+        .chain(array("claimFlags"))
+        .chain(array("normalizedClaimValues"))
+        .chain(array("claimIdentifierHashes"))
+        .chain(["main.deviceKeyX".to_string(), "main.deviceKeyY".to_string()])
+        .collect();
+
+    let Some(actual) = witness_indices("jsonld", &wanted) else {
+        // Same strictness as the JWT test: a missing circuit is a failure unless
+        // the caller opts out explicitly.
+        if std::env::var("ZKID_ALLOW_UNCOMPILED").as_deref() == Ok("1") {
+            eprintln!("skipping jsonld: circuit not compiled (ZKID_ALLOW_UNCOMPILED=1)");
+            return;
+        }
+        panic!(
+            "jsonld circuit not compiled: {} missing. Run \
+             `bash ../circom/scripts/compile.sh jsonld`, or set ZKID_ALLOW_UNCOMPILED=1 to skip.",
+            sym_path("jsonld").display()
+        );
+    };
+
+    let expected: Vec<usize> = [layout.issuer_key_x_index, layout.issuer_key_y_index]
+        .into_iter()
+        .chain(layout.claim_formats_range())
+        .chain(layout.claim_flags_range())
+        .chain(layout.claim_values_range())
+        .chain(
+            layout.claim_identifier_hashes_start
+                ..layout.claim_identifier_hashes_start + layout.claim_values_len,
+        )
+        .chain([layout.device_key_x_index, layout.device_key_y_index])
+        .collect();
+
+    assert_eq!(
+        actual, expected,
+        "jsonld witness layout drifted; update the JSONLD_*_WITNESS_START constants in utils.rs"
+    );
+    assert_eq!(layout.claim_values_start, JSONLD_CLAIM_VALUES_WITNESS_START);
+    // The public prefix is contiguous, so the last flag closes it.
+    assert_eq!(layout.claim_flags_range().end - 1, layout.num_public());
+
+    // Claim values and the device key are private: publishing either would
+    // reveal the attribute or let verifiers correlate presentations.
+    let private = layout
+        .claim_values_range()
+        .chain([layout.device_key_x_index, layout.device_key_y_index])
+        .chain(
+            layout.claim_identifier_hashes_start
+                ..layout.claim_identifier_hashes_start + layout.claim_values_len,
+        );
+    for idx in private {
+        assert!(
+            idx > layout.num_public(),
+            "jsonld: witness[{idx}] is inside the public IO"
         );
     }
 }

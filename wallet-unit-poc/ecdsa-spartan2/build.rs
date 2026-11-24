@@ -31,6 +31,13 @@ fn main() {
         println!("cargo:warning=Found compiled circuit: mdoc.cpp — enabling mdoc support");
     }
 
+    // JSON-LD likewise: a single `has_circuit_jsonld` cfg.
+    println!("cargo::rustc-check-cfg=cfg(has_circuit_jsonld)");
+    if circuits_dir.join("jsonld.cpp").exists() {
+        println!("cargo:rustc-cfg=has_circuit_jsonld");
+        println!("cargo:warning=Found compiled circuit: jsonld.cpp — enabling jsonld support");
+    }
+
     // Only run witnesscalc build when the native-witness feature is enabled.
     // WASM builds use JavaScript witness generation instead.
     #[cfg(feature = "native-witness")]
@@ -66,5 +73,15 @@ fn main() {
         }
 
         witnesscalc_adapter::build_and_link(circuits_path);
+
+        // The adapter links the witnesscalc dylibs without an rpath, so the CLI
+        // only starts under `cargo run`. Embed one so external callers (the
+        // `jsonld verify-linked` verifier) can exec the binary directly.
+        #[cfg(target_os = "macos")]
+        if let Ok(out_dir) = std::env::var("OUT_DIR") {
+            println!(
+                "cargo:rustc-link-arg-bins=-Wl,-rpath,{out_dir}/witnesscalc/package/lib"
+            );
+        }
     }
 }

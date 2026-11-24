@@ -34,21 +34,21 @@ pub(crate) fn call_jwt_witness(
     circuit_name: &str,
     inputs_json: &str,
 ) -> Result<Vec<u8>, SynthesisError> {
-    let result = match circuit_name {
+    let result: Result<Vec<u8>, SynthesisError> = match circuit_name {
         #[cfg(has_circuit_base)]
-        "jwt" => jwt_witness(inputs_json),
+        "jwt" => jwt_witness(inputs_json).map_err(|_| SynthesisError::Unsatisfiable),
 
         #[cfg(has_circuit_1k)]
-        "jwt_1k" => jwt_1k_witness(inputs_json),
+        "jwt_1k" => jwt_1k_witness(inputs_json).map_err(|_| SynthesisError::Unsatisfiable),
 
         #[cfg(has_circuit_2k)]
-        "jwt_2k" => jwt_2k_witness(inputs_json),
+        "jwt_2k" => jwt_2k_witness(inputs_json).map_err(|_| SynthesisError::Unsatisfiable),
 
         #[cfg(has_circuit_4k)]
-        "jwt_4k" => jwt_4k_witness(inputs_json),
+        "jwt_4k" => jwt_4k_witness(inputs_json).map_err(|_| SynthesisError::Unsatisfiable),
 
         #[cfg(has_circuit_8k)]
-        "jwt_8k" => jwt_8k_witness(inputs_json),
+        "jwt_8k" => jwt_8k_witness(inputs_json).map_err(|_| SynthesisError::Unsatisfiable),
 
         name => {
             eprintln!(
@@ -61,7 +61,7 @@ pub(crate) fn call_jwt_witness(
         }
     };
 
-    result.map_err(|_| SynthesisError::Unsatisfiable)
+    result
 }
 
 // Stub for WASM builds - witness generation happens in JavaScript

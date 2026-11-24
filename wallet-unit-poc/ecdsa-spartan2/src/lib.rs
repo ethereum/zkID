@@ -13,6 +13,8 @@ pub type Scalar = <E as Engine>::Scalar;
 
 pub mod circuit_size;
 pub mod circuits;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod linked_report;
 pub mod paths;
 pub mod prover;
 #[cfg(not(target_arch = "wasm32"))]
@@ -22,11 +24,12 @@ pub mod utils;
 // Re-export commonly used types and functions
 pub use circuit_size::CircuitSize;
 pub use circuits::{
-    mdoc_circuit::MdocCircuit, prepare_circuit::PrepareCircuit, show_circuit::ShowCircuit,
+    jsonld_circuit::JsonLdCircuit, mdoc_circuit::MdocCircuit, prepare_circuit::PrepareCircuit,
+    show_circuit::ShowCircuit,
 };
 pub use paths::PathConfig;
 pub use prover::{
-    generate_mdoc_witness, generate_prepare_witness, prove_circuit_in_memory, reblind_in_memory,
+    generate_jsonld_witness, generate_mdoc_witness, generate_prepare_witness, prove_circuit_in_memory, reblind_in_memory,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use prover::{
@@ -39,7 +42,7 @@ pub use setup::{
     load_witness, save_keys, setup_circuit_keys, setup_circuit_keys_no_save,
 };
 pub use utils::{
-    bigint_to_scalar, calculate_jwt_output_indices, calculate_mdoc_output_indices,
-    convert_bigint_to_scalar, parse_jwt_inputs, parse_mdoc_inputs, parse_show_inputs,
-    parse_witness,
+    bigint_to_scalar, calculate_jsonld_output_indices, calculate_jwt_output_indices,
+    calculate_mdoc_output_indices, convert_bigint_to_scalar, parse_jsonld_inputs,
+    parse_jwt_inputs, parse_mdoc_inputs, parse_show_inputs, parse_witness,
 };
