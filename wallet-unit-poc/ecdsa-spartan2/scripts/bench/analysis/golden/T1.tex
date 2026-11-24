@@ -1,0 +1,18 @@
+\begin{tabular}{lrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{Mac} & \multicolumn{2}{c}{iPhone 17 Pro} & \multicolumn{2}{c}{Galaxy S26+} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Phase & OpenAC+ GP only & OpenAC+ (8,20) & OpenAC+ GP only & OpenAC+ (8,20) & OpenAC+ GP only & OpenAC+ (8,20) \\
+\midrule
+Offline, per credential & 1500 ms [1500, 1506] & 1545 ms [1545, 1551] & 1350 ms [1345, 1355] & 1390 ms [1385, 1396] & 1800 ms [1793, 1807] & 1854 ms [1847, 1861] \\
+Per tuple & 900 ms [900, 904] & 927 ms [927, 931] & 810 ms [807, 813] & 834 ms [831, 838] & 1080 ms [1076, 1084] & 1112 ms [1108, 1117] \\
+Online, tuple ready & 156 ms [156, 157] & 1189 ms [1189, 1193] & 141 ms [140, 141] & 1070 ms [1065, 1074] & 188 ms [187, 188] & 1426 ms [1421, 1432] \\
+Online with refill & 1056 ms [1056, 1061] & 2116 ms [2116, 2124] & 951 ms [947, 955] & 1904 ms [1896, 1912] & 1268 ms [1263, 1273] & 2539 ms [2529, 2549] \\
+Verify & 60 ms [60, 60] & 60 ms [60, 60] & 54 ms [54, 54] & 54 ms [54, 54] & 72 ms [72, 72] & 72 ms [72, 72] \\
+Statement check & 5 ms [5, 5] & 5 ms [5, 5] & 4 ms [4, 5] & 4 ms [4, 5] & 6 ms [6, 6] & 6 ms [6, 6] \\
+Verify + acceptance & 65 ms [65, 65] & 65 ms [65, 65] & 58 ms [58, 59] & 58 ms [58, 59] & 78 ms [78, 78] & 78 ms [78, 78] \\
+VK load, first iteration (Mac: page cache warm) & 20 ms [20, 20] & 20 ms [20, 20] & 18 ms [18, 18] & 18 ms [18, 18] & 24 ms [24, 24] & 24 ms [24, 24] \\
+VK digest (Mac only; the PR \#115 sidecar removes it on phones) & 100 ms [100, 100] & 100 ms [100, 100] & -- & -- & -- & -- \\
+Peak memory & 1651.0 MB & 3251.0 MB & 2457.6 MB & 2457.6 MB & 2048.0 MB & 2048.0 MB \\
+\bottomrule
+\end{tabular}

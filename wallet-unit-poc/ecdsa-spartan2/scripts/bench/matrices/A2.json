@@ -1,0 +1,68 @@
+{
+ "matrix_id": "A2",
+ "cells": [
+  {
+   "id": "A2-v1-4k",
+   "matrix_id": "A2",
+   "cmd": "run",
+   "stage": "v1/A2-v1-4k",
+   "config": "v1",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "4k"
+   ]
+  },
+  {
+   "id": "A2-v1-8k",
+   "matrix_id": "A2",
+   "cmd": "run",
+   "stage": "v1/A2-v1-8k",
+   "config": "v1",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "8k"
+   ]
+  },
+  {
+   "id": "A2-combined-4k",
+   "matrix_id": "A2",
+   "cmd": "run",
+   "stage": "combined/A2-combined-4k",
+   "config": "combined",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "4k"
+   ]
+  },
+  {
+   "id": "A2-combined-8k",
+   "matrix_id": "A2",
+   "cmd": "run",
+   "stage": "combined/A2-combined-8k",
+   "config": "combined",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "8k"
+   ]
+  },
+  {
+   "id": "A2-jwt_1920",
+   "matrix_id": "A2",
+   "cmd": "generic",
+   "stage": "variant/A2-jwt_1920",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": [],
+   "role": "prepare"
+  }
+ ]
+}

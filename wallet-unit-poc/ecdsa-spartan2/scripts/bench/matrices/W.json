@@ -1,0 +1,106 @@
+{
+ "matrix_id": "W",
+ "cells": [
+  {
+   "id": "W-w2",
+   "matrix_id": "W",
+   "cmd": "generic",
+   "stage": "variant/W-w2",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "W-w1",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-w1",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-eq_true",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-eq_true",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-eq_false",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-eq_false",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-le_true",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-le_true",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-le_false",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-le_false",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-ge_true",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-ge_true",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  },
+  {
+   "id": "W-ge_false",
+   "matrix_id": "W",
+   "cmd": "run",
+   "stage": "headline/W-ge_false",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ]
+  }
+ ]
+}

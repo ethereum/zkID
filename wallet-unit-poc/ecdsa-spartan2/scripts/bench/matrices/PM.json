@@ -1,0 +1,33 @@
+{
+ "matrix_id": "PM",
+ "cells": [
+  {
+   "id": "PM-main-2k",
+   "matrix_id": "PM",
+   "cmd": "peakmem",
+   "stage": "main/A1-main-2k",
+   "config": "main",
+   "visits": 3,
+   "phases": [
+    "prepare",
+    "present",
+    "verify",
+    "online"
+   ]
+  },
+  {
+   "id": "PM-headline-2k",
+   "matrix_id": "PM",
+   "cmd": "peakmem",
+   "stage": "headline/A1-headline-2k",
+   "config": "headline",
+   "visits": 3,
+   "phases": [
+    "prepare",
+    "present",
+    "verify",
+    "online"
+   ]
+  }
+ ]
+}

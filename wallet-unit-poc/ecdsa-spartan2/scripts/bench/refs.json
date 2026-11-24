@@ -1,0 +1,194 @@
+{
+  "spartan2": {
+    "git": "https://github.com/0xVikasRushi/Spartan2.git",
+    "branch": "openac-sdk",
+    "rev": "d687dbb"
+  },
+  "configs": {
+    "v1": {
+      "base_sha": "1e6b69e8645e22786de487763ac796b2f2b1245a",
+      "bench_sha": "e4e3d6de9cdfa9ad79e3b9b9af9135e22589e511",
+      "circuit_commit": "1e6b69e8645e22786de487763ac796b2f2b1245a",
+      "spartan2_rev": "d687dbb",
+      "r1cs": [
+        {
+          "circuit": "ecdsa",
+          "jwt_size": null,
+          "r1cs_sha256": "19d181047e673253274164807a6f72069210e4e84e15b112bb27697b8bb4a80b"
+        },
+        {
+          "circuit": "jwt",
+          "jwt_size": "1920",
+          "r1cs_sha256": "183a77a96c62cd7e819c8a1f8bcb699367838ab8cab8b562d0c32d08908d045d"
+        },
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "8b06aabf50a6c814f237144e9169b2cdff1128ffa2922254540753fe85246ef6"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "76648dca5822ca23678346bee0defb7bc9163d5c88ba6723b35ee0dc9cd71e5e"
+        },
+        {
+          "circuit": "jwt_4k",
+          "jwt_size": "4k",
+          "r1cs_sha256": "648b2e96e02b4b406951088d177a6ee3694ce4a3dd3ff5f7ba5b1a892864cff8"
+        },
+        {
+          "circuit": "jwt_8k",
+          "jwt_size": "8k",
+          "r1cs_sha256": "c89a60d8cda7fbcfe2fc06354e41fb2296c7a3dbe69b9027656a45ed1e086800"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "a89ca60b9fcbcb9e25c420a1ca65813598fbea0cf1a2033ae313803b36ca119b"
+        }
+      ]
+    },
+    "main": {
+      "base_sha": "b605ca40e52ff6767fa038bb2393385aa5189ca7",
+      "bench_sha": "9805435f76e5d5150048ab6e2957c9b5b2570691",
+      "circuit_commit": "9557067768ee610de56be0a26e9ff97842ed9b26",
+      "spartan2_rev": "d687dbb",
+      "base_spartan2_rev": "64687af",
+      "r1cs": [
+        {
+          "circuit": "ecdsa",
+          "jwt_size": null,
+          "r1cs_sha256": "ba3db337b03d29b5d45a2fb2ef7481e0055c92265392200bce85972afeb08916"
+        },
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "879cfb17d721d293895e1df503901094904f0d9680ece31aa9f4587ff4c84ba6"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "d4f8b34dfd454234872a34f47ea486545cb4d989c41ed75f856268718251dc6a"
+        },
+        {
+          "circuit": "jwt_4k",
+          "jwt_size": "4k",
+          "r1cs_sha256": "a1e2fbe506cd3be81a4216eac99f2b4838b1351d97bc9f4ec6615f3fe60d618c"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "3809e70502fa90f2038760da5f1399a1e3eb17923e5af872edf3dfa0b7d37a9a"
+        }
+      ]
+    },
+    "issuer": {
+      "base_sha": "38f2d8eb674d2d09da2b4914c716da722c56af9d",
+      "bench_sha": "9af87a8b23e70392842d84b14a55ec29e8b5affa",
+      "circuit_commit": "38f2d8eb674d2d09da2b4914c716da722c56af9d",
+      "spartan2_rev": "d687dbb",
+      "r1cs": [
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "c5308d05d38c0a636243c7a426b708f7f2c88ba6bf273371478efa8dc7725612"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "7b524484f330f2bd294158f5687dac9c2705e24d0429d2c2af386c3772b12bc4"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "23530234a2b280e785ab72a569335ea56a20becd016468857ec70f13bd848f7d"
+        }
+      ]
+    },
+    "revocation": {
+      "base_sha": "ef842eddb4ffa1fd5bb0cf7da0edd43c05d4cb52",
+      "bench_sha": "dfeff34405cc6c5ebf38aacce2aeef8d51c0df47",
+      "circuit_commit": "ef842eddb4ffa1fd5bb0cf7da0edd43c05d4cb52",
+      "spartan2_rev": "d687dbb",
+      "r1cs": [
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "379c7fe2e5c909c527aa2562e750117f840f1632426a606b94d877f4f241c22e"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "f3fe78f87f7de7966cfca50d65389a8c3d10edc43706c709fb57e95663fd9810"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "e5d82e801eb96588ee50177882f811258873678ffcf1b4465b11802a0da7de16"
+        }
+      ]
+    },
+    "combined": {
+      "base_sha": "b53cbc4e78f1b237caaa386b0dc3de48ee2196c7",
+      "bench_sha": "7b9554129d86a29266dc3eb004ba633f58ecfd85",
+      "circuit_commit": "f17fffef6015acae60944660424ebbf1c497c9cd",
+      "spartan2_rev": "d687dbb",
+      "r1cs": [
+        {
+          "circuit": "jwt",
+          "jwt_size": "1920",
+          "r1cs_sha256": "e22ad53c909e3a2c63b7bd0f540dce6b1e0fd172c699b45cad0c6fba2259039a"
+        },
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "610422607e764240824979a3502e7e33d3056634f46efbb5797ed5dcb061089d"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "30086f43e5c6e16c7cb7aabee2cc52b20ba8cbfbd820d241c5bcb64e6d4d753f"
+        },
+        {
+          "circuit": "jwt_4k",
+          "jwt_size": "4k",
+          "r1cs_sha256": "11eff98e1e89d25d4c174ac9dc1eaa9a1ec3d65bf54e7c2e939cbcd648eed74f"
+        },
+        {
+          "circuit": "jwt_8k",
+          "jwt_size": "8k",
+          "r1cs_sha256": "5b7773fea6352e493df79fcbd675dd7915a2fb25f2daac6979f161822c6f05b0"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "99547d22b5e6892126508ece765139304011c0fde4cbe7f008e26e8e3af0e331"
+        }
+      ]
+    },
+    "headline": {
+      "base_sha": "b53cbc4e78f1b237caaa386b0dc3de48ee2196c7",
+      "bench_sha": "88567c6a1f82c4fe2556401f66078dd0cf28a283",
+      "circuit_commit": "1deb778edc2e416b8717407e1536647d0ea46df9",
+      "spartan2_rev": "d687dbb",
+      "r1cs": [
+        {
+          "circuit": "jwt_1k",
+          "jwt_size": "1k",
+          "r1cs_sha256": "610422607e764240824979a3502e7e33d3056634f46efbb5797ed5dcb061089d"
+        },
+        {
+          "circuit": "jwt_2k",
+          "jwt_size": "2k",
+          "r1cs_sha256": "30086f43e5c6e16c7cb7aabee2cc52b20ba8cbfbd820d241c5bcb64e6d4d753f"
+        },
+        {
+          "circuit": "show",
+          "jwt_size": null,
+          "r1cs_sha256": "53efe3db91d29ad50fa01ff937f4bb15a847b012188268627a530ab30c2fd31a"
+        }
+      ],
+      "stacked_on": "combined"
+    }
+  }
+}

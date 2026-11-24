@@ -1,0 +1,95 @@
+{
+ "matrix_id": "S-D",
+ "cells": [
+  {
+   "id": "S-D-sd_d8_r8",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d8_r8",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d8_r16",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d8_r16",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sn_show_n2",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sn_show_n2",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d8_r24",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d8_r24",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d8_r32",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d8_r32",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d16_r20",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d16_r20",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d24_r20",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d24_r20",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d32_r20",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d32_r20",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-D-sd_d32_r32",
+   "matrix_id": "S-D",
+   "cmd": "generic",
+   "stage": "variant/S-D-sd_d32_r32",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  }
+ ]
+}

@@ -1,0 +1,50 @@
+{
+ "matrix_id": "X2",
+ "cells": [
+  {
+   "id": "X2-main-1t",
+   "matrix_id": "X2",
+   "cmd": "run",
+   "stage": "main/X2-main-1t",
+   "config": "main",
+   "visits": 3,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ],
+   "threads": 1,
+   "base_cell": "A1-main-2k"
+  },
+  {
+   "id": "X2-v1-1t",
+   "matrix_id": "X2",
+   "cmd": "run",
+   "stage": "v1/X2-v1-1t",
+   "config": "v1",
+   "visits": 3,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ],
+   "threads": 1,
+   "base_cell": "A1-v1-2k"
+  },
+  {
+   "id": "X2-headline-1t",
+   "matrix_id": "X2",
+   "cmd": "run",
+   "stage": "headline/X2-headline-1t",
+   "config": "headline",
+   "visits": 3,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ],
+   "threads": 1,
+   "base_cell": "A1-headline-2k"
+  }
+ ]
+}
