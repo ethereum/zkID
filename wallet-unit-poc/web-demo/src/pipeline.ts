@@ -213,6 +213,9 @@ let currentPresent: PresentResult | null = null;
 // Step 0: Initialize WASM + load keys (called once)
 // ---------------------------------------------------------------------------
 
+// Must match abi_version() in openac-sdk/wasm/src/lib.rs.
+const ABI_VERSION = 1;
+
 export type ProgressCallback = (message: string) => void;
 
 export async function initWasm(
@@ -228,6 +231,13 @@ export async function initWasm(
   const wasmResp = await fetch("/openac_wasm_bg.wasm");
   const wasmBytes = await wasmResp.arrayBuffer();
   wasmModule.initSync({ module: new WebAssembly.Module(wasmBytes) });
+  const abi = wasmModule.abi_version();
+  if (abi !== ABI_VERSION) {
+    throw new Error(
+      `Verifier WASM ABI mismatch: expected ${ABI_VERSION}, got ${abi}. ` +
+        "The copy in this demo is stale; rebuild openac-sdk/wasm and run `npm run setup`."
+    );
+  }
 
   bridge = new WasmBridge();
   bridge.initWithModule(wasmModule);
