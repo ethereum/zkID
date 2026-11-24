@@ -9,7 +9,7 @@ import {
   signDeviceNonce,
 } from "./inputs/show-input-builder.js";
 import { circuitInputsToJson, base64Encode } from "./utils.js";
-import { InputError, ProofError } from "./errors.js";
+import { InputError, ProofError, VerificationError } from "./errors.js";
 import { base64Decode } from "./utils.js";
 import {
   DEFAULT_SHOW_PARAMS,
@@ -42,6 +42,10 @@ import type {
 } from "./types.js";
 
 const SDK_VERSION = "0.1.0";
+
+// Wire version of the binary proof bundle. 0.2.0 is the strict framing: every
+// frame must fit the buffer and the buffer must be consumed exactly.
+const BUNDLE_VERSION = "0.2.0";
 
 export class Prover {
   private bridge: WasmBridge;
@@ -406,8 +410,8 @@ interface ProofBundle {
   showInstance: Uint8Array;
 }
 
-function serializeProofBundle(result: ProofBundle): Uint8Array {
-  const version = new TextEncoder().encode(SDK_VERSION);
+export function serializeProofBundle(result: ProofBundle): Uint8Array {
+  const version = new TextEncoder().encode(BUNDLE_VERSION);
   const parts = [
     version,
     result.prepareProof,
@@ -446,8 +450,20 @@ export function deserializeProofBundle(data: Uint8Array): {
   let offset = 0;
 
   function readPart(): Uint8Array {
+    if (data.length - offset < 4) {
+      throw new VerificationError(
+        "INVALID_PROOF_FORMAT",
+        `Proof bundle truncated: missing frame length at offset ${offset}`,
+      );
+    }
     const len = view.getUint32(offset, true);
     offset += 4;
+    if (len > data.length - offset) {
+      throw new VerificationError(
+        "INVALID_PROOF_FORMAT",
+        `Proof bundle frame declares ${len} bytes but only ${data.length - offset} remain`,
+      );
+    }
     const part = data.slice(offset, offset + len);
     offset += len;
     return part;
@@ -455,10 +471,23 @@ export function deserializeProofBundle(data: Uint8Array): {
 
   const versionBytes = readPart();
   const version = new TextDecoder().decode(versionBytes);
+  if (version !== BUNDLE_VERSION) {
+    throw new VerificationError(
+      "INVALID_PROOF_FORMAT",
+      `Unsupported proof bundle version "${version}" (expected ${BUNDLE_VERSION})`,
+    );
+  }
   const prepareProof = readPart();
   const showProof = readPart();
   const prepareInstance = readPart();
   const showInstance = readPart();
+
+  if (offset !== data.length) {
+    throw new VerificationError(
+      "INVALID_PROOF_FORMAT",
+      `Proof bundle has ${data.length - offset} trailing bytes`,
+    );
+  }
 
   return { version, prepareProof, showProof, prepareInstance, showInstance };
 }
