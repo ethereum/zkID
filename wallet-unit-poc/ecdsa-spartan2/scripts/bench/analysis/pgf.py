@@ -29,13 +29,12 @@ def _series(label, pts, opts=""):
     return (label, pts, opts) if pts else None
 
 
-def _axis(series, xlabel, ylabel, extra="", name=None, after=None):
+def _axis(series, xlabel, ylabel, extra, name, after):
     opts = [f"width={PANEL_WIDTH}", "height=0.30\\linewidth", f"xlabel={{{xlabel}}}", f"ylabel={{{ylabel}}}",
             "legend style={at={(0.5,-0.32)}, anchor=north, font=\\scriptsize}", "legend cell align=left", "grid=major"]
     if extra:
         opts.append(extra)
-    if name:
-        opts.append(f"name={name}")
+    opts.append(f"name={name}")
     if after:
         opts += [f"at={{({after}.east)}}", "anchor=west", f"xshift={PANEL_GAP}"]
     lines = ["  \\begin{axis}[", "    " + ",\n    ".join(opts) + "]"]
@@ -102,7 +101,7 @@ def _two_panel(rows, xcol, labels, xlabel):
 
 def f4(rows):
     rows = [dict(r, mt=f"({r['m']},{r['t']})") for r in rows]
-    labels = sorted({r["mt"] for r in rows}, key=lambda s: tuple(map(int, s.strip("()").split(","))))
+    labels = [f"({m},{t})" for m, t in sorted({(r["m"], r["t"]) for r in rows})]
     return _two_panel(rows, "mt", labels, "Predicate and token capacity (M,T)")
 
 

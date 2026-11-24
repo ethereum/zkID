@@ -14,11 +14,9 @@ from test_tables import synthetic_dataset
 POINT = re.compile(r"\((-?[0-9.e+]+),(-?[0-9.e+]+)\)")
 
 
-class COORD:
+def coords(tex):
     """Coordinates only; the legend text may hold something that looks like a pair, such as (8,20)."""
-    @staticmethod
-    def findall(tex):
-        return [m for line in tex.splitlines() if "\\addplot" in line for m in POINT.findall(line)]
+    return [m for line in tex.splitlines() if "\\addplot" in line for m in POINT.findall(line)]
 
 
 def read_csv(path):
@@ -61,7 +59,7 @@ class PgfTest(unittest.TestCase):
     def test_coordinate_count_matches_the_csv(self):
         for name in FIGURES:
             rows = read_csv(os.path.join(self.dir.name, name + ".csv"))
-            self.assertEqual(len(COORD.findall(self.tex(name))), expected_coords(name, rows), name)
+            self.assertEqual(len(coords(self.tex(name))), expected_coords(name, rows), name)
 
     def test_braces_and_environments_balance(self):
         for name in FIGURES:
@@ -77,7 +75,7 @@ class PgfTest(unittest.TestCase):
             t = self.tex(name).lower()
             self.assertNotIn("nan", t, name)
             self.assertNotIn("inf", t, name)
-            for x, y in COORD.findall(t):
+            for x, y in coords(t):
                 self.assertTrue(math.isfinite(float(x)) and math.isfinite(float(y)), name)
 
     def test_stands_alone_inside_a_figure(self):
@@ -97,7 +95,7 @@ class PgfTest(unittest.TestCase):
         rows = [{"config": "main", "n": 1, "constraints": float("nan"), "show_prove_ms": 2.0},
                 {"config": "main", "n": 2, "constraints": 5, "show_prove_ms": None}]
         t = EMITTERS["F5"](rows)
-        self.assertEqual(sorted(COORD.findall(t)), [("0", "2"), ("1", "5")])
+        self.assertEqual(sorted(coords(t)), [("0", "2"), ("1", "5")])
         self.assertNotIn("nan", t.lower())
 
     def test_flat_series_gets_a_linear_axis(self):
