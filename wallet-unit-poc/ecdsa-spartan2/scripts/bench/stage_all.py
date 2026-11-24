@@ -4,6 +4,7 @@
 Inputs: each worktree's circom/inputs for v1..combined; Track B's headline inputs and inputs.jsonl for the
 headline cells (roots from the registry). Generic cells are staged separately with layout.py and stage.py generic.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -49,9 +50,11 @@ def cell_meta(cell):
     return ["--meta", json.dumps({"base_cell": f"A1-{cell.split('-')[1]}-2k"})] if cell.startswith("X2-") else []
 
 
-def stage_chain():
+def stage_chain(only=None):
     for cfg, cell, size, mid in chain_cells_all():
-        w = sl.worktree(cfg)
+        if only and cell not in only:
+            continue
+        w = sl.require_worktree(cfg)
         inp = os.path.join(w, "wallet-unit-poc/circom/inputs")
         di, dr = DEPTHS[cfg]
         run(["--worktree", w, "--config", cfg, "--cell", cell, "--size", size, "--matrix-id", mid, "--d-iss", str(di), "--d-rev", str(dr),
@@ -59,21 +62,26 @@ def stage_chain():
              *(["--population", json.dumps(CHAIN_POPULATION[cfg])] if CHAIN_POPULATION[cfg] else []), *cell_meta(cell)])
 
 
-def headline(cell, mid, size, jwt, show, roots, meta=None, extra=()):
-    run(["--worktree", sl.worktree("headline"), "--config", "headline", "--label-config", "combined", "--cell", cell, "--size", size, "--matrix-id", mid,
+def headline(cell, mid, size, jwt, show, roots, meta=None, extra=(), only=None):
+    if only and cell not in only:
+        return
+    run(["--worktree", sl.require_worktree("headline"), "--config", "headline", "--label-config", "combined", "--cell", cell, "--size", size, "--matrix-id", mid,
          "--d-iss", "8", "--d-rev", "20", "--jwt-input", jwt, "--show-input", show, "--roots", roots, *( ["--meta", json.dumps(meta)] if meta else []), *extra])
 
 
-def stage_headline():
+def stage_headline(only=None):
+    def headline_(*a, **k):
+        return headline(*a, only=only, **k)
+
     v = os.path.join(sl.bench_root(), "variants")
     own = os.path.join(sl.laptop_root(), "inputs/headline")
-    headline("A1-headline-1k", "A1", "1k", f"{own}/show-1k.jwt.json", f"{own}/show-1k.json", f"{own}/show-1k.roots.json")
+    headline_("A1-headline-1k", "A1", "1k", f"{own}/show-1k.jwt.json", f"{own}/show-1k.json", f"{own}/show-1k.roots.json")
     jwt, show, roots = (f"{v}/headline/show-2k.jwt.json", f"{v}/headline/show-2k.json", f"{v}/headline/show-2k.roots.json")
-    headline("A1-headline-2k", "A1", "2k", jwt, show, roots)
+    headline_("A1-headline-2k", "A1", "2k", jwt, show, roots)
     for b in (1, 8, 32, 128):
-        headline(f"S-B-{b}", "S-B", "2k", jwt, show, roots, {"batch": b})
-    headline("X2-headline-1t", "X2", "2k", jwt, show, roots, {"base_cell": "A1-headline-2k"})
-    headline("L5-headline-2k-r1cs", "L5", "2k", jwt, show, roots, extra=["--r1cs-present"])
+        headline_(f"S-B-{b}", "S-B", "2k", jwt, show, roots, {"batch": b})
+    headline_("X2-headline-1t", "X2", "2k", jwt, show, roots, {"base_cell": "A1-headline-2k"})
+    headline_("L5-headline-2k-r1cs", "L5", "2k", jwt, show, roots, extra=["--r1cs-present"])
     rows = [json.loads(l) for l in open(os.path.join(v, "inputs.jsonl"))]
     for r in rows:
         if r["cell"] != "sn_show_n2":
@@ -86,13 +94,20 @@ def stage_headline():
         elif r["matrix_id"] == "W":
             cells.append((f"W-{r['workload']}", "W"))
         for cell, mid in cells:
-            headline(cell, mid, "2k", jwt, r["input_path"], base + ".roots.json",
-                     {"population": r["population"], "workload": r["workload"], "input_sha256_registry": r["input_sha256"]})
+            headline_(cell, mid, "2k", jwt, r["input_path"], base + ".roots.json",
+                      {"population": r["population"], "workload": r["workload"], "input_sha256_registry": r["input_sha256"]})
 
 
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["chain", "headline"]
+    ap = argparse.ArgumentParser(description="Stage the product cells of the matrices.")
+    ap.add_argument("which", nargs="*", choices=["chain", "headline"], help="groups to stage (default: both)")
+    ap.add_argument("--only", nargs="+", metavar="CELL", help="stage only these cell ids")
+    a = ap.parse_args()
+    if a.only and not a.which:
+        ap.error("--only needs the group to search: chain or headline")
+    only = set(a.only) if a.only else None
+    which = a.which or ["chain", "headline"]
     if "chain" in which:
-        stage_chain()
+        stage_chain(only)
     if "headline" in which:
-        stage_headline()
+        stage_headline(only)

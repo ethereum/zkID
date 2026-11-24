@@ -37,8 +37,19 @@ def cells_for(row):
     return []
 
 
+def parse_only(argv):
+    """Cell ids from `--only a b` plus bare positionals (the older spelling); flags such as --patch-meta are skipped."""
+    only, collecting = set(), False
+    for a in argv:
+        if a.startswith("--"):
+            collecting = a == "--only"
+        else:
+            only.add(a)
+    return only
+
+
 def main():
-    only = {a for a in sys.argv[1:] if not a.startswith('--')}
+    only = parse_only(sys.argv[1:])
     for line in open(os.path.join(sl.bench_root(), "variants", "inputs.jsonl")):
         row = json.loads(line)
         for cell, role, n in cells_for(row):

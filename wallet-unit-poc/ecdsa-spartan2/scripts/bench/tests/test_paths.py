@@ -40,6 +40,26 @@ class BenchRoot(unittest.TestCase):
                 self.assertIn("git work tree", str(cm.exception))
 
 
+class Creation(unittest.TestCase):
+    def test_fresh_root_gets_laptop_and_stage_dirs(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = os.path.join(d, "fresh", "root")
+            with env(OPENACPLUS_BENCH_ROOT=root):
+                self.assertEqual(sl.laptop_root(), os.path.join(root, "laptop"))
+                self.assertTrue(os.path.isdir(os.path.join(root, "laptop")))
+                self.assertTrue(os.path.isdir(sl.stage_root()))
+
+    def test_refused_root_creates_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q", d], check=True)
+            root = os.path.join(d, "bench")
+            with env(OPENACPLUS_BENCH_ROOT=root):
+                for fn in (sl.laptop_root, sl.stage_root):
+                    with self.assertRaises(SystemExit):
+                        fn()
+            self.assertFalse(os.path.exists(root))
+
+
 class Worktrees(unittest.TestCase):
     def test_unset_fails_naming_the_variable(self):
         with env(), self.assertRaises(SystemExit) as cm:
@@ -54,6 +74,14 @@ class Worktrees(unittest.TestCase):
     def test_variant_stage_config_uses_the_combined_worktree(self):
         with env(OPENACPLUS_WORKTREES="/w"):
             self.assertEqual(sl.worktree("variant"), "/w/combined")
+
+    def test_require_worktree_names_the_expected_path(self):
+        with tempfile.TemporaryDirectory() as d, env(OPENACPLUS_WORKTREES=d):
+            os.mkdir(os.path.join(d, "main"))
+            self.assertEqual(sl.require_worktree("main"), os.path.join(d, "main"))
+            with self.assertRaises(SystemExit) as cm:
+                sl.require_worktree("issuer")
+            self.assertIn(os.path.join(d, "issuer"), str(cm.exception))
 
     def test_binary_path_is_the_release_build(self):
         with env(OPENACPLUS_WORKTREES="/w"):
@@ -71,6 +99,54 @@ class Refs(unittest.TestCase):
             self.assertTrue(c["r1cs"], name)
             for r in c["r1cs"]:
                 self.assertRegex(r["r1cs_sha256"], r"^[0-9a-f]{64}$", f"{name}.{r['circuit']}")
+
+
+class Only(unittest.TestCase):
+    def setUp(self):
+        import stage_all
+        self.sa = stage_all
+        self.calls = []
+        self.tmp = tempfile.TemporaryDirectory()
+        for cfg in ("v1", "main", "issuer", "revocation", "combined"):
+            os.mkdir(os.path.join(self.tmp.name, cfg))
+        patches = [mock.patch.dict(os.environ, {"OPENACPLUS_WORKTREES": self.tmp.name}),
+                   mock.patch.object(stage_all, "run", lambda args: self.calls.append(args[args.index("--cell") + 1]))]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_no_filter_stages_every_chain_cell(self):
+        self.sa.stage_chain(None)
+        self.assertEqual(len(self.calls), len(list(self.sa.chain_cells_all())))
+
+    def test_only_selects_exactly_the_named_cells(self):
+        self.sa.stage_chain({"A1-main-1k", "X2-v1-1t"})
+        self.assertEqual(sorted(self.calls), ["A1-main-1k", "X2-v1-1t"])
+
+    def test_missing_worktree_of_a_selected_cell_names_the_path(self):
+        os.rmdir(os.path.join(self.tmp.name, "issuer"))
+        with self.assertRaises(SystemExit) as cm:
+            self.sa.stage_chain({"A1-issuer-1k"})
+        self.assertIn(os.path.join(self.tmp.name, "issuer"), str(cm.exception))
+
+    def test_unselected_cells_do_not_need_their_worktree(self):
+        os.rmdir(os.path.join(self.tmp.name, "issuer"))
+        self.sa.stage_chain({"A1-main-1k"})
+        self.assertEqual(self.calls, ["A1-main-1k"])
+
+    def test_headline_cell_filter(self):
+        os.mkdir(os.path.join(self.tmp.name, "headline"))
+        self.sa.headline("A1-headline-1k", "A1", "1k", "j", "s", "r", only={"other"})
+        self.assertEqual(self.calls, [])
+        self.sa.headline("A1-headline-1k", "A1", "1k", "j", "s", "r", only={"A1-headline-1k"})
+        self.assertEqual(self.calls, ["A1-headline-1k"])
+
+    def test_generic_parser_takes_only_flag_and_legacy_positionals(self):
+        import stage_generic_all as sg
+        self.assertEqual(sg.parse_only(["--only", "S-N-sn_show_n2", "W-w2"]), {"S-N-sn_show_n2", "W-w2"})
+        self.assertEqual(sg.parse_only(["W-w2", "--patch-meta"]), {"W-w2"})
+        self.assertEqual(sg.parse_only([]), set())
 
 
 if __name__ == "__main__":

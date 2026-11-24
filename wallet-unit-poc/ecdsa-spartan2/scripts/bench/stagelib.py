@@ -26,11 +26,15 @@ def bench_root():
 
 
 def laptop_root():
-    return os.path.join(bench_root(), "laptop")
+    path = os.path.join(bench_root(), "laptop")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def stage_root():
-    return os.path.join(laptop_root(), "stage")
+    path = os.path.join(laptop_root(), "stage")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def worktrees():
@@ -44,6 +48,13 @@ def worktrees():
 def worktree(config):
     """Worktree for a stage config; `variant` cells are built from the combined worktree."""
     return os.path.join(worktrees(), "combined" if config == "variant" else config)
+
+
+def require_worktree(config):
+    path = worktree(config)
+    if not os.path.isdir(path):
+        sys.exit(f"worktree for config '{config}' not found: expected {path} (under OPENACPLUS_WORKTREES)")
+    return path
 
 
 def worktree_binary(config):
