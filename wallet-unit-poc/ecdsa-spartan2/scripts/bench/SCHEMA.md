@@ -179,10 +179,26 @@ New row kinds:
 
 ## Registry rows (phase 2)
 
-A second registry run adds ops and fields. Readers ignore fields they do not know, and the analysis does the same.
+The second registry run (`registry-bench.ts`) adds fields and ops, and changes what a few ops time. Readers ignore fields they do not know, and the analysis does the same.
 
-- New ops can appear next to the ones listed above, for example lookups, syncs and `to_commitment`.
-- `calls`: the number of calls inside one timed region, for operations too short to time singly. `wall_us` may be a float, and it is then the whole region.
-- `beyond_circuit`: true for a population larger than the built circuit supports, such as an issuer registry of 65,536 entries.
+New fields:
+- `calls`: 1, or 1000 for micro-ops. `wall_us` is per call and a float.
+- `ok`: true on rows whose result was verified.
+- `entries_before`, `entries_after`: on mutating ops.
+- `depth_after`: on issuer mutating ops.
+- `beyond_circuit`: on issuer rows; true when the population is over 256, the most the built circuit holds.
 
-Exact op names and the per-call rule are to be filled in.
+New ops:
+- `lookup`, with `method` `hit` or `miss`.
+- `to_commitment`; issuer rows carry `method: "in_generate_proof"`.
+- `leaf_slots` (revocation).
+- `sync`, `unrevoke`, `update`.
+- `insert_many`, with k = 1 or 100.
+- `revoke_many`, with k = 1, 100 or 1000.
+- `bandwidth` with `method: "full_sync"`; `wall_us` and `k` are null.
+
+Changed semantics:
+- `insert` takes a registry from population − 1 to population.
+- `remove` removes from a fresh full tree.
+- Witnesses and `path_verify` time 1000 calls per region.
+- Mutating ops start each iteration from a fresh `import(snapshot, false)`.
