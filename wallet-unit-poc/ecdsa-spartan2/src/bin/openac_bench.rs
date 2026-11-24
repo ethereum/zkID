@@ -262,7 +262,7 @@ fn load_vks(config: &PathConfig) -> Res<(VK, VK)> {
     Ok((load("prepare_verifying.key", "prepare")?, load("show_verifying.key", "show")?))
 }
 
-/// Forces the vk digests that d687dbb computes on first use; the phone build restores them from a sidecar.
+/// Forces the vk digests, which are otherwise computed on first use; the phone build restores them from a sidecar.
 fn force_digests(vks: &[&VK]) -> Res<()> {
     for vk in vks {
         vk.digest().map_err(|e| format!("vk digest: {e:?}"))?;
