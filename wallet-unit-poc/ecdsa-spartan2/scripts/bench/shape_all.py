@@ -49,7 +49,7 @@ def main(argv=None):
         if a.only and name not in a.only:
             continue
         extra = {"config": "combined" if a.config == "headline" else a.config, "variant_of": "headline" if a.config == "headline" else None,
-                 "matrix_id": "C0", "path": "product", "commit": CIRCUIT_COMMIT[a.config], "harness_commit": commit, "spartan2_rev": "d687dbb",
+                 "matrix_id": "C0", "path": "product", "commit": CIRCUIT_COMMIT[a.config], "harness_commit": commit, "spartan2_rev": sl.spartan2_rev(a.worktree),
                  "d_iss": d_iss, "d_rev": d_rev, "show_params": SHOW_PARAMS[a.config] if name == "show" else None,
                  "jwt_params": JWT_PARAMS.get(name), "jwt_size": name.split("_")[1] if name.startswith("jwt_") else "1920" if name == "jwt" else None}
         cmd = [binary, "shape", "--r1cs", r1cs, "--circuit", name, "--out", a.out, "--extra", json.dumps(extra)]

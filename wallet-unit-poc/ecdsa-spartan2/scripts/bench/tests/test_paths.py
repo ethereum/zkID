@@ -187,6 +187,25 @@ class Spartan2Rev(unittest.TestCase):
         self.assertIn("spartan2", str(cm.exception))
 
 
+class ShapeRev(unittest.TestCase):
+    def test_shape_rows_carry_the_worktree_spartan2_rev(self):
+        import shape_all
+        import stage
+        with tempfile.TemporaryDirectory() as d:
+            eco = os.path.join(d, "wt", "wallet-unit-poc", "ecdsa-spartan2")
+            os.makedirs(eco)
+            with open(os.path.join(eco, "Cargo.lock"), "w") as f:
+                f.write(LOCK)
+            seen = []
+            with mock.patch.object(shape_all, "jobs", lambda cfg, circom: [("show", "show.r1cs", "2k")]), \
+                    mock.patch.object(stage, "find_libdirs", lambda b: []), \
+                    mock.patch.object(sl, "sh", lambda cmd: "abc1234\n"), \
+                    mock.patch.object(shape_all.subprocess, "run", lambda cmd, **kw: seen.append(cmd) or mock.Mock(returncode=0, stderr="")):
+                shape_all.main(["--worktree", os.path.join(d, "wt"), "--config", "main", "--out", os.path.join(d, "out.jsonl")])
+            extra = json.loads(seen[0][seen[0].index("--extra") + 1])
+            self.assertEqual(extra["spartan2_rev"], "64687af")
+
+
 class DigestSidecar(unittest.TestCase):
     def test_sidecar_is_copied_next_to_the_staged_key(self):
         import stage
