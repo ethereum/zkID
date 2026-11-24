@@ -100,6 +100,12 @@ class PgfTest(unittest.TestCase):
         self.assertEqual(sorted(COORD.findall(t)), [("0", "2"), ("1", "5")])
         self.assertNotIn("nan", t.lower())
 
+    def test_flat_series_gets_a_linear_axis(self):
+        flat = [{"config": "main", "n": n, "constraints": 100 * n, "show_prove_ms": 240.0 + n} for n in (1, 2, 4)]
+        t = EMITTERS["F5"](flat)
+        self.assertEqual(t.count("ymode=log"), 1)
+        self.assertEqual(t.count("ymin=0"), 1)
+
     def test_escape(self):
         self.assertEqual(esc("a_b & 5%"), "a\\_b \\& 5\\%")
 

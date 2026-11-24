@@ -1,8 +1,8 @@
 """pgfplots source for F1-F6, one F<n>.tex per figure, from the same rows as F<n>.csv. \\input it inside a figure environment."""
 import math
 
-PANEL_WIDTH = r"0.40\linewidth"
-PANEL_GAP = "1.6cm"
+PANEL_WIDTH = r"0.38\linewidth"
+PANEL_GAP = "2.2cm"
 CONFIG_NAMES = {"v1": "OpenAC v1.0.0", "main": "OpenAC+ GP only", "combined": "OpenAC+ (8,20)"}
 
 
@@ -28,7 +28,7 @@ def _series(label, pts, opts=""):
 
 def _axis(series, xlabel, ylabel, extra="", name=None, after=None):
     opts = [f"width={PANEL_WIDTH}", "height=0.30\\linewidth", f"xlabel={{{xlabel}}}", f"ylabel={{{ylabel}}}",
-            "legend pos=north west", "legend style={font=\\scriptsize}", "grid=major"]
+            "legend style={at={(0.5,-0.32)}, anchor=north, font=\\scriptsize}", "legend cell align=left", "grid=major"]
     if extra:
         opts.append(extra)
     if name:
@@ -80,7 +80,7 @@ def f2(rows):
 def f3(rows):
     series = [_series(CONFIG_NAMES[cfg], [(r["bytes"], r["prepare_prove_ms"]) for r in sorted(rows, key=lambda r: r["bytes"]) if r["config"] == cfg])
               for cfg in ("v1", "main", "combined")]
-    extra = ("xmode=log,\n    log basis x=2,\n    xtick={1024,1920,2048,4096,8192},\n    xticklabels={1k,1920,2k,4k,8k},\n"
+    extra = ("xmode=log,\n    log basis x=2,\n    xtick={1024,2048,4096,8192},\n    xticklabels={1k,2k,4k,8k},\n"
              "    minor tick num=0")
     return _picture([(series, "Credential size (bytes)", "Prepare prove (ms)", extra)])
 
@@ -90,7 +90,9 @@ def _two_panel(rows, xcol, labels, xlabel):
     panels = []
     for ycol, ylabel in (("constraints", "Show constraints"), ("show_prove_ms", "Show prove, witness precomputed (ms)")):
         series = [_series(name, [(labels.index(r[xcol]), r[ycol]) for r in rows if r["config"] == cfg]) for cfg, name in names]
-        panels.append((series, xlabel, ylabel, "ymode=log,\n    " + _cat_ticks(labels)))
+        ys = [y for sr in series if sr for _, y in sr[1]]
+        scale = "ymode=log" if ys and max(ys) >= 4 * min(ys) else "ymin=0"   # a log axis over a flat range overflows TeX
+        panels.append((series, xlabel, ylabel, scale + ",\n    " + _cat_ticks(labels)))
     return _picture(panels)
 
 

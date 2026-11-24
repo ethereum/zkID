@@ -17,7 +17,8 @@ Raw rows and generated output go to `$OPENACPLUS_BENCH_ROOT`, never into git. `a
 - Rust (the toolchain the repo builds with).
 - Node with yarn 4 (`packageManager` in `circom/package.json`).
 - `circom`, on the `PATH`.
-- Python 3. `matplotlib` is needed for the figure PDFs and for the analysis tests.
+- Python 3 with `matplotlib`, needed for the figure PDFs and for the analysis tests. A venv is fine (`python3 -m venv v && v/bin/pip install matplotlib`, then run the analysis with `v/bin/python`).
+- For the `F*.tex` figures, the paper needs `\usepackage{pgfplots}`. Each file sets `compat=1.18` itself and can be `\input` inside `figure` or `figure*`. They compile with tectonic.
 - `/usr/bin/time` (macOS), used for peak memory.
 
 ## Worktrees and paths
