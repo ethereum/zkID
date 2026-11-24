@@ -1,0 +1,19 @@
+{
+ "matrix_id": "L5",
+ "cells": [
+  {
+   "id": "L5-headline-2k-r1cs",
+   "matrix_id": "L5",
+   "cmd": "run",
+   "stage": "headline/L5-headline-2k-r1cs",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k"
+   ],
+   "r1cs_present": true
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+{
+ "matrix_id": "S-B",
+ "cells": [
+  {
+   "id": "S-B-1",
+   "matrix_id": "S-B",
+   "cmd": "run",
+   "stage": "headline/S-B-1",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k",
+    "--batch",
+    "1"
+   ]
+  },
+  {
+   "id": "S-B-8",
+   "matrix_id": "S-B",
+   "cmd": "run",
+   "stage": "headline/S-B-8",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k",
+    "--batch",
+    "8"
+   ]
+  },
+  {
+   "id": "S-B-32",
+   "matrix_id": "S-B",
+   "cmd": "run",
+   "stage": "headline/S-B-32",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k",
+    "--batch",
+    "32"
+   ]
+  },
+  {
+   "id": "S-B-128",
+   "matrix_id": "S-B",
+   "cmd": "run",
+   "stage": "headline/S-B-128",
+   "config": "headline",
+   "visits": 4,
+   "warm": 5,
+   "args": [
+    "--size",
+    "2k",
+    "--batch",
+    "128"
+   ]
+  }
+ ]
+}

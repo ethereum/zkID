@@ -1,0 +1,45 @@
+{
+ "matrix_id": "S-MT",
+ "cells": [
+  {
+   "id": "S-MT-smt_c_m1_t1",
+   "matrix_id": "S-MT",
+   "cmd": "generic",
+   "stage": "variant/S-MT-smt_c_m1_t1",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-MT-smt_c_m4_t7",
+   "matrix_id": "S-MT",
+   "cmd": "generic",
+   "stage": "variant/S-MT-smt_c_m4_t7",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-MT-smt_c_m8_t15",
+   "matrix_id": "S-MT",
+   "cmd": "generic",
+   "stage": "variant/S-MT-smt_c_m8_t15",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  },
+  {
+   "id": "S-MT-smt_c_m16_t31",
+   "matrix_id": "S-MT",
+   "cmd": "generic",
+   "stage": "variant/S-MT-smt_c_m16_t31",
+   "config": "variant",
+   "visits": 4,
+   "warm": 5,
+   "args": []
+  }
+ ]
+}
