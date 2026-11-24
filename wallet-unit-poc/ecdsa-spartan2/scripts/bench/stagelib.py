@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -92,7 +93,6 @@ def hardlink_or_copy(src, dst):
     try:
         os.link(src, dst)
     except OSError:
-        import shutil
         shutil.copy2(src, dst)
 
 
@@ -195,10 +195,6 @@ def update_meta(cell, updates):
 
 def patch_path_lens(cell, show_input):
     """Writes iss_path_len and rev_path_len into a staged cell's meta.json without touching anything else."""
-    p = os.path.join(cell, "meta.json")
-    with open(p) as f:
-        meta = json.load(f)
-    meta["iss_path_len"], meta["rev_path_len"] = path_lens(show_input) if show_input else (0, 0)
-    with open(p, "w") as f:
-        json.dump(meta, f, indent=1)
-    return meta["iss_path_len"], meta["rev_path_len"]
+    iss, rev = path_lens(show_input) if show_input else (0, 0)
+    update_meta(cell, {"iss_path_len": iss, "rev_path_len": rev})
+    return iss, rev
