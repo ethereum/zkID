@@ -2,6 +2,8 @@ import { strict as assert } from "assert";
 import type { WitnessTester } from "circomkit";
 import { circomkit } from "../common/index.ts";
 import { buildMdocWitness, MDOC_PARAMS } from "../common/mdoc-fixture.ts";
+import { hashClaimName } from "../common/claim-identity.ts";
+import { witnessValues } from "../common/witness-signals.ts";
 import { createTestMdocCredential } from "../../src/mdoc-fixture.ts";
 import { generateMdocCircuitParams, generateMdocInputs, parseMdocClaims } from "../../src/mdoc.ts";
 
@@ -52,6 +54,63 @@ describe("MDOC Circuit", () => {
       () => generateMdocInputs(params, cred.tbsData, tampered, cred.issuerPubRaw, claims, deviceKeyPos),
       /Internal ECDSA signature verification failed/,
     );
+  });
+
+  describe("claim identity", () => {
+    const LONG_NAME = "family_name_national_character";
+    const BOUNDARY_NAME = "biometric_template_face";
+    const claims = { [LONG_NAME]: "Smithsson", [BOUNDARY_NAME]: "faceblob" };
+
+    it("rejects a name framed by a two-byte CBOR header", async () => {
+      const cred = await createTestMdocCredential(claims);
+      const params = generateMdocCircuitParams([...MDOC_PARAMS]);
+      const parsed = parseMdocClaims(cred.tbsData, cred.items, cred.deviceKeyX, { [LONG_NAME]: { type: "string" } });
+      // The generator refuses names over 23 bytes, so the slot is built under an alias.
+      parsed.claims[0].identifier = "alias";
+      const inputs = generateMdocInputs(
+        params,
+        cred.tbsData,
+        cred.signature,
+        cred.issuerPubRaw,
+        parsed.claims,
+        parsed.deviceKeyPos,
+      );
+
+      const truncated = Buffer.concat([Uint8Array.of(0x78, 0x1e), Buffer.from(LONG_NAME).subarray(0, 23)]);
+      inputs.identifierCbor[0] = Array.from({ length: MDOC_PARAMS[3] }, (_, i) => BigInt(truncated[i] ?? 0));
+      inputs.identifierLengths[0] = 25n;
+
+      await circuit.expectFail(inputs);
+    });
+
+    it("hashes a 23-byte name to H(name)", async () => {
+      const { inputs } = await buildMdocWitness({ [BOUNDARY_NAME]: { type: "string" } }, claims);
+      const witness = await circuit.calculateWitness(inputs);
+      await circuit.expectConstraintPass(witness);
+      const [hash] = await witnessValues(circuit, witness, ["main.claimIdentifierHashes[0]"]);
+      assert.equal(hash, await hashClaimName(BOUNDARY_NAME));
+    });
+
+    it("rejects a header that disagrees with the length", async () => {
+      const { inputs } = await buildMdocWitness({ birth_date: { type: "date" } });
+      const len = Number(inputs.identifierLengths[0]);
+      const next = inputs.preimages[0][Number(inputs.identifierPositions[0]) + len];
+      inputs.identifierCbor[0][len] = next;
+      inputs.identifierLengths[0] = BigInt(len + 1);
+
+      await circuit.expectFail(inputs);
+    });
+
+    it("gives an inactive slot identity 0", async () => {
+      const { inputs } = await buildMdocWitness({ birth_date: { type: "date" } });
+      inputs.identifierCbor[1] = inputs.identifierCbor[1].map((_, i) => BigInt(0x61 + (i % 20)));
+      inputs.identifierLengths[1] = 30n;
+
+      const witness = await circuit.calculateWitness(inputs);
+      await circuit.expectConstraintPass(witness);
+      const [hash] = await witnessValues(circuit, witness, ["main.claimIdentifierHashes[1]"]);
+      assert.equal(hash, 0n);
+    });
   });
 
   describe("consistency checks", () => {

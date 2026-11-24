@@ -81,7 +81,17 @@ template MDOC(
 
     // CHECK 3: per-claim preimage authenticity + value extraction
     signal preimageHashesPoseidon[maxClaims];
-    signal idHash[maxClaims];
+
+    // Name hash width, same as show.circom and jwt.circom.
+    var NAME_ID_LEN = 31;
+    // Longest name a one-byte CBOR text header can frame.
+    var MAX_NAME_LEN = 23;
+    assert(maxIdentifierLen >= NAME_ID_LEN + 1);
+    // Name length without the header byte; 0 for inactive slots.
+    signal nameLengths[maxClaims];
+    // MdocClaimVerifier keeps an active identifierLengths in [1, maxIdentifierLen], so nameLengths cannot wrap.
+    component nameFits[maxClaims];
+    component nameHashers[maxClaims];
 
     for (var i = 0; i < maxClaims; i++) {
         // claimFlags[i] must be 0 or 1; fractional values bypass gated assertions.
@@ -90,8 +100,21 @@ template MDOC(
         preimageHashesPoseidon[i] <== HashBytesToFieldWithLen(maxPreimageLen)(preimages[i], preimageLengths[i]);
 
         // MdocClaimVerifier already proved this identifier is in the signed preimage.
-        idHash[i] <== HashBytesToFieldWithLen(maxIdentifierLen)(identifierCbor[i], identifierLengths[i]);
-        claimIdentifierHashes[i] <== idHash[i] * claimFlags[i];
+        nameLengths[i] <== claimFlags[i] * (identifierLengths[i] - 1);
+        nameFits[i] = LessEqThan(log2Ceil(maxIdentifierLen));
+        nameFits[i].in[0] <== nameLengths[i];
+        nameFits[i].in[1] <== MAX_NAME_LEN;
+        nameFits[i].out === 1;
+
+        // An active identifier starts with the CBOR header 0x60 + name length.
+        claimFlags[i] * (identifierCbor[i][0] - 0x60 - nameLengths[i]) === 0;
+
+        nameHashers[i] = HashBytesToFieldWithLen(NAME_ID_LEN);
+        for (var j = 0; j < NAME_ID_LEN; j++) {
+            nameHashers[i].in[j] <== identifierCbor[i][j + 1];
+        }
+        nameHashers[i].len <== nameLengths[i];
+        claimIdentifierHashes[i] <== nameHashers[i].hash * claimFlags[i];
 
         MdocClaimVerifier(maxCredLen, maxPreimageLen, maxIdentifierLen)(
             message,

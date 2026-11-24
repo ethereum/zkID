@@ -75,10 +75,7 @@ function extractIssuerSignedItem(item: any): ParsedIssuerSignedItem {
   const innerBytes: Buffer = Buffer.from(item.encode());
   const preimage = Buffer.from(cbor.encode(new cbor.Tagged(24, innerBytes)));
 
-  const idCbor = Buffer.concat([
-    Buffer.from([0x60 | item.elementIdentifier.length]),
-    Buffer.from(item.elementIdentifier),
-  ]);
+  const idCbor = Buffer.from(cbor.encode(item.elementIdentifier));
   const identifierCborPos = preimage.indexOf(idCbor);
   if (identifierCborPos < 0) {
     throw new Error(`identifier CBOR not found for "${item.elementIdentifier}"`);

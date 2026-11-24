@@ -5,6 +5,7 @@ import * as nodeCrypto from "crypto";
 import { createTestMdocCredential } from "./mdoc-fixture";
 import { generateMdocCircuitParams, generateMdocInputs, parseMdocClaims, type MdocClaimType } from "./mdoc";
 import { generateShowInputs, signDeviceNonce } from "./show";
+import { bindPredicateName, hashClaimName } from "./claim-identity";
 
 // Mirrors circuits/main/mdoc.circom: MDOC(1792, 256, 4, 32, 64).
 const MDOC_PARAMS: [number, number, number, number, number] = [1792, 256, 4, 32, 64];
@@ -77,6 +78,8 @@ async function main(): Promise<void> {
     [],
     [],
     normalizedClaimValues,
+    // Show's shared witness must carry the same name hashes as the mdoc circuit.
+    [await hashClaimName("birth_date"), await hashClaimName("resident_state")],
   );
 
   showInputs.predicateLen = 1n;
@@ -86,6 +89,7 @@ async function main(): Promise<void> {
   showInputs.tokenTypes[0] = 0n;
   showInputs.tokenValues[0] = 0n;
   showInputs.exprLen = 1n;
+  await bindPredicateName(showInputs, 0, 0, "birth_date");
 
   const showDir = path.join(circomDir, "inputs", "show");
   fs.mkdirSync(showDir, { recursive: true });
