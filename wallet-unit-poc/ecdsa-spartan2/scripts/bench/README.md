@@ -121,7 +121,7 @@ python3 run_matrix.py --run-id w1-$(date +%Y%m%d) matrices/A1.json matrices/A2.j
 python3 run_matrix.py --run-id w2-$(date +%Y%m%d) matrices/S-B.json matrices/S-D.json matrices/S-MT.json \
   matrices/S-N.json matrices/S-P.json matrices/W.json matrices/X2.json matrices/L5.json
 ```
-Run the analysis after window 1 (step 6). Every `ITER` row should be `ok` and the gates in `checks.md` should pass before window 2 starts.
+Run the analysis after window 1 (step 6). Every proving or verifying `ITER` row should be `ok` (key-load rows carry no `ok`), and the gates in `checks.md` should pass before window 2 starts.
 
 **4. Peak memory.** `run_matrix.py` does not run these cells. `matrices/PM.json` lists them and the runs each needs, and the `--final` gate reads it. `--config` is the stage directory name.
 ```
@@ -132,8 +132,7 @@ python3 peakmem.py --config headline --cell A1-headline-2k --runs 3
 **5. Registry and end-to-end runs.** From `combined/wallet-unit-poc/circom`, with `NODE_OPTIONS=--expose-gc`. The registry bench takes one population per process (`--pops`). Its defaults are revocation 1024, 32768 and 1,046,528, and issuer 256 and 65,536 (the larger one is beyond the built circuit). Add `--smoke` to any of these for a quick check.
 ```
 export NODE_OPTIONS=--expose-gc
-for p in 1024 32768 1046528; do npx tsx scripts/benchmarks/registry-bench.ts --pops $p; done
-npx tsx scripts/benchmarks/registry-bench.ts --pops 256,65536
+for p in 256 65536 1024 32768 1046528; do npx tsx scripts/benchmarks/registry-bench.ts --pops $p; done
 for k in 1 100 1000; do
   npx tsx scripts/benchmarks/e2e-registry.ts --stage "$OPENACPLUS_BENCH_ROOT/laptop/stage/headline/A1-headline-2k" --k $k
 done
