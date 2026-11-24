@@ -59,5 +59,11 @@
     "template": "MDOC",
     "params": [1792, 256, 4, 32, 64],
     "pubs": ["pubKeyX", "pubKeyY", "valueTypes", "claimFlags"]
+  },
+  "jsonld": {
+    "file": "jsonld",
+    "template": "JSONLD",
+    "params": [2240, 2, 128, 31, 64, 252],
+    "pubs": ["pubKeyX", "pubKeyY", "claimFormats", "claimFlags"]
   }
 }

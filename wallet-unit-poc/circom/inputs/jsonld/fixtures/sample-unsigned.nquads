@@ -1,0 +1,14 @@
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#addressCountry> "ZZ" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#credentialId> "3f2b8c1e-5d4a-4e7b-9a60-1c2d3e4f5a6b" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#dateOfBirth> "1990-01-01" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#deviceKey> "eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImVQdk5LZlA2OWI4Z1JtVmY3eHY2eDVlMVZwV0lxeHpwWHBCTmtZOVBld3ciLCJ5IjoiY3dEeDVmWGtuSXR0ekJzSTFtOXQ2QjdQcG1UUU9HUU5aaUxDei11T2VjRSJ9" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#documentNumber> "D0000000042" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#documentType> "ResidentCard" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#gender> "Male" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#name> "Sample Holder" .
+<did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> <https://example.org/eid#nationality> "Ruritanian" .
+_:c14n0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://example.org/eid#IdentityCredential> .
+_:c14n0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.w3.org/2018/credentials#VerifiableCredential> .
+_:c14n0 <https://www.w3.org/2018/credentials#credentialSubject> <did:key:z6MknV8DramYjmkMLWbsNv6KLv6bqLML1hg211jFgX9y6CHU> .
+_:c14n0 <https://www.w3.org/2018/credentials#issuanceDate> "2026-10-26T04:30:00.000Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+_:c14n0 <https://www.w3.org/2018/credentials#issuer> <did:example:issuer> .

@@ -1,0 +1,7 @@
+{
+  "WARNING": "TEST ONLY. Deterministic throwaway issuer key for jsonld circuit fixtures. Protects nothing.",
+  "curve": "P-256",
+  "d": "3dc72b522db071b12ab100618241f2f43ac9c7392650224fd5363f590c2eabed",
+  "x": "146e28851b003c3346b5b3965a37cd407b5036d7c09d256fee74311f101c64eb",
+  "y": "b62935defec669e1aa9485773f6f50cbaa41438fbaf089c55b5e36f9a85f9ec1"
+}

@@ -18,10 +18,12 @@
     "compile:jwt:8k": "bash scripts/compile.sh jwt_8k",
     "compile:show": "bash scripts/compile.sh show",
     "compile:mdoc": "bash scripts/compile.sh mdoc",
+    "compile:jsonld": "bash scripts/compile.sh jsonld",
     "compile:ecdsa": "bash scripts/compile.sh ecdsa",
     "compile:all": "bash scripts/compile.sh all",
     "generate:inputs": "npx ts-node src/generate-inputs.ts",
     "generate:inputs:mdoc": "npx ts-node src/generate-mdoc-inputs.ts",
+    "generate:inputs:jsonld": "npx ts-node src/generate-jsonld-inputs.ts",
     "setup": "npx circomkit setup jwt",
     "prove": "npx circomkit prove jwt",
     "verify": "npx circomkit verify jwt"

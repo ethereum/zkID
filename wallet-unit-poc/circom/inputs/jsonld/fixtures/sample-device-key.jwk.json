@@ -1,0 +1,8 @@
+{
+  "kid": "TEST ONLY: throwaway device key for the JSON-LD test fixture",
+  "kty": "EC",
+  "x": "ePvNKfP69b8gRmVf7xv6x5e1VpWIqxzpXpBNkY9Peww",
+  "y": "cwDx5fXknIttzBsI1m9t6B7PpmTQOGQNZiLCz-uOecE",
+  "crv": "P-256",
+  "d": "HW2TvGkeO1xOtWoaZ228U4WupZt7aSjL9sWQi2WXMrA"
+}
