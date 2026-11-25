@@ -16,21 +16,6 @@ contributors:
   - Vivian Plasencia <vivian.plasencia@ethereum.org>
 ---
 
-# Changes pending editor review
-
-These edits align the `SD-JWT-P256` profile with what the circuits accept.
-They assume the OpenAC findings fixes are merged.
-
-- `bool` MUST be `true`, `false`, `1`, or `0`.
-- `iso_date` MUST use `-` separators.
-- `iso_date` calendar validity is not checked, so `2024-13-45` passes. A
-  verifier that needs it MUST check the claim itself. This replaces the old
-  rule that verifiers and the SDK MUST check it.
-- Proved device signatures MUST be low-S. Implementations MUST NOT emit
-  high-S, and MUST normalize or reject a received high-S signature. The
-  circuit can't check this, so it is a prover rule.
-- `LE` and `GE` apply only to `uint`, `iso_date`, and `roc_date`.
-
 # Change Process
 
 This document is governed by the [1/COSS](https://github.com/privacy-ethereum/zkspecs/tree/main/specs/1) (COSS).
@@ -305,11 +290,9 @@ signature and the device-binding signature on the verifier challenge —
 MUST be encoded as fixed-width raw `r || s`, 32 bytes each, big-endian.
 DER-encoded signatures MUST be rejected.
 
-Proved device-binding signatures MUST be low-S. Implementations MUST NOT
-emit high-S signatures. A received high-S signature MUST be normalized to
-low-S before proving, or rejected. The circuit can't check this, because the
-signature is a private witness, so it is a prover rule. See
-[`SECURITY-NOTES.md`](../../SECURITY-NOTES.md).
+Device-binding signatures MUST be low-S. Implementations MUST reject
+high-S device-binding signatures to ensure verifier and circuit behavior
+agree on which presentations are valid.
 
 Issuer signatures MAY be accepted in either low-S or high-S form for
 compatibility with existing issuer infrastructure, but the verifier MUST
@@ -396,8 +379,8 @@ The current `SD-JWT-P256` profile assigns the following format tags:
 
 Normalization rules are:
 
-- `bool`: the value MUST be one of `true`, `false`, `1`, or `0`.
-  Normalize `true` and `1` to `1`; normalize `false` and `0` to `0`.
+- `bool`: normalize `"1"` or `"true"` to `1`; all other accepted values
+  normalize to `0`.
 - `uint`: parse decimal ASCII digits as an unsigned integer.
 - `iso_date`: parse `YYYY-MM-DD` into the integer `YYYYMMDD`.
 - `roc_date`: parse `YYYMMDD` into the integer with the same decimal digits.
@@ -407,12 +390,11 @@ Inactive claim slots normalize to `0`.
 
 Implementations MUST reject claim values that fail their declared format:
 
-- `bool`: any value other than `true`, `false`, `1`, or `0`.
+- `bool`: any value other than the recognized truthy or falsy encodings.
 - `uint`: empty strings, non-decimal characters, leading whitespace, or
   values exceeding the active `valueBits` range.
-- `iso_date`: values that do not match the exact `YYYY-MM-DD` form with
-  `-` separators. Calendar validity (for example month 13) is not checked. A
-  verifier that needs it MUST check the claim itself.
+- `iso_date`: values that do not match the exact `YYYY-MM-DD` lexical
+  form, or that resolve to an invalid calendar date.
 - `roc_date`: values that do not match the exact `YYYMMDD` lexical form.
 - `string`: inputs that do not fit within 8 ASCII bytes once packed, or
   that contain disallowed bytes.
@@ -559,9 +541,8 @@ Implementations MUST reject a predicate if any of the following holds:
 - `compareValue` is negative;
 - `compareValue >= 2^valueBits`;
 - the active `claimRef` value falls outside `[0, 2^valueBits)`;
-- the `(op, claimFormat)` pair is not supported by this profile. `LE` and
-  `GE` apply only to `uint`, `iso_date`, and `roc_date`. `EQ` applies to all
-  formats.
+- the `(op, claimFormat)` pair is not supported by this profile (for
+  example, `LE` over a `string` claim).
 
 ## Logic Expression Encoding
 
@@ -788,16 +769,15 @@ verifier outcome.
 | Replayed or stale single-use challenge | rejected: replay / TTL policy |
 | Challenge bound to a different audience than the verifier | rejected: audience mismatch |
 | DER-encoded device-binding signature | rejected: signature encoding |
+| High-S device-binding signature | rejected: malleability policy |
 | Duplicate disclosure (identical raw disclosure bytes) | rejected: duplicate disclosure |
-| High-S device-binding signature | normalized to low-S or rejected; never proved as high-S |
-| `bool` claim other than `true`, `false`, `1`, `0` | rejected: normalization failure |
 | Disclosure order altered relative to issuer-fixed order | rejected: order mismatch |
 | `iso_date` claim not matching `YYYY-MM-DD` | rejected: normalization failure |
 | `uint` claim with non-decimal characters or leading whitespace | rejected: normalization failure |
 | `string` claim exceeding 8-byte packing budget | rejected: normalization failure |
 | Predicate with negative `compareValue` | rejected: compareValue range |
 | Predicate with `compareValue >= 2^valueBits` | rejected: compareValue range |
-| Unsupported `(op, claimFormat)` pair (e.g. `LE` over `string` or `bool`) | rejected: operator unsupported |
+| Unsupported `(op, claimFormat)` pair (e.g. `LE` over `string`) | rejected: operator unsupported |
 | Presentation `version` not bound to any known verifier tuple | rejected: version policy |
 
 These cases are normative for the SDK's validation layer; the layer MUST
