@@ -180,7 +180,7 @@ Resolve the expected issuer from your own configuration, by expected `iss`/`kid`
 
 ### Validity (`exp` / `nbf`) is yours to enforce
 
-`verify()` attests nothing about `exp` or `nbf`. `Credential.parse` checks them on the holder's side against a caller-supplied `now`, and validity is not part of the proven statement, so a holder can present a credential outside its validity window. A relying party that needs validity must enforce it itself, outside this SDK.
+`verify()` does not check `exp` or `nbf`. `Credential.parse` checks them on the holder side, with a `now` the caller picks, and that check is not part of the proof. So a holder can present a credential outside its validity window. If you need validity, check it yourself.
 
 ## Configuration
 

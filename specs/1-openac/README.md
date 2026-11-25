@@ -18,25 +18,18 @@ contributors:
 
 # Changes pending editor review
 
-These edits tighten the `SD-JWT-P256` profile to match what the circuits
-accept. Each is marked by the finding id from the zkID OpenAC review.
+These edits align the `SD-JWT-P256` profile with what the circuits accept.
+They assume the OpenAC findings fixes are merged.
 
-These rules match the checks added by the OpenAC findings fixes. A conforming
-implementation needs those fixes.
-
-- 1789512268: `bool` values MUST be `true`, `false`, `1`, or `0`.
-- 1789509685: `iso_date` MUST use `-` separators.
-- 1789513951: proved device signatures MUST be low-S; implementations MUST
-  NOT emit high-S and MUST normalize or reject a received high-S signature.
-  The circuit does not enforce it, so it is a prover obligation. The
-  Conformance table row for high-S now reads "normalized or rejected".
-- `iso_date` calendar validity (accepted limitation): neither the circuit nor
-  the SDK checks it. An `iso_date` value is accepted if it has the `-`
-  separators and digits in the `YYYY-MM-DD` positions, so `2024-13-45` is
-  accepted. A verifier that needs a valid calendar date MUST check the claim
-  itself. This replaces the earlier requirement that verifiers and the SDK
-  MUST check calendar validity.
-- 1789512824: ordering operators only over `uint`, `iso_date`, `roc_date`.
+- `bool` MUST be `true`, `false`, `1`, or `0`.
+- `iso_date` MUST use `-` separators.
+- `iso_date` calendar validity is not checked, so `2024-13-45` passes. A
+  verifier that needs it MUST check the claim itself. This replaces the old
+  rule that verifiers and the SDK MUST check it.
+- Proved device signatures MUST be low-S. Implementations MUST NOT emit
+  high-S, and MUST normalize or reject a received high-S signature. The
+  circuit can't check this, so it is a prover rule.
+- `LE` and `GE` apply only to `uint`, `iso_date`, and `roc_date`.
 
 # Change Process
 
@@ -312,12 +305,11 @@ signature and the device-binding signature on the verifier challenge —
 MUST be encoded as fixed-width raw `r || s`, 32 bytes each, big-endian.
 DER-encoded signatures MUST be rejected.
 
-Device-binding signatures that are proved MUST be low-S. An implementation
-MUST NOT emit high-S device signatures. An implementation that receives a
-high-S signature from a signer MUST either normalize it to low-S before
-proving or reject it. The circuit does not enforce low-S today, because the
-signature is a private witness, so this is a prover-implementation
-obligation; see [`SECURITY-NOTES.md`](../../SECURITY-NOTES.md).
+Proved device-binding signatures MUST be low-S. Implementations MUST NOT
+emit high-S signatures. A received high-S signature MUST be normalized to
+low-S before proving, or rejected. The circuit can't check this, because the
+signature is a private witness, so it is a prover rule. See
+[`SECURITY-NOTES.md`](../../SECURITY-NOTES.md).
 
 Issuer signatures MAY be accepted in either low-S or high-S form for
 compatibility with existing issuer infrastructure, but the verifier MUST
@@ -418,10 +410,9 @@ Implementations MUST reject claim values that fail their declared format:
 - `bool`: any value other than `true`, `false`, `1`, or `0`.
 - `uint`: empty strings, non-decimal characters, leading whitespace, or
   values exceeding the active `valueBits` range.
-- `iso_date`: values that do not match the exact `YYYY-MM-DD` lexical
-  form with `-` separators. Calendar validity (for example month 13) is NOT
-  checked by the circuit or the SDK. A verifier that needs it MUST check the
-  claim itself.
+- `iso_date`: values that do not match the exact `YYYY-MM-DD` form with
+  `-` separators. Calendar validity (for example month 13) is not checked. A
+  verifier that needs it MUST check the claim itself.
 - `roc_date`: values that do not match the exact `YYYMMDD` lexical form.
 - `string`: inputs that do not fit within 8 ASCII bytes once packed, or
   that contain disallowed bytes.
@@ -568,10 +559,9 @@ Implementations MUST reject a predicate if any of the following holds:
 - `compareValue` is negative;
 - `compareValue >= 2^valueBits`;
 - the active `claimRef` value falls outside `[0, 2^valueBits)`;
-- the `(op, claimFormat)` pair is not supported by this profile. `LE`
-  and `GE` MUST be used only over `uint`, `iso_date`, and `roc_date` claims,
-  not over `bool` or `string` claims (for example, `LE` over a `string`
-  claim). `EQ` applies to all formats.
+- the `(op, claimFormat)` pair is not supported by this profile. `LE` and
+  `GE` apply only to `uint`, `iso_date`, and `roc_date`. `EQ` applies to all
+  formats.
 
 ## Logic Expression Encoding
 
@@ -799,7 +789,7 @@ verifier outcome.
 | Challenge bound to a different audience than the verifier | rejected: audience mismatch |
 | DER-encoded device-binding signature | rejected: signature encoding |
 | Duplicate disclosure (identical raw disclosure bytes) | rejected: duplicate disclosure |
-| High-S device-binding signature | normalized to low-S before proving, or rejected; never proved as high-S |
+| High-S device-binding signature | normalized to low-S or rejected; never proved as high-S |
 | `bool` claim other than `true`, `false`, `1`, `0` | rejected: normalization failure |
 | Disclosure order altered relative to issuer-fixed order | rejected: order mismatch |
 | `iso_date` claim not matching `YYYY-MM-DD` | rejected: normalization failure |
