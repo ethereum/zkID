@@ -194,10 +194,15 @@ template BindDeviceKeyPath(n) {
     xAtMember === 1;
     yAtMember === 1;
 
-    // The pinned anchors end with an opening quote. Each coordinate is a
-    // 43-character base64url encoding and must end at the closing quote.
-    signal xEnd <== ItemAtIndex(n)(payload, xIndex + 5 + 43);
-    signal yEnd <== ItemAtIndex(n)(payload, yIndex + 5 + 43);
+    // A 32-byte coordinate has 43 base64url characters. Some issuer-signed
+    // credentials include a nonstandard 44th '=' pad byte. Accept only a quote
+    // directly after the 43 characters, or one '=' followed by the quote.
+    signal xTail <== ItemAtIndex(n)(payload, xIndex + 5 + 43);
+    signal yTail <== ItemAtIndex(n)(payload, yIndex + 5 + 43);
+    signal xPadded <== IsEqual()([xTail, 61]);
+    signal yPadded <== IsEqual()([yTail, 61]);
+    signal xEnd <== ItemAtIndex(n)(payload, xIndex + 5 + 43 + xPadded);
+    signal yEnd <== ItemAtIndex(n)(payload, yIndex + 5 + 43 + yPadded);
     xEnd === 34;
     yEnd === 34;
 }

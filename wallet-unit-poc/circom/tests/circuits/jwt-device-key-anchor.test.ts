@@ -152,6 +152,23 @@ describe("Device key JSON path", () => {
     await circuit.expectConstraintPass(witness);
   });
 
+  it("accepts a single terminal pad byte on each signed coordinate", async () => {
+    const json = `{"cnf":{"jwk":{"x":"${coordinate}=","y":"${coordinate}="}}}`;
+    const witness = await circuit.calculateWitness(inputs(json));
+    await circuit.expectConstraintPass(witness);
+  });
+
+  for (const member of ["x", "y"] as const) {
+    for (const suffix of ["!", "==", "=!"]) {
+      it(`rejects a ${member} coordinate suffix ${JSON.stringify(suffix)}`, async () => {
+        const x = member === "x" ? coordinate + suffix : coordinate;
+        const y = member === "y" ? coordinate + suffix : coordinate;
+        const json = `{"cnf":{"jwk":{"x":"${x}","y":"${y}"}}}`;
+        await assert.rejects(() => circuit.calculateWitness(inputs(json)), /Assert Failed/);
+      });
+    }
+  }
+
   const key = `{"x":"${coordinate}","y":"${coordinate}"}`;
   const invalidPaths = [
     ["a key outside cnf", `{"backup":{"jwk":${key}}}`],
