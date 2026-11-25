@@ -257,6 +257,7 @@ export type {
   SerializedProof,
   SerializedProofJSON,
   DisclosedClaim,
+  JsonValue,
   EcdsaPublicKey,
   EcdsaPrivateKey,
   IssuerPublicKey,
