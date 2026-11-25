@@ -163,7 +163,7 @@ describe("ClaimDecoder", () => {
 });
 
 describe("ClaimHasher", () => {
-  let circuit: WitnessTester<["claims"], ["claimHashes"]>;
+  let circuit: WitnessTester<["claims", "claimLengths"], ["claimHashes"]>;
 
   const maxClaimsLength = 128;
   const maxClaims = 3;
@@ -186,6 +186,7 @@ describe("ClaimHasher", () => {
 
     const witness = await circuit.calculateWitness({
       claims: claimArray,
+      claimLengths,
     });
 
     await circuit.expectConstraintPass(witness);
@@ -199,6 +200,66 @@ describe("ClaimHasher", () => {
       const expectedHashHex = Array.from(expectedHash, (b) => b.toString(16).padStart(2, "0")).join("");
       const circuitHashHex = circuitClaimHash[i].map((b) => b.toString(16).padStart(2, "0")).join("");
       assert.strictEqual(circuitHashHex, expectedHashHex);
+    }
+  });
+
+  it("rejects a decode length shorter than the authenticated disclosure", async () => {
+    const { claimArray, claimLengths } = encodeClaims(["A".repeat(64)], maxClaims, maxClaimsLength);
+    claimLengths[0] = 60n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: claimArray, claimLengths }),
+      /Assert Failed/,
+    );
+  });
+
+  it("rejects a changed SHA marker, zero padding, trailer, or out-of-range length", async () => {
+    const encoded = encodeClaims(["A".repeat(56)], maxClaims, maxClaimsLength);
+    encoded.claimArray[0]![56] = 0n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: encoded.claimArray, claimLengths: encoded.claimLengths }),
+      /Assert Failed/,
+    );
+
+    const changedZeroPadding = encodeClaims(["A".repeat(56)], maxClaims, maxClaimsLength);
+    changedZeroPadding.claimArray[0]![57] = 7n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: changedZeroPadding.claimArray, claimLengths: changedZeroPadding.claimLengths }),
+      /Assert Failed/,
+    );
+
+    const changedOneBlockPadding = encodeClaims(["A".repeat(50)], maxClaims, maxClaimsLength);
+    changedOneBlockPadding.claimArray[0]![51] = 7n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: changedOneBlockPadding.claimArray, claimLengths: changedOneBlockPadding.claimLengths }),
+      /Assert Failed/,
+    );
+
+    const changedTrailer = encodeClaims(["A".repeat(56)], maxClaims, maxClaimsLength);
+    changedTrailer.claimArray[0]![127] = 0n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: changedTrailer.claimArray, claimLengths: changedTrailer.claimLengths }),
+      /Assert Failed/,
+    );
+
+    const overlong = encodeClaims(["A".repeat(119)], maxClaims, maxClaimsLength);
+    overlong.claimLengths[0] = 120n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: overlong.claimArray, claimLengths: overlong.claimLengths }),
+      /Assert Failed/,
+    );
+  });
+
+  it("hashes correctly across the one-block/two-block boundary", async () => {
+    const inputs = ["A".repeat(55), "A".repeat(56), "A".repeat(119)];
+    const { claimArray, claimLengths } = encodeClaims(inputs, maxClaims, maxClaimsLength);
+    const witness = await circuit.calculateWitness({ claims: claimArray, claimLengths });
+    await circuit.expectConstraintPass(witness);
+    const { claimHashes } = await circuit.readWitnessSignals(witness, ["claimHashes"]);
+    for (let i = 0; i < inputs.length; i++) {
+      assert.deepStrictEqual(
+        (claimHashes as bigint[][])[i]!.map(Number),
+        Array.from(sha256(Buffer.from(inputs[i]!))),
+      );
     }
   });
 
@@ -224,7 +285,7 @@ describe("ClaimHasher", () => {
 
     const { claimArray, claimLengths } = encodeClaims(testcase, maxClaims, maxClaimsLength);
 
-    const witness = await circuit.calculateWitness({ claims: claimArray });
+    const witness = await circuit.calculateWitness({ claims: claimArray, claimLengths });
     const outputs = await circuit.readWitnessSignals(witness, ["claimHashes"]);
 
     const circuitClaimHash = outputs.claimHashes as number[][];
@@ -269,7 +330,7 @@ describe("ClaimHasher", () => {
       return Buffer.from(bytesArray).toString("utf8");
     });
 
-    const witness = await circuit.calculateWitness({ claims: claimArray });
+    const witness = await circuit.calculateWitness({ claims: claimArray, claimLengths });
     await circuit.expectConstraintPass(witness);
 
     const outputs = await circuit.readWitnessSignals(witness, ["claimHashes"]);
