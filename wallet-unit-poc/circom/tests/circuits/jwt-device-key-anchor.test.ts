@@ -1,5 +1,6 @@
 import { strict as assert } from "assert";
 import type { WitnessTester } from "circomkit";
+import { sha256Pad } from "@zk-email/helpers";
 import { p256 } from "@noble/curves/nist.js";
 import { circomkit } from "../common/index.ts";
 import { generateMockData } from "../../src/mock-vc-generator.ts";
@@ -11,8 +12,8 @@ import { witnessIndices } from "../common/witness-signals.ts";
 // Match slots 0/1 are pinned to the literal '"x":"' / '"y":"', but the prover
 // picks which occurrence matchIndex[0]/[1] points at. If the issuer signs a
 // payload carrying a second P-256 JWK, the holder can bind the presentation to
-// that key instead of cnf.jwk. The fix requires each anchor to occur exactly
-// once in the signed payload, so there is no occurrence left to choose.
+// that key instead of cnf.jwk. The circuit must also prove that the selected
+// coordinates are direct members of cnf.jwk when no competing anchor exists.
 
 const CIRCUIT_PARAMS = [2048, 2000, 4, 50, 128];
 
@@ -109,5 +110,100 @@ describe("JWT device-key anchor uniqueness (1789506251)", () => {
       extraPayload: { backup: { jwk: attackerJwk() } },
     });
     await assert.rejects(() => circuit.calculateWitness(mock.circuitInputs), /Assert Failed/);
+  });
+
+  it("rejects a signed payload with only a backup JWK and no cnf.jwk", async () => {
+    const backup = attackerJwk();
+    const mock = await generateMockData({
+      circuitParams: CIRCUIT_PARAMS,
+      extraPayload: { cnf: undefined, backup: { jwk: backup } },
+    });
+    const payload = JSON.parse(Buffer.from(mock.token.split(".")[1], "base64url").toString("utf8"));
+    assert.equal(Object.hasOwn(payload, "cnf"), false);
+    assert.deepEqual(payload.backup.jwk, backup);
+    await assert.rejects(() => circuit.calculateWitness(mock.circuitInputs), /Assert Failed/);
+  });
+});
+
+describe("Device key JSON path", () => {
+  const coordinate = "A".repeat(43);
+  const payloadLength = 192;
+  let circuit!: WitnessTester<any, any>;
+
+  before(async () => {
+    circuit = await circomkit.WitnessTester("DeviceKeyPath", {
+      file: "components/device-key-path",
+      template: "BindDeviceKeyPath",
+      params: [payloadLength],
+    });
+  });
+
+  function inputs(json: string) {
+    return {
+      payload: [...Buffer.from(json), ...Array(payloadLength - Buffer.byteLength(json)).fill(0)],
+      xIndex: Math.max(0, json.indexOf('"x":')),
+      yIndex: Math.max(0, json.indexOf('"y":')),
+    };
+  }
+
+  it("accepts direct JWK members in either order with whitespace around the object separators", async () => {
+    const json = `{ "cnf" : { "jwk" : {"y":"${coordinate}","x":"${coordinate}"} } }`;
+    const witness = await circuit.calculateWitness(inputs(json));
+    await circuit.expectConstraintPass(witness);
+  });
+
+  const key = `{"x":"${coordinate}","y":"${coordinate}"}`;
+  const invalidPaths = [
+    ["a key outside cnf", `{"backup":{"jwk":${key}}}`],
+    ["a nested cnf", `{"backup":{"cnf":{"jwk":${key}}}}`],
+    ["a nested jwk", `{"cnf":{"backup":{"jwk":${key}}}}`],
+    ["coordinates nested inside jwk", `{"cnf":{"jwk":{"backup":${key}}}}`],
+    ["duplicate cnf members", `{"cnf":{"jwk":${key}},"cnf":null}`],
+    ["duplicate jwk members", `{"cnf":{"jwk":${key},"jwk":null}}`],
+    ["an escaped duplicate cnf name", `{"cnf":{"jwk":${key}},"\\u0063nf":null}`],
+  ];
+  for (const [name, json] of invalidPaths) {
+    it(`rejects ${name}`, async () => {
+      await assert.rejects(() => circuit.calculateWitness(inputs(json)), /Assert Failed/);
+    });
+  }
+
+  for (const member of ["x", "y"]) {
+    it(`requires the ${member} coordinate independently`, async () => {
+      const other = member === "x" ? "y" : "x";
+      const json = `{"cnf":{"jwk":{"${other}":"${coordinate}"}}}`;
+      await assert.rejects(() => circuit.calculateWitness(inputs(json)), /Assert Failed/);
+    });
+
+    it(`rejects duplicate ${member} members independently`, async () => {
+      const json = `{"cnf":{"jwk":{"x":"${coordinate}","y":"${coordinate}","${member}":null}}}`;
+      await assert.rejects(() => circuit.calculateWitness(inputs(json)), /Assert Failed/);
+    });
+  }
+});
+
+describe("JWT encoded payload length", () => {
+  let circuit!: WitnessTester<any, any>;
+
+  before(async () => {
+    circuit = await circomkit.WitnessTester("JWTPayloadLength", {
+      file: "jwt_tx_builder/header-payload-extractor",
+      template: "PayloadExtractor",
+      params: [128, 8],
+    });
+  });
+
+  function input(encodedPayload: string) {
+    const [message, messageLength] = sha256Pad(Buffer.from(`e30.${encodedPayload}`), 128);
+    return { message: [...message], messageLength, periodIndex: 3 };
+  }
+
+  it("accepts the configured maximum", async () => {
+    const witness = await circuit.calculateWitness(input("YWJjZGVm"));
+    await circuit.expectConstraintPass(witness);
+  });
+
+  it("rejects a longer encoded payload", async () => {
+    await assert.rejects(() => circuit.calculateWitness(input("YWJjZGVmZw")), /Assert Failed/);
   });
 });
