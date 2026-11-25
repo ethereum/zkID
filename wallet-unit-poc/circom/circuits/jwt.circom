@@ -8,6 +8,7 @@ include "utils/utils.circom";
 include "components/payload_matcher.circom";
 include "components/ec-extractor.circom";
 include "components/device-key-path.circom";
+include "components/sd-digest-span.circom";
 include "components/claim-value-extractor.circom";
 include "components/claim-name-extractor.circom";
 include "components/claim-value-normalizer.circom";
@@ -16,8 +17,7 @@ include "components/claim-value-normalizer.circom";
 /// @notice Verifies an ES256-signed SD-JWT and extracts normalized claim values.
 /// @notice match slots 0 and 1 are reserved for device binding key extraction (x/y patterns).
 /// @notice Device-key anchors must be direct members of the signed cnf.jwk object.
-/// @notice Disclosure digest matching still assumes the issuer places each digest
-///         uniquely in the payload, as an element of the single "_sd" array.
+/// @notice Every used disclosure digest must be inside the single signed "_sd" array.
 /// @notice Claim arrays are claim-only and map directly to normalizedClaimValues.
 /// @notice pubKeyX/pubKeyY (the issuer key the ES256 check runs against) are public
 ///         inputs of the main component, so they appear in the proof's public IO and
@@ -158,42 +158,6 @@ template JWT(
     xAnchorCount === 1;
     yAnchorCount === 1;
 
-    // Each used digest must be an element of the one "_sd":[ array.
-    var SD_LEN = 7;
-    signal sdOpen[maxPayloadLength - SD_LEN + 1] <== PatternMatches(maxPayloadLength, SD_LEN, [34, 95, 115, 100, 34, 58, 91])(payload);
-    var sdAnchors = 0;
-    for (var j = 0; j < maxPayloadLength - SD_LEN + 1; j++) {
-        sdAnchors += sdOpen[j];
-    }
-    signal sdAnchorCount <== sdAnchors;
-    sdAnchorCount === 1;
-
-    // sdQuote[j] = 1 if payload[j] is a '"' inside the _sd array (up to the first ']').
-    signal isClose[maxPayloadLength];
-    signal isQuote[maxPayloadLength];
-    signal inSd[maxPayloadLength];
-    signal sdQuote[maxPayloadLength];
-    for (var j = 0; j < maxPayloadLength; j++) {
-        isClose[j] <== IsEqual()([payload[j], 93]);
-        isQuote[j] <== IsEqual()([payload[j], 34]);
-        inSd[j] <== ((j > 0 ? inSd[j - 1] : 0) + (j >= SD_LEN ? sdOpen[j - SD_LEN] : 0)) * (1 - isClose[j]);
-        sdQuote[j] <== inSd[j] * isQuote[j];
-    }
-
-    signal digestOpenIdx[maxClaims];
-    signal digestCloseIdx[maxClaims];
-    signal digestOpenOk[maxClaims];
-    signal digestCloseOk[maxClaims];
-    for (var i = 0; i < maxClaims; i++) {
-        // The quotes around the digest must be inside _sd. Unused slots read index 0.
-        digestOpenIdx[i] <== claimUsed[i] * (matchIndex[i + 2] - 1);
-        digestCloseIdx[i] <== claimUsed[i] * (matchIndex[i + 2] + matchLength[i + 2]);
-        digestOpenOk[i] <== SelectArrayValue(maxPayloadLength)(sdQuote, digestOpenIdx[i], claimUsed[i]);
-        digestCloseOk[i] <== SelectArrayValue(maxPayloadLength)(sdQuote, digestCloseIdx[i], claimUsed[i]);
-        claimUsed[i] * (1 - digestOpenOk[i]) === 0;
-        claimUsed[i] * (1 - digestCloseOk[i]) === 0;
-    }
-
     // Extract the device binding public key from the payload
     component ecExtractor = ECPublicKeyExtractor_Optimized(maxPayloadLength, 32);
     ecExtractor.payload <== payload;
@@ -272,4 +236,5 @@ template JWT(
     signal KeyBindingY <== ecExtractor.pubKeyY;
 
     BindDeviceKeyPath(maxPayloadLength)(payload, matchIndex[0], matchIndex[1]);
+    BindSdDigestSpan(maxPayloadLength, maxMatches)(payload, matchIndex, matchLength, claimUsed);
 }
