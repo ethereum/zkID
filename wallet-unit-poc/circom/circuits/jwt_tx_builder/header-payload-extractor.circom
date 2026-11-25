@@ -90,6 +90,12 @@ template PayloadExtractor(
 
     // Calculate the length of the Base64 encoded payload
     signal b64PayloadLength <== realMessageLength - periodIndex - 1;
+    // Range-check before the comparison so its inputs fit the comparator.
+    var lengthBits = log2Ceil(maxMessageLength + 1);
+    component payloadLengthBits = Num2Bits(lengthBits);
+    payloadLengthBits.in <== b64PayloadLength;
+    signal payloadFits <== LessEqThan(lengthBits)([b64PayloadLength, maxB64PayloadLength]);
+    payloadFits === 1;
 
     // Extract the Base64 encoded payload from the message
     signal b64Payload[maxB64PayloadLength] <== SelectSubArrayBase64(maxMessageLength, maxB64PayloadLength)(message, periodIndex + 1, b64PayloadLength);

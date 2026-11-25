@@ -69,3 +69,41 @@ template CountCharOccurrences(maxLength) {
 
     count <== counter[maxLength-1];
 }
+
+/// @title PatternMatches
+/// @notice Marks each window equal to a constant pattern.
+/// @dev The caller must constrain every input to a byte.
+template PatternMatches(maxLength, patLen, pattern) {
+    assert(patLen * 8 < 252);
+    assert(patLen <= maxLength);
+
+    signal input in[maxLength];
+    signal output match[maxLength - patLen + 1];
+
+    var target = 0;
+    for (var k = 0; k < patLen; k++) {
+        target += pattern[k] * 256 ** k;
+    }
+
+    for (var i = 0; i <= maxLength - patLen; i++) {
+        var packed = 0;
+        for (var k = 0; k < patLen; k++) {
+            packed += in[i + k] * 256 ** k;
+        }
+        match[i] <== IsZero()(packed - target);
+    }
+}
+
+/// @title CountPatternOccurrences
+/// @notice Counts the positions where the input matches the constant pattern.
+template CountPatternOccurrences(maxLength, patLen, pattern) {
+    signal input in[maxLength];
+    signal output count;
+
+    signal matches[maxLength - patLen + 1] <== PatternMatches(maxLength, patLen, pattern)(in);
+    var total = 0;
+    for (var i = 0; i <= maxLength - patLen; i++) {
+        total += matches[i];
+    }
+    count <== total;
+}
