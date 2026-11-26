@@ -79,6 +79,16 @@ export class Credential {
     const claims: DisclosedClaim[] = disclosures.map((raw, index) => {
       return parseDisclosure(raw, index);
     });
+    const claimNames = new Set<string>();
+    for (const claim of claims) {
+      if (claimNames.has(claim.name)) {
+        throw new InputError(
+          "AMBIGUOUS_PAYLOAD",
+          `Credential discloses claim "${claim.name}" more than once; duplicate claim names are ambiguous`,
+        );
+      }
+      claimNames.add(claim.name);
+    }
 
     return new Credential(
       jwt,
