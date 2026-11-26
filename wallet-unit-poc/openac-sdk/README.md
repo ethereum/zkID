@@ -178,6 +178,10 @@ return result.expressionResult;
 
 Resolve the expected issuer from your own configuration, by expected `iss`/`kid`/credential type, rather than from anything the holder sent alongside the proof.
 
+### Validity (`exp` / `nbf`) is yours to enforce
+
+`verify()` does not check `exp` or `nbf`. `Credential.parse` checks them on the holder side, with a `now` the caller picks, and that check is not part of the proof. So a holder can present a credential outside its validity window. If you need validity, check it yourself.
+
 ## Configuration
 
 ```typescript

@@ -290,9 +290,11 @@ signature and the device-binding signature on the verifier challenge —
 MUST be encoded as fixed-width raw `r || s`, 32 bytes each, big-endian.
 DER-encoded signatures MUST be rejected.
 
-Device-binding signatures MUST be low-S. Implementations MUST reject
-high-S device-binding signatures to ensure verifier and circuit behavior
-agree on which presentations are valid.
+Proved device-binding signatures MUST be low-S. Implementations MUST NOT
+emit high-S signatures, and MUST normalize a received high-S signature to
+low-S before proving, or reject it. The circuit does not check this, because
+the signature is a private witness. See
+[`SECURITY-NOTES.md`](../../SECURITY-NOTES.md).
 
 Issuer signatures MAY be accepted in either low-S or high-S form for
 compatibility with existing issuer infrastructure, but the verifier MUST
@@ -379,8 +381,8 @@ The current `SD-JWT-P256` profile assigns the following format tags:
 
 Normalization rules are:
 
-- `bool`: normalize `"1"` or `"true"` to `1`; all other accepted values
-  normalize to `0`.
+- `bool`: normalize `"1"` or `"true"` to `1`, and `"0"` or `"false"` to
+  `0`.
 - `uint`: parse decimal ASCII digits as an unsigned integer.
 - `iso_date`: parse `YYYY-MM-DD` into the integer `YYYYMMDD`.
 - `roc_date`: parse `YYYMMDD` into the integer with the same decimal digits.
@@ -390,11 +392,13 @@ Inactive claim slots normalize to `0`.
 
 Implementations MUST reject claim values that fail their declared format:
 
-- `bool`: any value other than the recognized truthy or falsy encodings.
+- `bool`: any value other than `"true"`, `"false"`, `"1"`, or `"0"`.
 - `uint`: empty strings, non-decimal characters, leading whitespace, or
   values exceeding the active `valueBits` range.
 - `iso_date`: values that do not match the exact `YYYY-MM-DD` lexical
-  form, or that resolve to an invalid calendar date.
+  form, including the `-` separators. Calendar validity (for example month
+  13) is not checked, so a verifier that needs it MUST check the claim
+  itself.
 - `roc_date`: values that do not match the exact `YYYMMDD` lexical form.
 - `string`: inputs that do not fit within 8 ASCII bytes once packed, or
   that contain disallowed bytes.
@@ -541,8 +545,9 @@ Implementations MUST reject a predicate if any of the following holds:
 - `compareValue` is negative;
 - `compareValue >= 2^valueBits`;
 - the active `claimRef` value falls outside `[0, 2^valueBits)`;
-- the `(op, claimFormat)` pair is not supported by this profile (for
-  example, `LE` over a `string` claim).
+- the `(op, claimFormat)` pair is not supported by this profile. `LE` and
+  `GE` apply only to `uint`, `iso_date`, and `roc_date`. `EQ` applies to all
+  formats.
 
 ## Logic Expression Encoding
 
@@ -769,15 +774,16 @@ verifier outcome.
 | Replayed or stale single-use challenge | rejected: replay / TTL policy |
 | Challenge bound to a different audience than the verifier | rejected: audience mismatch |
 | DER-encoded device-binding signature | rejected: signature encoding |
-| High-S device-binding signature | rejected: malleability policy |
+| High-S device-binding signature | normalized to low-S before proving, or rejected |
 | Duplicate disclosure (identical raw disclosure bytes) | rejected: duplicate disclosure |
 | Disclosure order altered relative to issuer-fixed order | rejected: order mismatch |
+| `bool` claim other than `true`, `false`, `1`, `0` | rejected: normalization failure |
 | `iso_date` claim not matching `YYYY-MM-DD` | rejected: normalization failure |
 | `uint` claim with non-decimal characters or leading whitespace | rejected: normalization failure |
 | `string` claim exceeding 8-byte packing budget | rejected: normalization failure |
 | Predicate with negative `compareValue` | rejected: compareValue range |
 | Predicate with `compareValue >= 2^valueBits` | rejected: compareValue range |
-| Unsupported `(op, claimFormat)` pair (e.g. `LE` over `string`) | rejected: operator unsupported |
+| Unsupported `(op, claimFormat)` pair (e.g. `LE` over `string` or `bool`) | rejected: operator unsupported |
 | Presentation `version` not bound to any known verifier tuple | rejected: version policy |
 
 These cases are normative for the SDK's validation layer; the layer MUST
