@@ -189,6 +189,21 @@ describe("Utils", () => {
       expect(claimArray[0]![0]).toBe(104n);
       expect(claimArray[1]![0]).toBe(0n);
     });
+
+    it("uses one padded block at 55 bytes and two at 56 bytes", () => {
+      const disclosures = ["Alicia", "Cameron"].map((name) =>
+        Buffer.from(JSON.stringify(["padding-fixture", "given_name", name])).toString("base64url"),
+      );
+      const { claimArray, claimLengths } = encodeClaims(disclosures, 2, 128);
+      const [oneBlock, twoBlocks] = claimArray.map((bytes) => Buffer.from(bytes.map(Number)));
+
+      expect(claimLengths).toEqual([55n, 56n]);
+      expect(oneBlock![55]).toBe(0x80);
+      expect(oneBlock!.readBigUInt64BE(56)).toBe(55n * 8n);
+      expect(oneBlock!.subarray(64)).toEqual(Buffer.alloc(64));
+      expect(twoBlocks![56]).toBe(0x80);
+      expect(twoBlocks!.readBigUInt64BE(120)).toBe(56n * 8n);
+    });
   });
 
   describe("modInverse", () => {

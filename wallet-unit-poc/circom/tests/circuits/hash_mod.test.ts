@@ -5,9 +5,16 @@ import assert from "assert";
 describe("HashModScalarField", () => {
   let circuit!: WitnessTester<["hash"], ["out"]>;
 
-  const qHex = "0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551";
-  const q = BigInt(qHex);
-  const toBits256 = (hex: string): number[] => BigInt(hex).toString(2).padStart(256, "0").split("").map(Number);
+  const p = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFn;
+  const q = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551n;
+
+  async function hashModOutput(digest: bigint): Promise<bigint> {
+    const hash = digest.toString(2).padStart(256, "0").split("").map(Number);
+    const witness = await circuit.calculateWitness({ hash });
+    await circuit.expectConstraintPass(witness);
+    const { "main.out": out } = await circuit.readWitness(witness, ["main.out"]);
+    return out;
+  }
 
   before(async () => {
     circuit = await circomkit.WitnessTester("HashModScalarField", {
@@ -20,23 +27,19 @@ describe("HashModScalarField", () => {
     console.log("#constraints:", await circuit.getConstraintCount());
   });
 
-  it("reduces any 256‑bit hash into the secp256r1 scalar field", async () => {
-    const cases = {
-      qMinus1: "0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632550", // q‑1
-      qExact: "0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", // q
-      qPlus1: "0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632552", // q+1
-    };
-
-    const w1 = await circuit.calculateWitness({ hash: toBits256(cases.qMinus1) });
-    const signals = await circuit.readWitnessSignals(w1, ["out"]);
-    assert(signals.out === q - 1n, `Expected out to be q-1`);
-
-    const w2 = await circuit.calculateWitness({ hash: toBits256(cases.qExact) });
-    const signals2 = await circuit.readWitnessSignals(w2, ["out"]);
-    assert(signals2.out === 0n, `Expected out to be 0`);
-
-    const w3 = await circuit.calculateWitness({ hash: toBits256(cases.qPlus1) });
-    const signals3 = await circuit.readWitnessSignals(w3, ["out"]);
-    assert(signals3.out === 1n, `Expected out to be 1`);
+  it("agrees with direct scalar reduction at q-1, q, q+1, and p-1", async () => {
+    for (const digest of [q - 1n, q, q + 1n, p - 1n]) {
+      assert.strictEqual(await hashModOutput(digest), digest % q, `digest = ${digest}`);
+    }
   });
+
+  for (const [label, digest] of [
+    ["p", p],
+    ["p+1", p + 1n],
+    ["the largest 256-bit digest", (1n << 256n) - 1n],
+  ] as const) {
+    it(`agrees with direct scalar reduction at ${label}`, async () => {
+      assert.strictEqual(await hashModOutput(digest), digest % q, `digest = ${digest}`);
+    });
+  }
 });
