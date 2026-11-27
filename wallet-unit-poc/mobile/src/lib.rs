@@ -1,5 +1,5 @@
 use ecdsa_spartan2::{
-    load_instance, load_proof, load_shared_blinds, load_witness,
+    load_instance, load_proof, load_shared_blinds, load_verifying_key, load_witness,
     paths::keys::{
         PREPARE_INSTANCE, PREPARE_PROOF, PREPARE_PROVING_KEY, PREPARE_VERIFYING_KEY,
         PREPARE_WITNESS, SHARED_BLINDS, SHOW_INSTANCE, SHOW_PROOF, SHOW_PROVING_KEY,
@@ -8,12 +8,13 @@ use ecdsa_spartan2::{
     prover::{
         generate_shared_blinds as gen_shared_blinds, prove_circuit, prove_circuit_with_pk, reblind,
         reblind_with_loaded_data, try_verify_circuit, verify_circuit_with_loaded_data,
-        verify_linked_paths,
+        verify_linked,
     },
     save_keys,
     setup::{setup_circuit_keys, setup_circuit_keys_no_save},
-    CircuitSize, PathConfig, PrepareCircuit, ShowCircuit, E,
+    CircuitSize, PathConfig, PrepareCircuit, ShowCircuit, Scalar, E,
 };
+use ff::Field;
 use std::path::PathBuf;
 
 // Initializes the shared UniFFI scaffolding and defines the `MoproError` enum.
@@ -381,8 +382,12 @@ pub fn reblind_show(documents_path: String) -> Result<ProofResult, ZkProofError>
 // Verify Operations
 // ============================================================================
 
-/// Verify JWT circuit proof
-/// Verifies the proof using the verifying key
+/// Verify the JWT (Prepare) proof alone.
+///
+/// A component-only check, not a presentation decision: it says nothing about
+/// the Show proof, the link between the two, the policy result, or the
+/// verifier's nonce, policy, issuer key and expected normalization. To accept a
+/// credential, use `flow_verify` (or `flow::verify` with an expected statement).
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn verify_jwt(documents_path: String) -> Result<bool, ZkProofError> {
     let config = make_config(&documents_path);
@@ -394,8 +399,12 @@ pub fn verify_jwt(documents_path: String) -> Result<bool, ZkProofError> {
     ))
 }
 
-/// Verify Show circuit proof
-/// Verifies the proof using the verifying key
+/// Verify the Show proof alone.
+///
+/// A component-only check, not a presentation decision: it does not check the
+/// Prepare proof, the link between the two, that the policy result is 1, or the
+/// verifier's nonce, policy, issuer key and expected normalization. To accept a
+/// credential, use `flow_verify` (or `flow::verify` with an expected statement).
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn verify_show(documents_path: String) -> Result<bool, ZkProofError> {
     let config = make_config(&documents_path);
@@ -405,18 +414,33 @@ pub fn verify_show(documents_path: String) -> Result<bool, ZkProofError> {
     ))
 }
 
-/// Verify a full presentation: both proofs verify AND commit to the same shared
-/// witness (Item 12). This is the check a verifier must make — verifying the two
-/// proofs separately does not bind them to the same credential.
+/// Check that both proofs verify, they commit to the same shared witness, and
+/// the Show proof's `expressionResult` is 1.
+///
+/// This is NOT a presentation decision. It does not bind the verifier's nonce,
+/// policy, trusted issuer key or expected claim normalization, so a credential
+/// the attacker signed with their own key passes it, and a captured
+/// presentation replays. To accept a credential, use `flow_verify` (or
+/// `flow::verify` with an expected statement), which runs the statement checks.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn verify_presentation(documents_path: String) -> Result<bool, ZkProofError> {
     let config = make_config(&documents_path);
-    Ok(verify_linked_paths(
-        config.artifact_path(PREPARE_PROOF),
-        config.key_path(PREPARE_VERIFYING_KEY),
-        config.artifact_path(SHOW_PROOF),
-        config.key_path(SHOW_VERIFYING_KEY),
-    ))
+    Ok(presentation_accepted(verify_presentation_files(&config)))
+}
+
+fn verify_presentation_files(config: &PathConfig) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+    let prepare_proof = load_proof(config.artifact_path(PREPARE_PROOF)).ok()?;
+    let prepare_vk = load_verifying_key(config.key_path(PREPARE_VERIFYING_KEY)).ok()?;
+    let show_proof = load_proof(config.artifact_path(SHOW_PROOF)).ok()?;
+    let show_vk = load_verifying_key(config.key_path(SHOW_VERIFYING_KEY)).ok()?;
+    verify_linked(&prepare_proof, &prepare_vk, &show_proof, &show_vk)
+}
+
+/// `linked` is the output of a successful linked verification, `None` if
+/// either proof failed or the two are not linked. Show public value 0 is
+/// `expressionResult`.
+fn presentation_accepted(linked: Option<(Vec<Scalar>, Vec<Scalar>)>) -> bool {
+    linked.is_some_and(|(_, show)| show.first() == Some(&Scalar::ONE))
 }
 
 // ============================================================================
@@ -829,6 +853,53 @@ mod tests {
         let config = make_config("/docs");
         assert_eq!(config.circuit_size, CircuitSize::Kb2);
         assert!(config.is_mobile);
+    }
+
+    fn linked(expression_result: u64) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+        Some((vec![Scalar::ONE], vec![Scalar::from(expression_result)]))
+    }
+
+    #[test]
+    fn presentation_accepted_when_linked_and_policy_true() {
+        assert!(presentation_accepted(linked(1)));
+    }
+
+    #[test]
+    fn presentation_rejected_when_policy_false() {
+        assert!(!presentation_accepted(linked(0)));
+        assert!(!presentation_accepted(linked(2)));
+        assert!(!presentation_accepted(Some((vec![], vec![]))));
+    }
+
+    #[test]
+    fn presentation_rejected_when_not_linked() {
+        assert!(!presentation_accepted(None));
+    }
+
+    #[test]
+    fn verify_presentation_false_for_missing_or_corrupt_proofs() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let docs = dir.path().to_string_lossy().into_owned();
+        assert!(!verify_presentation(docs.clone()).unwrap());
+
+        let config = make_config(&docs);
+        for (name, kind) in [
+            (PREPARE_PROOF, "proof"),
+            (SHOW_PROOF, "proof"),
+            (PREPARE_VERIFYING_KEY, "key"),
+            (SHOW_VERIFYING_KEY, "key"),
+        ] {
+            let path = if kind == "proof" {
+                config.artifact_path(name)
+            } else {
+                config.key_path(name)
+            };
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"not a proof").unwrap();
+        }
+        assert!(!verify_presentation(docs.clone()).unwrap());
+        assert!(!verify_jwt(docs.clone()).unwrap());
+        assert!(!verify_show(docs).unwrap());
     }
 
     #[test]

@@ -29,6 +29,10 @@ jobs:
           chmod +x /home/runner/work/circom
           sudo mv /home/runner/work/circom /bin/circom
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -60,5 +64,81 @@ jobs:
           cargo run --release -- prepare verify --size 1k
           cargo run --release -- show verify --size 1k
 
+      - name: Run ecdsa-spartan2 cargo tests
+        run: cd wallet-unit-poc/ecdsa-spartan2 && cargo test --release
+
       - name: Run tests
         run: cd wallet-unit-poc/circom && yarn test
+
+  circom-poc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            libgmp-dev \
+            libsodium-dev \
+            nasm \
+            nlohmann-json3-dev
+
+      - name: Download Circom Binary v2.2.3
+        run: |
+          wget -qO /home/runner/work/circom https://github.com/iden3/circom/releases/download/v2.2.3/circom-linux-amd64
+          chmod +x /home/runner/work/circom
+          sudo mv /home/runner/work/circom /bin/circom
+
+      - name: Install dependencies
+        run: cd wallet-unit-poc/circom && yarn
+
+      - name: Run PoC regression tests
+        run: cd wallet-unit-poc/circom && yarn test:poc
+
+  openac-sdk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: cd wallet-unit-poc/openac-sdk && npm ci
+
+      - name: Type check
+        run: cd wallet-unit-poc/openac-sdk && npm run lint
+
+      # e2e.test.ts is excluded: it runs the default-size circuit
+      # (DEFAULT_JWT_PARAMS, assets/jwt.wasm) through the native ecdsa-spartan2
+      # binary with default-size keys, while the circom job only compiles and
+      # keygens the 1k circuit. sdk-e2e.test.ts needs the built WASM package.
+      - name: Run SDK tests
+        run: |
+          cd wallet-unit-poc/openac-sdk
+          npx vitest run \
+            $(ls tests/*.test.ts | grep -v -e '/e2e.test.ts' -e '/sdk-e2e.test.ts')
+
+  openac-wasm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run WASM decoder tests
+        run: cd wallet-unit-poc/openac-sdk/wasm && cargo test

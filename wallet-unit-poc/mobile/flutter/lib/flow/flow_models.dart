@@ -175,8 +175,12 @@ enum Verdict {
 
   const Verdict(this.label);
 
-  static Verdict of({required bool valid, required bool expressionResult}) {
-    if (!valid) return rejected;
+  static Verdict of({
+    required bool valid,
+    required bool proofsLinked,
+    required bool expressionResult,
+  }) {
+    if (!valid || !proofsLinked) return rejected;
     return expressionResult ? verified : policyNotSatisfied;
   }
 }

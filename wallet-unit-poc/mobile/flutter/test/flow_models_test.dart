@@ -25,9 +25,9 @@ void main() {
   });
 
   test('ignores bundle keys the app does not read', () {
-    final json = jsonDecode(
-            File('test/fixtures/sample_bundle.json').readAsStringSync())
-        as Map<String, dynamic>;
+    final json =
+        jsonDecode(File('test/fixtures/sample_bundle.json').readAsStringSync())
+            as Map<String, dynamic>;
     json['sdkVersion'] = '5.0.0';
     json['circuit'] = {'size': '2k'};
     (json['credential'] as Map)['jwt'] = 'a.b.c';
@@ -52,11 +52,24 @@ void main() {
   });
 
   test('maps outcomes to verdicts', () {
-    expect(Verdict.of(valid: true, expressionResult: true), Verdict.verified);
-    expect(Verdict.of(valid: true, expressionResult: false),
+    expect(Verdict.of(valid: true, proofsLinked: true, expressionResult: true),
+        Verdict.verified);
+    expect(Verdict.of(valid: true, proofsLinked: true, expressionResult: false),
         Verdict.policyNotSatisfied);
-    expect(Verdict.of(valid: false, expressionResult: true), Verdict.rejected);
-    expect(Verdict.of(valid: false, expressionResult: false), Verdict.rejected);
+    expect(Verdict.of(valid: false, proofsLinked: true, expressionResult: true),
+        Verdict.rejected);
+    expect(
+        Verdict.of(valid: false, proofsLinked: true, expressionResult: false),
+        Verdict.rejected);
+  });
+
+  test('valid proofs that are not linked are never verified', () {
+    for (final expression in [true, false]) {
+      expect(
+          Verdict.of(
+              valid: true, proofsLinked: false, expressionResult: expression),
+          Verdict.rejected);
+    }
   });
 
   test('parses the generated bundle when present', () {
