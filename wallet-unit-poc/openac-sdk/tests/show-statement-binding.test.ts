@@ -393,7 +393,7 @@ describe("Claim normalization binding: verifier enforcement", () => {
       logicExpression: narrow.logicExpression,
       claimNormalization: requiredNormalization(narrow),
     };
-    expect(narrow.decodeFlags).toEqual([1, 0]);
+    expect(narrow.decodeFlags).toEqual([1]);
 
     // The proof decoded both slots; the policy reads only the first.
     const verifier = new Verifier(
