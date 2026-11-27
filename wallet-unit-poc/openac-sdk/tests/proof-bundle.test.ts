@@ -75,4 +75,18 @@ describe("1789508531: proof bundle framing is canonical", () => {
     );
     expect(() => deserializeProofBundle(wire)).toThrow(/version/i);
   });
+
+  it("rejects a version frame with a leading BOM", () => {
+    const b = bundle();
+    const wire = concat(
+      frame(concat(new Uint8Array([0xef, 0xbb, 0xbf]), new TextEncoder().encode("0.2.0"))),
+      frame(b.prepareProof),
+      frame(b.showProof),
+      frame(b.prepareInstance),
+      frame(b.showInstance),
+    );
+    expect(() => deserializeProofBundle(wire)).toThrow(
+      expect.objectContaining({ code: "INVALID_PROOF_FORMAT" }),
+    );
+  });
 });
