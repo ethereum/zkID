@@ -403,6 +403,13 @@ export function checkPredicateFormats(
     if (spec.rhs.kind === "claimRef") {
       const rhs = slotError(spec.rhs.index, spec.rhs.name, spec.op);
       if (rhs) return rhs;
+      const lhsCode = normalization.claimFormats[spec.claimRef];
+      const rhsCode = normalization.claimFormats[spec.rhs.index];
+      if (lhsCode !== rhsCode) {
+        const name = (c: number | undefined) =>
+          c === undefined ? "none" : (FORMAT_CODE_NAMES[c] ?? `format ${c}`);
+        return `Claim "${spec.claimName}" and "${spec.rhs.name}" compared with conflicting formats: "${name(lhsCode)}" vs "${name(rhsCode)}"`;
+      }
     }
   }
   return null;
