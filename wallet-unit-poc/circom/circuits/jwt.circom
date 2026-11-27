@@ -7,6 +7,7 @@ include "components/claim-decoder.circom";
 include "utils/utils.circom";
 include "components/payload_matcher.circom";
 include "components/ec-extractor.circom";
+include "components/device-key-path.circom";
 include "components/claim-value-extractor.circom";
 include "components/claim-name-extractor.circom";
 include "components/claim-value-normalizer.circom";
@@ -14,23 +15,9 @@ include "components/claim-value-normalizer.circom";
 /// @title JWT
 /// @notice Verifies an ES256-signed SD-JWT and extracts normalized claim values.
 /// @notice match slots 0 and 1 are reserved for device binding key extraction (x/y patterns).
-/// @notice PRECONDITION on the signed payload. Matching here is positional: the template
-///         proves that a substring occurs at the supplied index, not that the index lies
-///         at the JSON path the substring is meant to come from. The device binding key
-///         and the disclosure digests are only well defined when each match has a single
-///         possible position, so the decoded payload must satisfy:
-///           - "x":" occurs exactly once, directly before cnf.jwk.x
-///           - "y":" occurs exactly once, directly before cnf.jwk.y
-///           - "_sd":[ occurs exactly once, so there is one disclosure array and no
-///             nested ones
-///           - every disclosure digest occurs exactly once, as an element of that array
-///         A nested object with an x or y key, a nested _sd array, or a signed string
-///         that repeats a digest each add a second position and leave the match
-///         undetermined. The payload bytes are fixed by the ES256 check below, so this
-///         is a property of what the issuer signed rather than of the witness, and it
-///         holds for schemas reviewed against the rules above. assertUnambiguousPayload()
-///         in openac-sdk/src/inputs/payload-anchors.ts enforces it before match indices
-///         are built.
+/// @notice Device-key anchors must be direct members of the signed cnf.jwk object.
+/// @notice Disclosure digest matching still assumes the issuer places each digest
+///         uniquely in the payload, as an element of the single "_sd" array.
 /// @notice Claim arrays are claim-only and map directly to normalizedClaimValues.
 /// @notice pubKeyX/pubKeyY (the issuer key the ES256 check runs against) are public
 ///         inputs of the main component, so they appear in the proof's public IO and
@@ -150,7 +137,7 @@ template JWT(
     );
 
     // Pin device-key slots 0/1 to the literal "x":" / "y":" anchors so the
-    // extractor can't be aimed off cnf.jwk. Both bytes and length must be fixed.
+    // path check can use their start indices and known lengths.
     matchLength[0] === 5;
     matchSubstring[0][0] === 34;  // "
     matchSubstring[0][1] === 120; // x
@@ -164,6 +151,12 @@ template JWT(
     matchSubstring[1][2] === 34;  // "
     matchSubstring[1][3] === 58;  // :
     matchSubstring[1][4] === 34;  // "
+
+    // Each anchor must occur exactly once, so slots 0/1 have only one place to point.
+    signal xAnchorCount <== CountPatternOccurrences(maxPayloadLength, 5, [34, 120, 34, 58, 34])(payload);
+    signal yAnchorCount <== CountPatternOccurrences(maxPayloadLength, 5, [34, 121, 34, 58, 34])(payload);
+    xAnchorCount === 1;
+    yAnchorCount === 1;
 
     // Extract the device binding public key from the payload
     component ecExtractor = ECPublicKeyExtractor_Optimized(maxPayloadLength, 32);
@@ -242,4 +235,6 @@ template JWT(
     // This leaves the circuit with no public outputs at all.
     signal KeyBindingX <== ecExtractor.pubKeyX;
     signal KeyBindingY <== ecExtractor.pubKeyY;
+
+    BindDeviceKeyPath(maxPayloadLength)(payload, matchIndex[0], matchIndex[1]);
 }
