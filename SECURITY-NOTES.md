@@ -36,13 +36,6 @@ high-S input into low-S before proving. The circuit can't check this, because
 
 The planned fix is to enforce low-S in Show at the next Show key update.
 
-## Claim-to-claim predicates don't compare formats
-
-The verifier checks the format of each side on its own. It does not check that
-both sides use the same format. This matters only for a hand-built expected
-normalization, since the compiler already enforces it for holder policies. The
-planned fix is a format match check in the verifier.
-
 ## An empty string reads as zero
 
 An empty `string` claim normalizes to 0, the same as a zero value, so a policy
