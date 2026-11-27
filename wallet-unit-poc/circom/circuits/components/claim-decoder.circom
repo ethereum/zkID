@@ -91,17 +91,85 @@ template ClaimComparator(maxMatches , maxSubstringLength){
     }
 }
 
+// Bind the decoder's length to canonical SHA-256 padding for the same bytes.
+template ClaimSha256Length(maxClaimsLength) {
+    assert(maxClaimsLength == 128);
+
+    signal input paddedIn[maxClaimsLength];
+    signal input messageLength;
+    signal output paddedLength;
+
+    // A 128-byte SHA buffer holds at most 119 disclosure bytes.
+    component lengthBits = Num2Bits(7);
+    lengthBits.in <== messageLength;
+    component lengthFits = LessThan(7);
+    lengthFits.in[0] <== messageLength;
+    lengthFits.in[1] <== 120;
+    lengthFits.out === 1;
+
+    component lengthIsZero = IsZero();
+    lengthIsZero.in <== messageLength;
+    signal isUsed <== 1 - lengthIsZero.out;
+
+    component oneBlockCheck = LessThan(7);
+    oneBlockCheck.in[0] <== messageLength;
+    oneBlockCheck.in[1] <== 56;
+    signal oneBlock <== oneBlockCheck.out;
+    paddedLength <== 64 * oneBlock + 128 * (1 - oneBlock);
+
+    signal activeOneBlock <== isUsed * oneBlock;
+    signal activeTwoBlock <== isUsed * (1 - oneBlock);
+
+    // afterMessage[j] is 1 exactly when j exceeds messageLength. Its single
+    // transition identifies the 0x80 marker; later bytes must be zero.
+    signal afterMessage[121];
+    afterMessage[0] <== 0;
+    afterMessage[120] <== 1;
+    component beforeIndex[119];
+    for (var j = 1; j < 120; j++) {
+        beforeIndex[j - 1] = LessThan(7);
+        beforeIndex[j - 1].in[0] <== messageLength;
+        beforeIndex[j - 1].in[1] <== j;
+        afterMessage[j] <== beforeIndex[j - 1].out;
+    }
+
+    signal paddingGate[120];
+    signal expectedPaddingByte[120];
+    for (var j = 0; j < 120; j++) {
+        expectedPaddingByte[j] <== 128 * (afterMessage[j + 1] - afterMessage[j]);
+        if (j < 56) {
+            paddingGate[j] <== isUsed * afterMessage[j + 1];
+        } else {
+            paddingGate[j] <== activeTwoBlock * afterMessage[j + 1];
+        }
+        paddingGate[j] * (paddedIn[j] - expectedPaddingByte[j]) === 0;
+    }
+
+    // The message is < 120 bytes, so its bit length fits in two bytes.
+    // The six leading bytes of the SHA trailer must be zero.
+    for (var j = 56; j < 62; j++) activeOneBlock * paddedIn[j] === 0;
+    activeOneBlock * (paddedIn[62] * 256 + paddedIn[63] - messageLength * 8) === 0;
+    for (var j = 120; j < 126; j++) activeTwoBlock * paddedIn[j] === 0;
+    activeTwoBlock * (paddedIn[126] * 256 + paddedIn[127] - messageLength * 8) === 0;
+}
+
 template ClaimHasher(maxMatches, maxClaimsLength){
     signal input claims[maxMatches][maxClaimsLength];
+    signal input claimLengths[maxMatches];
 
     component claimHasher[maxMatches];
+    component claimPadding[maxMatches];
     component hashByteConvert[maxMatches][32];
     signal output claimHashes[maxMatches][32]; 
 
     for (var i = 0; i < maxMatches; i++) {
+        claimPadding[i] = ClaimSha256Length(maxClaimsLength);
+        claimPadding[i].paddedIn <== claims[i];
+        claimPadding[i].messageLength <== claimLengths[i];
+
         claimHasher[i] = Sha256Bytes(maxClaimsLength);
         claimHasher[i].paddedIn <== claims[i];
-        claimHasher[i].paddedInLength <== maxClaimsLength;
+        claimHasher[i].paddedInLength <== claimPadding[i].paddedLength;
 
          for (var j = 0; j < 32; j++) {
             hashByteConvert[i][j] = Bits2Num(8);

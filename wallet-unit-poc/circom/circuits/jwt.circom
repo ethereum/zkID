@@ -70,7 +70,7 @@ template JWT(
     signal input claimFormats[maxClaims];
 
     signal decodedClaims[maxClaims][decodedLen] <== ClaimDecoder(maxClaims, maxClaimsLength)(claims, claimLengths, decodeFlags);
-    signal claimHashes[maxClaims][32] <== ClaimHasher(maxClaims, maxClaimsLength)(claims);
+    signal claimHashes[maxClaims][32] <== ClaimHasher(maxClaims, maxClaimsLength)(claims, claimLengths);
 
     signal claimMatchSubstring[maxClaims][maxSubstringLength];
     signal claimMatchLength[maxClaims];
