@@ -94,10 +94,16 @@ template Secp256r1AddComplete() {
     signal dy <== (yQ - yP) * (1 - isXEqual.out);
     signal lambdaA <-- ((yQ - yP) / dx) * (1 - isXEqual.out);
     dx * lambdaA === dy;
+    // When xP == xQ, dx = dy = 0 and the line above holds for every lambdaA.
+    // lambdaA is added into lambda, so pin it to 0 there (lambdaB is the slope).
+    lambdaA * isXEqual.out === 0;
 
     // lambdaB = (3 * xP^2) / (2 * yP)
-    signal lambdaB <-- ((3 * xPSquared - 3) / (2 * yP));
-    lambdaB * 2 * yP === 3 * xPSquared - 3;
+    // P at infinity (0, 0) has no tangent: relax the constraint (lambdaB = 0)
+    // instead of requiring 0 === -3. The infinity branches below ignore lambda.
+    signal tangentNum <== (3 * xPSquared - 3) * (1 - isPInf.out);
+    signal lambdaB <-- tangentNum / (2 * yP + isPInf.out);
+    lambdaB * 2 * yP === tangentNum;
 
     // lambda = xP != xQ ? lambdaA : lambdaB
     signal lambda <== (lambdaB * isXEqual.out) + lambdaA;
