@@ -376,7 +376,7 @@ export function claimNamesByIndex(compiled: CompiledPredicates): Map<number, str
  * an expected format, and that each operator is allowed over that format. This
  * is the verifier's own copy of the compiler's table, applied to the
  * expectation it was handed, so a hand-built or tampered `ExpectedStatement`
- * cannot reintroduce a combination the compiler rejects.
+ * cannot carry a combination the compiler rejects.
  *
  * @returns an error message, or null when the predicates are well-formed.
  */

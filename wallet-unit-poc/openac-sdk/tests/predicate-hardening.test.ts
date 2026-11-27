@@ -35,7 +35,7 @@ const claim = (index: number, name: string): DisclosedClaim => ({
 
 const CLAIMS = [claim(0, "age"), claim(1, "limit")];
 
-describe("1789506262: unsafe JS number literals", () => {
+describe("unsafe JS number literals", () => {
   const over = (value: bigint | number | string): PredicateExpression => ({
     claim: "age",
     op: "==",
@@ -67,7 +67,7 @@ describe("1789506262: unsafe JS number literals", () => {
   });
 });
 
-describe("1789512824: operator x format table", () => {
+describe("operator by format table", () => {
   const cmp = (op: "<=" | ">=" | "==", format: "uint" | "date" | "string"): PredicateExpression => ({
     claim: "age",
     op,
@@ -142,7 +142,7 @@ function expectedFor(expr: PredicateExpression): ExpectedStatement {
   };
 }
 
-describe("1789512824: verifier checks the same table", () => {
+describe("verifier checks the same table", () => {
   const stringEq = expectedFor({ claim: "age", op: "==", compareTo: { claim: "limit" }, format: "string" });
 
   it("fails closed on LE over a string-normalized slot", async () => {
@@ -166,7 +166,7 @@ describe("1789512824: verifier checks the same table", () => {
   });
 });
 
-describe("1789511071: sparse schemas", () => {
+describe("sparse schemas", () => {
   const SPARSE = [claim(0, "age"), claim(1, "limit"), claim(5, "far")];
   const onFar: PredicateExpression = { claim: "far", op: "==", value: 1n, format: "uint" };
 
@@ -202,8 +202,8 @@ describe("1789511071: sparse schemas", () => {
       ...exp,
       claimNormalization: { decodeFlags: [0, 0], claimFormats: [1, 1] },
     };
-    // The proof decoded the slot, as a holder's would; the expectation does not
-    // say so, so the format comparison would be skipped without the check.
+    // The proof decodes the slot but the expectation doesn't say so, which
+    // would skip the format comparison.
     const r = await verify(undecoded, exp.claimNormalization);
     expect(r.valid).toBe(false);
     expect(r.error).toMatch(/undecoded|decodeFlag/);
