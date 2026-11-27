@@ -207,8 +207,18 @@ export function compilePredicateExpression(
   expr: PredicateExpression,
   claims: DisclosedClaim[],
 ): CompiledPredicates {
+  // Reject duplicate claim names (RFC 9901 Section 7.1). Otherwise disclosure
+  // order would decide which value a predicate reads.
   const claimNameToIndex = new Map<string, number>();
-  for (const c of claims) claimNameToIndex.set(c.name, c.index);
+  for (const c of claims) {
+    if (claimNameToIndex.has(c.name)) {
+      throw new InputError(
+        "AMBIGUOUS_PAYLOAD",
+        `Credential discloses claim "${c.name}" more than once; duplicate claim names are ambiguous`,
+      );
+    }
+    claimNameToIndex.set(c.name, c.index);
+  }
 
   const claimFormatChosen = new Map<number, ClaimFormatHint>();
 

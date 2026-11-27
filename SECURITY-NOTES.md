@@ -42,6 +42,16 @@ An empty `string` claim normalizes to 0, the same as a zero value, so a policy
 can't tell the two apart. The planned fix is a non-empty check or a length tag
 in the string normalizer at the next Prepare key update.
 
+## Duplicate claim names are an issuer rule
+
+The circuit binds each claim slot only to the claim name. If an issuer signs
+two disclosures with the same name, a holder can choose which value a
+predicate reads, by reordering disclosures or withholding one. The SDK
+rejects credentials that disclose a name twice, but it can't see withheld
+disclosures, and neither can the circuit, because decoy digests make `_sd`
+completeness unprovable. Issuers must never sign duplicate names, as RFC 9901
+already requires. No circuit fix is planned.
+
 ## Revocation secrets need high entropy
 
 `r` must be uniform random with at least 128 bits of entropy, and must never be

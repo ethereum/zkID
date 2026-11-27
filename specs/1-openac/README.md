@@ -322,12 +322,12 @@ with the SD-JWT payload commitment structure.
 
 Additional disclosure rules for this profile:
 
-- Disclosures with identical `claim_name` MAY appear in the same
-  credential. A duplicate `claim_name` value MUST NOT by itself cause
-  rejection.
-- Disclosures MUST be presented in a deterministic order fixed by the
-  issuer. Verifiers MUST treat disclosure order as significant for
-  matching disclosures to profile-defined claim slots.
+- Issuers MUST NOT issue two disclosures with the same `claim_name`.
+  Holders and verifiers MUST reject a credential that contains them, as
+  RFC 9901 Section 7.1 requires. The circuit cannot enforce this, because
+  it cannot see disclosures the holder withholds.
+- Disclosure order MUST NOT affect which value a `claim_name` resolves
+  to.
 - Disclosure order MUST NOT affect the digest of an individual
   disclosure (each digest is over its own raw string).
 - The mapping of disclosed claims to the `Show` relation's claim slots is
@@ -776,7 +776,7 @@ verifier outcome.
 | DER-encoded device-binding signature | rejected: signature encoding |
 | High-S device-binding signature | normalized to low-S before proving, or rejected |
 | Duplicate disclosure (identical raw disclosure bytes) | rejected: duplicate disclosure |
-| Disclosure order altered relative to issuer-fixed order | rejected: order mismatch |
+| Two disclosures with the same `claim_name` | rejected: ambiguous payload |
 | `bool` claim other than `true`, `false`, `1`, `0` | rejected: normalization failure |
 | `iso_date` claim not matching `YYYY-MM-DD` | rejected: normalization failure |
 | `uint` claim with non-decimal characters or leading whitespace | rejected: normalization failure |
