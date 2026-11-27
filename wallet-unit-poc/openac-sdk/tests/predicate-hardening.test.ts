@@ -214,3 +214,22 @@ describe("1789511071: sparse schemas", () => {
     expect((await verify(exp)).valid).toBe(true);
   });
 });
+
+describe("claim-to-claim predicates compare matching formats", () => {
+  const uintLe = expectedFor({ claim: "age", op: "<=", compareTo: { claim: "limit" }, format: "uint" });
+
+  it("fails closed when the two sides expect different formats", async () => {
+    // uint <= date: the compiler cannot produce it, a hand-built statement can.
+    const mixed: ExpectedStatement = {
+      ...uintLe,
+      claimNormalization: { decodeFlags: [1, 1], claimFormats: [1, 3] },
+    };
+    const r = await verify(mixed);
+    expect(r.valid).toBe(false);
+    expect(r.error).toMatch(/conflicting formats/);
+  });
+
+  it("control: matching formats on both sides verify", async () => {
+    expect((await verify(uintLe)).valid).toBe(true);
+  });
+});
