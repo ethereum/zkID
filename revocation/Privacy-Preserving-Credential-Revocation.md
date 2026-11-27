@@ -59,6 +59,12 @@ Another option is to derive a deterministic [Semaphore V4 identity](https://docs
 
 Regardless of the implementation, commitments must not reveal information that can identify a credential or holder.
 
+The secret `r` MUST be uniform random with at least 128 bits of entropy. It MUST NOT come from identifiers (document number, name, email, phone number) or other guessable data.
+
+`C = H(r)` hides `r` only if `r` is hard to guess. If it isn't, anyone who sees `C` (for example in the revocation tree) can hash guesses offline until one matches, and so link `C` to the holder.
+
+If `r` must be deterministic, use a hiding commitment instead, such as a Pedersen commitment `C = Commit(m; b)` with a fresh random `b`.
+
 ### Revocation Tree
 
 The protocol requires an authenticated data structure capable of supporting non-membership proofs.
