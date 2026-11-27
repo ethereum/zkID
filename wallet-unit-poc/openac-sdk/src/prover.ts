@@ -43,8 +43,8 @@ import type {
 
 const SDK_VERSION = "0.1.0";
 
-// Wire version of the binary proof bundle. 0.2.0 is the strict framing: every
-// frame must fit the buffer and the buffer must be consumed exactly.
+// Wire version of the binary proof bundle. Every frame must fit the buffer,
+// and the buffer must be consumed exactly.
 const BUNDLE_VERSION = "0.2.0";
 
 export class Prover {

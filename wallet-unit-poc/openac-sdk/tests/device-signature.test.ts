@@ -19,7 +19,7 @@ const deviceKey = {
 const b64u = (b: Uint8Array) => Buffer.from(b).toString("base64url");
 const sigS = (sig: string) => BigInt("0x" + Buffer.from(sig, "base64url").subarray(32).toString("hex"));
 
-describe("1789513951: low-S device signatures", () => {
+describe("low-S device signatures", () => {
   it("signDeviceNonce never emits a high-S signature", () => {
     for (let i = 0; i < 200; i++) {
       const s = sigS(signDeviceNonce(`device-nonce-${i}-abcdef`, PRIV));

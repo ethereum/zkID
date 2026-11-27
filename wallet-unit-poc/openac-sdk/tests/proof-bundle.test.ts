@@ -24,7 +24,7 @@ const concat = (...a: Uint8Array[]) => {
   return out;
 };
 
-describe("1789508531: proof bundle framing is canonical", () => {
+describe("proof bundle framing is canonical", () => {
   it("control: serialize/deserialize round-trips", () => {
     const b = bundle();
     const out = deserializeProofBundle(serializeProofBundle(b));
