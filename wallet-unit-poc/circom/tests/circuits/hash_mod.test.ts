@@ -39,4 +39,42 @@ describe("HashModScalarField", () => {
     const signals3 = await circuit.readWitnessSignals(w3, ["out"]);
     assert(signals3.out === 1n, `Expected out to be 1`);
   });
+
+  // The circuit's native field is the P-256 base field, so a digest at or above
+  // p cannot be packed into one field element without losing its value.
+  const p = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+  const toBits = (v: bigint): number[] => v.toString(2).padStart(256, "0").split("").map(Number);
+
+  it("reduces a digest at or above the base-field modulus correctly", async () => {
+    for (const digest of [p + 5n, p, p - 1n, (1n << 256n) - 1n]) {
+      const w = await circuit.calculateWitness({ hash: toBits(digest) });
+      const { out } = await circuit.readWitnessSignals(w, ["out"]);
+      assert(out === digest % q, `digest ${digest.toString(16)}: got ${out}, expected ${digest % q}`);
+    }
+  });
+
+  it("accepts a hash made only of bits", async () => {
+    await circuit.expectPass({ hash: toBits(p - 5n) }, { out: (p - 5n) % q });
+  });
+
+  // Bits2Num sums its inputs without checking they are bits, so a 2 in a
+  // limb would otherwise give a consistent but unintended value.
+  it("rejects a non-bit value in the low limb", async () => {
+    const hash = toBits(7n);
+    hash[255] = 2;
+    await circuit.expectFail({ hash });
+  });
+
+  it("rejects a non-bit value in the high limb", async () => {
+    const hash = toBits(1n << 200n);
+    hash[0] = 2;
+    await circuit.expectFail({ hash });
+  });
+
+  it("reduces a digest below the base-field modulus correctly", async () => {
+    const digest = p - 5n;
+    const w = await circuit.calculateWitness({ hash: toBits(digest) });
+    const { out } = await circuit.readWitnessSignals(w, ["out"]);
+    assert(out === digest % q, `got ${out}, expected ${digest % q}`);
+  });
 });

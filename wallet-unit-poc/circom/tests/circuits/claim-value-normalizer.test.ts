@@ -3,6 +3,7 @@ import type { WitnessTester } from "circomkit";
 import { circomkit } from "../common/index.ts";
 
 const VALUE_LEN = 96;
+const FORMAT_BOOL = 0n;
 const FORMAT_UINT = 1n;
 const FORMAT_ISO_DATE = 2n;
 const FORMAT_ROC_DATE = 3n;
@@ -10,7 +11,7 @@ const FORMAT_ROC_DATE = 3n;
 function formatInput(text: string, format: bigint) {
   const value = new Array<bigint>(VALUE_LEN).fill(0n);
   for (let i = 0; i < text.length; i++) value[i] = BigInt(text.charCodeAt(i));
-  return { value, valueLength: BigInt(text.length), format };
+  return { value, valueLength: BigInt(text.length), format, isActive: 1n };
 }
 
 function uintInput(decimal: string) {
@@ -22,7 +23,7 @@ function uintInput(decimal: string) {
 const q = 115792089210356248762697446949407573530086143415290314195533631308867097853951n;
 
 describe("ClaimValueNormalizer uint range", () => {
-  let circuit: WitnessTester<["value", "valueLength", "format"], ["normalizedValue"]>;
+  let circuit: WitnessTester<["value", "valueLength", "format", "isActive"], ["normalizedValue"]>;
 
   before(async () => {
     circuit = await circomkit.WitnessTester("claim_value_normalizer", {
@@ -107,11 +108,51 @@ describe("ClaimValueNormalizer uint range", () => {
     await circuit.expectFail(formatInput("090+101", FORMAT_ROC_DATE));
   });
 
-  it("still ignores the ISO separators", async () => {
-    // Positions 4 and 7 are not read by the date arithmetic, so they must not
-    // be constrained to digits -- otherwise every real ISO date fails.
-    await circuit.expectPass(formatInput("2010/01/01", FORMAT_ISO_DATE), {
-      normalizedValue: 20100101n,
+  it("rejects a wrong separator byte in an ISO date", async () => {
+    await circuit.expectFail(formatInput("2010/01/01", FORMAT_ISO_DATE));
+    await circuit.expectFail(formatInput("2010-01/01", FORMAT_ISO_DATE));
+    await circuit.expectFail(formatInput("2010/01-01", FORMAT_ISO_DATE));
+  });
+
+  it("does not constrain the ROC date, which has no separators", async () => {
+    await circuit.expectPass(formatInput("0900101", FORMAT_ROC_DATE), {
+      normalizedValue: 900101n,
     });
+  });
+
+  it("leaves an inactive slot's empty uint and empty bool unconstrained", async () => {
+    // Unused slots carry an empty value under the builder's default format.
+    await circuit.expectPass({ ...uintInput(""), isActive: 0n }, { normalizedValue: 0n });
+    await circuit.expectPass({ ...formatInput("", FORMAT_BOOL), isActive: 0n }, { normalizedValue: 0n });
+  });
+
+  it("rejects an empty uint", async () => {
+    // An empty uint would read as 0 and satisfy any zero-favorable policy.
+    await circuit.expectFail(uintInput(""));
+  });
+
+  it("still accepts a uint of one or more digits", async () => {
+    await circuit.expectPass(uintInput("100"), { normalizedValue: 100n });
+    await circuit.expectPass(uintInput("0"), { normalizedValue: 0n });
+  });
+
+  describe("bool", () => {
+    for (const [text, expected] of [
+      ["1", 1n],
+      ["true", 1n],
+      ["0", 0n],
+      ["false", 0n],
+    ] as const) {
+      it(`accepts ${text}`, async () => {
+        await circuit.expectPass(formatInput(text, FORMAT_BOOL), { normalizedValue: expected });
+      });
+    }
+
+    for (const text of ["banana", "", "2", "True", "tru", "falsy", "00", "10", "truee", "fals"]) {
+      it(`rejects ${JSON.stringify(text)}`, async () => {
+        // Each would read as 0 and satisfy a false-favorable policy.
+        await circuit.expectFail(formatInput(text, FORMAT_BOOL));
+      });
+    }
   });
 });

@@ -103,6 +103,20 @@ This document describes the circuits used for privacy-preserving identity verifi
 
 3.  **Claims Matching:** Compare decoded and hashed claims against selective disclosure data.
 
+## Claim Value Normalization and Hashing
+
+**ClaimValueNormalizer**
+
+- `uint`: at least one digit and at most 19, every byte a digit.
+
+- `bool`: exactly `1`, `true`, `0` or `false`. Anything else is unsatisfiable. The emptiness and spelling checks apply only to decoded slots (`decodeFlags[i] = 1`).
+
+- `iso_date`: width 10, digits everywhere except positions 4 and 7, which must be `-`.
+
+**HashModScalarField**
+
+- The 256 digest bits build the low and high 128-bit limbs directly, then one subtraction of the scalar order reduces them. A digest at or above the base-field modulus reduces correctly. Shared with the mdoc circuit.
+
 ## AgeVerifier Circuit
 
 This circuit operates separately from `JWT`. It checks whether a birth date claim corresponds to a user who is 18 years or older.
