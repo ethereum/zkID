@@ -234,6 +234,13 @@ describe("ClaimHasher", () => {
       /Assert Failed/,
     );
 
+    const changedOneBlockTrailer = encodeClaims(["A".repeat(50)], maxClaims, maxClaimsLength);
+    changedOneBlockTrailer.claimArray[0]![63] = 0n;
+    await assert.rejects(
+      () => circuit.calculateWitness({ claims: changedOneBlockTrailer.claimArray, claimLengths: changedOneBlockTrailer.claimLengths }),
+      /Assert Failed/,
+    );
+
     const changedTrailer = encodeClaims(["A".repeat(56)], maxClaims, maxClaimsLength);
     changedTrailer.claimArray[0]![127] = 0n;
     await assert.rejects(
