@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Credential } from "../src/credential.js";
+import { compilePredicateExpression } from "../src/predicates.js";
 import {
   base64urlToBase64,
   base64Decode,
@@ -87,6 +88,52 @@ describe("Credential", () => {
         expect(typeof claim.digest).toBe("string");
         expect(claim.digest).not.toMatch(/[+/=]/);
       }
+    });
+
+    it.each([
+      ["array", ["18"]],
+      ["object", { value: "18" }],
+      ["number", 18],
+      ["boolean", true],
+      ["null", null],
+    ])("preserves a %s disclosure value", (_case, value) => {
+      const { jwt } = createMockJwt();
+      const disclosure = base64urlEncode(new TextEncoder().encode(JSON.stringify(["salt", "age", value])));
+      expect(Credential.parse(jwt, [disclosure]).claims[0]!.value).toEqual(value);
+    });
+
+    it.each([
+      ["number", 18],
+      ["array", ["18"]],
+      ["null", null],
+    ])("rejects a predicate reading a %s disclosure value", (_case, value) => {
+      const { jwt } = createMockJwt();
+      const disclosure = base64urlEncode(new TextEncoder().encode(JSON.stringify(["salt", "age", value])));
+      const credential = Credential.parse(jwt, [disclosure]);
+      expect(() => compilePredicateExpression(
+        { claim: "age", op: ">=", value: 18n, format: "uint" },
+        credential.claims,
+      )).toThrow(expect.objectContaining({ code: "INVALID_KEY" }));
+    });
+
+    it("rejects a claim-to-claim predicate reading a non-string disclosure value", () => {
+      const { jwt, disclosures } = createMockJwt();
+      const nonString = base64urlEncode(new TextEncoder().encode(JSON.stringify(["salt", "age", 18])));
+      const credential = Credential.parse(jwt, [...disclosures, nonString]);
+      expect(() => compilePredicateExpression(
+        { claim: "age", op: ">=", compareTo: { claim: "roc_birthday" }, format: "uint" },
+        credential.claims,
+      )).toThrow(expect.objectContaining({ code: "INVALID_KEY" }));
+    });
+
+    it.each([
+      ["extra item", ["salt", "age", "18", 0]],
+      ["array name", ["salt", ["age"], "18"]],
+      ["array salt", [["salt"], "age", "18"]],
+    ])("rejects %s in a named disclosure", (_case, tuple) => {
+      const { jwt } = createMockJwt();
+      const disclosure = base64urlEncode(new TextEncoder().encode(JSON.stringify(tuple)));
+      expect(() => Credential.parse(jwt, [disclosure])).toThrow(/Invalid disclosure format/);
     });
   });
 

@@ -222,6 +222,13 @@ export function compilePredicateExpression(
         }`,
       );
     }
+    const claim = claims.find((c) => c.index === idx);
+    if (typeof claim?.value !== "string") {
+      throw new InputError(
+        "INVALID_KEY",
+        `Predicate reads claim "${name}" with a non-string value; proofs require string disclosure values`,
+      );
+    }
     return idx;
   }
 

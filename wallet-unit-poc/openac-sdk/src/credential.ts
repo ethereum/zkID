@@ -6,7 +6,7 @@ import {
   utf8Decode,
 } from "./utils.js";
 import { InputError } from "./errors.js";
-import type { DisclosedClaim, EcdsaPublicKey } from "./types.js";
+import type { DisclosedClaim, EcdsaPublicKey, JsonValue } from "./types.js";
 
 export class Credential {
   readonly header: Record<string, unknown>;
@@ -222,7 +222,7 @@ function parseDisclosure(raw: string, index: number): DisclosedClaim {
     );
   }
 
-  let parsed: unknown[];
+  let parsed: unknown;
   try {
     parsed = JSON.parse(decoded);
   } catch (e) {
@@ -233,23 +233,28 @@ function parseDisclosure(raw: string, index: number): DisclosedClaim {
     );
   }
 
-  if (!Array.isArray(parsed) || parsed.length < 3) {
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 3 ||
+    typeof parsed[0] !== "string" ||
+    typeof parsed[1] !== "string"
+  ) {
     throw new InputError(
       "MISSING_DISCLOSURE",
-      `Invalid disclosure format at index ${index}: expected [salt, name, value]`,
+      `Invalid disclosure format at index ${index}: expected [string salt, string name, value]`,
     );
   }
 
-  const [salt, name, value] = parsed;
+  const [salt, name, value] = parsed as [string, string, JsonValue];
 
   const digestBytes = sha256(new TextEncoder().encode(raw));
   const digest = base64urlEncode(digestBytes);
 
   return {
     index,
-    salt: String(salt),
-    name: String(name),
-    value: String(value),
+    salt,
+    name,
+    value,
     raw,
     digest,
   };

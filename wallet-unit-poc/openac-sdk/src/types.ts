@@ -227,10 +227,18 @@ export interface DisclosedClaim {
   index: number;
   salt: string;
   name: string;
-  value: string;
+  value: JsonValue;
   raw: string;
   digest: string; // SHA-256 of disclosure (base64url, matches _sd array)
 }
+
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export interface WasmExports {
   setup_prepare(
