@@ -18,6 +18,7 @@ import { sha256 } from "@noble/hashes/sha2";
 import { Credential } from "../../openac-sdk/src/credential.js";
 import { WasmBridge } from "../../openac-sdk/src/wasm-bridge.js";
 import type { VcSize } from "../../openac-sdk/src/wasm-bridge.js";
+import wasmUrl from "../../openac-sdk/wasm/pkg/openac_wasm_bg.wasm?url";
 import { buildJwtCircuitInputs } from "../../openac-sdk/src/inputs/jwt-input-builder.js";
 import {
   buildShowCircuitInputs,
@@ -224,18 +225,19 @@ export async function initWasm(
   const logs: StepLog[] = [];
 
   // 1. Load WASM module
-  //    JS glue is bundled from src/wasm/, binary is served from public/
+  //    Glue and binary come straight from openac-sdk/wasm/pkg, so the demo
+  //    always runs the verifier that was last built there.
   onProgress?.("Loading WASM module...");
   let t = performance.now();
-  const wasmModule = await import("./wasm/openac_wasm.js");
-  const wasmResp = await fetch("/openac_wasm_bg.wasm");
+  const wasmModule = await import("../../openac-sdk/wasm/pkg/openac_wasm.js");
+  const wasmResp = await fetch(wasmUrl);
   const wasmBytes = await wasmResp.arrayBuffer();
   wasmModule.initSync({ module: new WebAssembly.Module(wasmBytes) });
   const abi = wasmModule.abi_version();
   if (abi !== ABI_VERSION) {
     throw new Error(
       `Verifier WASM ABI mismatch: expected ${ABI_VERSION}, got ${abi}. ` +
-        "The copy in this demo is stale; rebuild openac-sdk/wasm and run `npm run setup`."
+        "openac-sdk/wasm/pkg is stale; rebuild it with `npm run build:wasm` in openac-sdk."
     );
   }
 
