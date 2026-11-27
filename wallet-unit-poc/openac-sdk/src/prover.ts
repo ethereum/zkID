@@ -470,7 +470,8 @@ export function deserializeProofBundle(data: Uint8Array): {
   }
 
   const versionBytes = readPart();
-  const version = new TextDecoder().decode(versionBytes);
+  // ignoreBOM keeps a leading EF BB BF in the string, so it fails the version check.
+  const version = new TextDecoder("utf-8", { ignoreBOM: true }).decode(versionBytes);
   if (version !== BUNDLE_VERSION) {
     throw new VerificationError(
       "INVALID_PROOF_FORMAT",
