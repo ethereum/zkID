@@ -20,7 +20,7 @@ function fakeModule(overrides: Record<string, unknown> = {}) {
 
 const args = [new Uint8Array(), new Uint8Array(), new Uint8Array(), new Uint8Array(), new Uint8Array(), new Uint8Array()] as const;
 
-describe("1789510114: WASM ABI version", () => {
+describe("WASM ABI version", () => {
   it("control: a matching abi_version initializes", () => {
     const b = new WasmBridge();
     b.initWithModule(fakeModule());
@@ -42,7 +42,7 @@ describe("1789510114: WASM ABI version", () => {
   });
 });
 
-describe("1789511095: a WASM trap poisons the bridge", () => {
+describe("a WASM trap poisons the bridge", () => {
   it("control: a normal call returns", async () => {
     const b = new WasmBridge();
     b.initWithModule(fakeModule());

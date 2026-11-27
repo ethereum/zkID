@@ -225,10 +225,10 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
     expect(result.error).toMatch(/nonce/i);
   }, 60_000);
 
-  // Spartan2 0578977 returns Err for a wrong-length IPA b_vec; d687dbb panicked,
-  // which traps the module and poisons the bridge. The proof's Vec fields are
-  // bincode u64 length prefixes, so drop the last element of every vec in the
-  // Show proof (b_vec among them) and require that none of them traps.
+  // A wrong-length IPA b_vec must return an error, not trap, since a trap
+  // poisons the bridge. The proof's Vec fields are bincode u64 length
+  // prefixes, so drop the last element of every vec in the Show proof (b_vec
+  // among them) and check that none traps.
   it("a wrong-length vector in a proof errors without trapping the module", async () => {
     if (!ready) return;
     const bytes = proof.showProof;
