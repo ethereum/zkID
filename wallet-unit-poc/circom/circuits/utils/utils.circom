@@ -231,10 +231,9 @@ template HashModScalarField() {
     var qlo = q & ((2 ** 128) - 1);
     var qhi = q >> 128;
     
-    // The limbs are built straight from the digest bits. Packing all 256 bits
-    // into one field element first would wrap a digest >= P (the circuit's own
-    // modulus) and lose its value before the reduction below. Bits2Num does
-    // not check its inputs, so each one is constrained to a bit here.
+    // Build the limbs from the bits directly: packing all 256 bits into one
+    // field element would wrap a digest >= P before the reduction below.
+    // Bits2Num doesn't check its inputs, so constrain each one to a bit.
     component loNum = Bits2Num(128);
     component hiNum = Bits2Num(128);
     for (var i = 0; i < 256; i++) {

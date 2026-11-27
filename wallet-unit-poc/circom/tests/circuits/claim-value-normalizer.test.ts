@@ -127,7 +127,7 @@ describe("ClaimValueNormalizer uint range", () => {
   });
 
   it("rejects an empty uint", async () => {
-    // Normalized to 0 before the fix, satisfying any zero-favorable policy.
+    // An empty uint would read as 0 and satisfy any zero-favorable policy.
     await circuit.expectFail(uintInput(""));
   });
 
@@ -150,7 +150,7 @@ describe("ClaimValueNormalizer uint range", () => {
 
     for (const text of ["banana", "", "2", "True", "tru", "falsy", "00", "10", "truee", "fals"]) {
       it(`rejects ${JSON.stringify(text)}`, async () => {
-        // Normalized to 0 before the fix, satisfying a false-favorable policy.
+        // Each would read as 0 and satisfy a false-favorable policy.
         await circuit.expectFail(formatInput(text, FORMAT_BOOL));
       });
     }
