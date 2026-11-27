@@ -8,6 +8,7 @@ include "utils/utils.circom";
 include "components/payload_matcher.circom";
 include "components/ec-extractor.circom";
 include "components/device-key-path.circom";
+include "components/sd-digest-span.circom";
 include "components/claim-value-extractor.circom";
 include "components/claim-name-extractor.circom";
 include "components/claim-value-normalizer.circom";
@@ -16,8 +17,7 @@ include "components/claim-value-normalizer.circom";
 /// @notice Verifies an ES256-signed SD-JWT and extracts normalized claim values.
 /// @notice match slots 0 and 1 are reserved for device binding key extraction (x/y patterns).
 /// @notice Device-key anchors must be direct members of the signed cnf.jwk object.
-/// @notice Disclosure digest matching still assumes the issuer places each digest
-///         uniquely in the payload, as an element of the single "_sd" array.
+/// @notice Every used disclosure digest must be inside the single signed "_sd" array.
 /// @notice Claim arrays are claim-only and map directly to normalizedClaimValues.
 /// @notice pubKeyX/pubKeyY (the issuer key the ES256 check runs against) are public
 ///         inputs of the main component, so they appear in the proof's public IO and
@@ -237,4 +237,5 @@ template JWT(
     signal KeyBindingY <== ecExtractor.pubKeyY;
 
     BindDeviceKeyPath(maxPayloadLength)(payload, matchIndex[0], matchIndex[1]);
+    BindSdDigestSpan(maxPayloadLength, maxMatches)(payload, matchIndex, matchLength, claimUsed);
 }

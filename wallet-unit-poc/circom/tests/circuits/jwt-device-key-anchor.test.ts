@@ -96,7 +96,9 @@ describe("JWT device-key anchor uniqueness (1789506251)", () => {
     let w: bigint[] | null = null;
     try {
       w = await circuit.calculateWitness(attack);
-    } catch {}
+    } catch (e) {
+      if (!/Assert Failed/.test(String(e))) throw e;
+    }
     if (w !== null) {
       const key = await keyBinding(circuit, w);
       const stolen = key.x === base64urlToBigInt(atk.x) && key.y === base64urlToBigInt(atk.y);
