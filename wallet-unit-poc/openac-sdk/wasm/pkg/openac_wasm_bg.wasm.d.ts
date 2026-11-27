@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const abi_version: () => number;
 export const init: () => void;
 export const precompute: (a: number, b: number) => [number, number, number];
 export const precompute_from_witness: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];

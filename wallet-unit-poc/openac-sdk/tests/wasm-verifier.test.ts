@@ -224,5 +224,46 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/nonce/i);
   }, 60_000);
+
+  // A wrong-length IPA b_vec must return an error, not trap, since a trap
+  // poisons the bridge. The proof's Vec fields are bincode u64 length
+  // prefixes, so drop the last element of every vec in the Show proof (b_vec
+  // among them) and check that none traps.
+  it("a wrong-length vector in a proof errors without trapping the module", async () => {
+    if (!ready) return;
+    const bytes = proof.showProof;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const ELEM = 32;
+    let mutated = 0;
+    for (let o = 0; o + 8 <= bytes.length; o++) {
+      const n = view.getBigUint64(o, true);
+      if (n < 2n || n > 4096n) continue;
+      const end = o + 8 + Number(n) * ELEM;
+      if (end > bytes.length) continue;
+      const cut = new Uint8Array(bytes.length - ELEM);
+      cut.set(bytes.subarray(0, end - ELEM));
+      cut.set(bytes.subarray(end), end - ELEM);
+      new DataView(cut.buffer).setBigUint64(o, n - 1n, true);
+      let outcome = "";
+      try {
+        const r = await verifier.verifyComponents(
+          proof.prepareProof, cut, verifyingKeys,
+          proof.prepareInstance, proof.showInstance, expected,
+        );
+        expect(r.valid).toBe(false);
+      } catch (e) {
+        outcome = String((e as Error)?.message ?? e);
+        expect(outcome).not.toMatch(/WASM_POISONED|unreachable|RuntimeError/i);
+      }
+      mutated++;
+    }
+    expect(mutated).toBeGreaterThan(0);
+
+    const ok = await verifier.verifyComponents(
+      proof.prepareProof, proof.showProof, verifyingKeys,
+      proof.prepareInstance, proof.showInstance, expected,
+    );
+    expect(ok.valid).toBe(true);
+  }, 600_000);
 });
 

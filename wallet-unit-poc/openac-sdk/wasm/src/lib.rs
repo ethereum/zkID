@@ -64,10 +64,93 @@ pub struct VerifyResult {
     pub error: Option<String>,
 }
 
+// Same encoding as `bincode::serialize` (fixint, little-endian), plus a byte
+// limit and no trailing bytes, so each value has exactly one accepted byte
+// string. bincode ignores `with_limit` when deserializing from a slice, so the
+// bytes go through a reader, where a length prefix larger than the limit fails
+// before any buffer is allocated for it. Readers also skip bincode's own
+// trailing-bytes check, hence the explicit one.
+fn decode_limited<T: serde::de::DeserializeOwned>(bytes: &[u8], limit: u64) -> bincode::Result<T> {
+    use bincode::Options;
+    let mut reader = bytes;
+    let value = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(limit)
+        .deserialize_from(&mut reader)?;
+    if !reader.is_empty() {
+        return Err(Box::new(bincode::ErrorKind::Custom(format!(
+            "{} trailing bytes after value",
+            reader.len()
+        ))));
+    }
+    Ok(value)
+}
+
+/// Nothing legitimately decodes to more bytes than it was encoded from.
+fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> bincode::Result<T> {
+    decode_limited(bytes, bytes.len() as u64)
+}
+
+/// Upper bound for caller-supplied proofs and instances. Honest ones are far
+/// smaller; this stops an oversized input from being accepted at all.
+const MAX_UNTRUSTED_BYTES: usize = 64 * 1024 * 1024;
+
+fn decode_untrusted<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> bincode::Result<T> {
+    if bytes.len() > MAX_UNTRUSTED_BYTES {
+        return Err(Box::new(bincode::ErrorKind::SizeLimit));
+    }
+    decode(bytes)
+}
+
+#[cfg(test)]
+mod decode_tests {
+    use super::*;
+
+    #[test]
+    fn round_trips_with_default_serialize() {
+        let v: Vec<u8> = vec![1, 2, 3, 4];
+        let bytes = bincode::serialize(&v).unwrap();
+        assert_eq!(decode::<Vec<u8>>(&bytes).unwrap(), v);
+    }
+
+    #[test]
+    fn trailing_byte_is_an_error() {
+        let mut bytes = bincode::serialize(&vec![1u8, 2, 3, 4]).unwrap();
+        bytes.push(0);
+        assert!(decode::<Vec<u8>>(&bytes).is_err());
+        assert!(decode_untrusted::<Vec<u8>>(&bytes).is_err());
+    }
+
+    #[test]
+    fn byte_limit_is_enforced() {
+        // Well-formed and complete, so only the limit can make these fail.
+        let text = bincode::serialize(&"x".repeat(100)).unwrap();
+        assert!(decode_limited::<String>(&text, text.len() as u64).is_ok());
+        assert!(decode_limited::<String>(&text, 10).is_err());
+
+        let nums = bincode::serialize(&vec![7u64; 20]).unwrap();
+        assert!(decode_limited::<Vec<u64>>(&nums, nums.len() as u64).is_ok());
+        assert!(decode_limited::<Vec<u64>>(&nums, 10).is_err());
+    }
+
+    #[test]
+    fn input_over_the_untrusted_cap_is_rejected() {
+        let bytes = vec![0u8; MAX_UNTRUSTED_BYTES + 1];
+        assert!(decode_untrusted::<Vec<u8>>(&bytes).is_err());
+    }
+}
+
 /// Initialize panic hook for better error messages in WASM
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
+}
+
+/// Contract version checked by the SDK at load time. Keep in step with
+/// `ABI_VERSION` in src/wasm-bridge.ts.
+#[wasm_bindgen]
+pub fn abi_version() -> u32 {
+    1
 }
 
 // ==========================================================================
@@ -119,7 +202,7 @@ pub fn setup() -> Result<JsValue, JsError> {
 #[wasm_bindgen]
 pub fn precompute(pk_bytes: &[u8]) -> Result<JsValue, JsError> {
     // Deserialize the proving key
-    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = bincode::deserialize(pk_bytes)
+    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = decode(pk_bytes)
         .map_err(|e| JsError::new(&format!("PK deserialization failed: {}", e)))?;
 
     // Create the Prepare circuit
@@ -168,7 +251,7 @@ pub fn precompute_from_witness(
         .map_err(|e: String| JsError::new(&format!("Invalid vc_size: {e}")))?;
 
     // Deserialize the proving key
-    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = bincode::deserialize(pk_bytes)
+    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = decode(pk_bytes)
         .map_err(|e| JsError::new(&format!("PK deserialization failed: {}", e)))?;
 
     // Parse WTNS bytes to Vec<Scalar>
@@ -210,7 +293,7 @@ pub fn precompute_show_from_witness(
     witness_wtns_bytes: &[u8],
 ) -> Result<JsValue, JsError> {
     // Deserialize the proving key
-    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = bincode::deserialize(pk_bytes)
+    let pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey = decode(pk_bytes)
         .map_err(|e| JsError::new(&format!("PK deserialization failed: {}", e)))?;
 
     // Parse WTNS bytes to Vec<Scalar>
@@ -270,24 +353,24 @@ pub fn present(
 ) -> Result<JsValue, JsError> {
     // Deserialize Prepare components
     let prepare_pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey =
-        bincode::deserialize(prepare_pk_bytes)
+        decode(prepare_pk_bytes)
             .map_err(|e| JsError::new(&format!("Prepare PK deserialization failed: {}", e)))?;
     let prepare_instance: spartan2::r1cs::SplitR1CSInstance<E> =
-        bincode::deserialize(prepare_instance_bytes).map_err(|e| {
+        decode_untrusted(prepare_instance_bytes).map_err(|e| {
             JsError::new(&format!("Prepare instance deserialization failed: {}", e))
         })?;
     let prepare_witness: spartan2::r1cs::R1CSWitness<E> =
-        bincode::deserialize(prepare_witness_bytes)
+        decode(prepare_witness_bytes)
             .map_err(|e| JsError::new(&format!("Prepare witness deserialization failed: {}", e)))?;
 
     // Deserialize Show components
     let show_pk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::ProverKey =
-        bincode::deserialize(show_pk_bytes)
+        decode(show_pk_bytes)
             .map_err(|e| JsError::new(&format!("Show PK deserialization failed: {}", e)))?;
     let show_instance: spartan2::r1cs::SplitR1CSInstance<E> =
-        bincode::deserialize(show_instance_bytes)
+        decode_untrusted(show_instance_bytes)
             .map_err(|e| JsError::new(&format!("Show instance deserialization failed: {}", e)))?;
-    let show_witness: spartan2::r1cs::R1CSWitness<E> = bincode::deserialize(show_witness_bytes)
+    let show_witness: spartan2::r1cs::R1CSWitness<E> = decode(show_witness_bytes)
         .map_err(|e| JsError::new(&format!("Show witness deserialization failed: {}", e)))?;
 
     // Step A: Generate shared blinds
@@ -354,26 +437,26 @@ pub fn verify(
     show_instance_bytes: &[u8],
 ) -> Result<JsValue, JsError> {
     // Deserialize all components
-    let prepare_proof: R1CSSNARK<E> = bincode::deserialize(prepare_proof_bytes)
+    let prepare_proof: R1CSSNARK<E> = decode_untrusted(prepare_proof_bytes)
         .map_err(|e| JsError::new(&format!("Prepare proof deserialization failed: {}", e)))?;
     let prepare_vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey =
-        bincode::deserialize(prepare_vk_bytes)
+        decode(prepare_vk_bytes)
             .map_err(|e| JsError::new(&format!("Prepare VK deserialization failed: {}", e)))?;
     // Instances are deserialized for input-shape compatibility only. They are
     // caller-supplied and unauthenticated, so linkage must not depend on them;
     // the commitment comparison below reads from the verified proofs instead.
     let _prepare_instance: spartan2::r1cs::SplitR1CSInstance<E> =
-        bincode::deserialize(prepare_instance_bytes).map_err(|e| {
+        decode_untrusted(prepare_instance_bytes).map_err(|e| {
             JsError::new(&format!("Prepare instance deserialization failed: {}", e))
         })?;
 
-    let show_proof: R1CSSNARK<E> = bincode::deserialize(show_proof_bytes)
+    let show_proof: R1CSSNARK<E> = decode_untrusted(show_proof_bytes)
         .map_err(|e| JsError::new(&format!("Show proof deserialization failed: {}", e)))?;
     let show_vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey =
-        bincode::deserialize(show_vk_bytes)
+        decode(show_vk_bytes)
             .map_err(|e| JsError::new(&format!("Show VK deserialization failed: {}", e)))?;
     let _show_instance: spartan2::r1cs::SplitR1CSInstance<E> =
-        bincode::deserialize(show_instance_bytes)
+        decode_untrusted(show_instance_bytes)
             .map_err(|e| JsError::new(&format!("Show instance deserialization failed: {}", e)))?;
 
     // Prepare's public IO carries the issuer key the credential was verified
@@ -476,9 +559,9 @@ pub fn setup_show() -> Result<JsValue, JsError> {
 /// Verify a single proof (use verify() instead)
 #[wasm_bindgen]
 pub fn verify_single(proof_bytes: &[u8], vk_bytes: &[u8]) -> Result<JsValue, JsError> {
-    let proof: R1CSSNARK<E> = bincode::deserialize(proof_bytes)
+    let proof: R1CSSNARK<E> = decode(proof_bytes)
         .map_err(|e| JsError::new(&format!("Proof deserialization failed: {}", e)))?;
-    let vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey = bincode::deserialize(vk_bytes)
+    let vk: <R1CSSNARK<E> as R1CSSNARKTrait<E>>::VerifierKey = decode(vk_bytes)
         .map_err(|e| JsError::new(&format!("VK deserialization failed: {}", e)))?;
 
     match proof.verify(&vk) {

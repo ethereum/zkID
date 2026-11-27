@@ -23,7 +23,9 @@ export type ErrorCode =
   | "INVALID_ENCODING"
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
-  | "WASM_NOT_INITIALIZED";
+  | "WASM_NOT_INITIALIZED"
+  | "WASM_POISONED"
+  | "WASM_ABI_MISMATCH";
 
 export class OpenACError extends Error {
   readonly code: ErrorCode;
@@ -89,7 +91,7 @@ export class InputError extends OpenACError {
 
 export class WasmError extends OpenACError {
   constructor(
-    code: "WASM_LOAD_FAILED" | "WASM_OOM" | "WASM_NOT_INITIALIZED" | "KEY_LOAD_FAILED" | "KEY_INTEGRITY_FAILED" | "SETUP_NOT_SUPPORTED",
+    code: "WASM_LOAD_FAILED" | "WASM_OOM" | "WASM_NOT_INITIALIZED" | "WASM_POISONED" | "WASM_ABI_MISMATCH" | "KEY_LOAD_FAILED" | "KEY_INTEGRITY_FAILED" | "SETUP_NOT_SUPPORTED",
     message: string,
     cause?: unknown
   ) {

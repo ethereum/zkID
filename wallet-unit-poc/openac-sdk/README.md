@@ -159,6 +159,11 @@ const result = await openac.verify(
 3. **Statement binding**: the Show proof's public values must equal what the verifier recomputes from its own `nonce` (freshness/replay) and compiled policy (no policy swap).
 4. **Claim normalization**: the `decodeFlags` and `claimFormats` in the Prepare proof's public IO must match what the policy requires, so the policy was evaluated over the credential's claim values in the formats it compares against rather than over `0` or a differently normalized value.
 
+### WASM module guards
+
+- `WasmBridge` checks `abi_version()` of the loaded module against the SDK's `ABI_VERSION` and refuses to initialize on a missing or different value (`WASM_ABI_MISMATCH`). Rebuild the WASM module after pulling SDK changes.
+- If a WASM call traps (`RuntimeError`), the module is poisoned: every later call, on any `WasmBridge` over that module, throws `WASM_POISONED`. The wasm-bindgen glue keeps one instance per JS realm, so a new `WasmBridge` reuses the trapped instance and its memory. Recover with a fresh Worker, JS realm or process.
+
 ### Issuer trust is yours to enforce
 
 Note what the list above does **not** include: who issued the credential.
