@@ -488,9 +488,11 @@ mod e2e_tests {
     use super::*;
     use crate::{
         flow_present, flow_prepare, flow_unload, flow_verify, load_prepare_key, load_show_key,
-        setup_jwt_keys, setup_show_keys,
+        setup_jwt_keys, setup_show_keys, verify_presentation,
     };
-    use ecdsa_spartan2::paths::keys::{PREPARE_PROVING_KEY, SHOW_PROVING_KEY};
+    use ecdsa_spartan2::paths::keys::{
+        PREPARE_PROOF, PREPARE_PROVING_KEY, SHOW_PROOF, SHOW_PROVING_KEY,
+    };
     use serde::Deserialize;
     use std::fs;
     use std::path::PathBuf;
@@ -645,6 +647,67 @@ mod e2e_tests {
             assert!(!r.valid, "{name}");
             assert!(r.failure.is_some(), "{name}");
         }
+        flow_unload();
+    }
+
+    /// Runs `verify_presentation` on proof files written from real flow
+    /// presentations. Run with:
+    ///   bash scripts/prepare-assets.sh
+    ///   cargo test --release -- --ignored e2e_verify_presentation
+    #[test]
+    #[ignore = "Long-running e2e; needs circom/build and flutter/assets/flow/bundle.json (scripts/prepare-assets.sh)"]
+    fn e2e_verify_presentation() {
+        let _guard = super::tests::lock();
+        let bundle_path = mobile_dir().join("flutter/assets/flow/bundle.json");
+        let bundle: Bundle =
+            serde_json::from_slice(&fs::read(&bundle_path).expect("read flow bundle"))
+                .expect("parse flow bundle");
+
+        let temp = tempfile::tempdir().unwrap();
+        let docs = setup_docs(temp.path());
+        flow_unload();
+        setup_jwt_keys(docs.clone()).expect("setup jwt keys");
+        setup_show_keys(docs.clone()).expect("setup show keys");
+        let config = make_config(&docs);
+        let key = |name| config.key_path(name).to_string_lossy().into_owned();
+        load_prepare_key(key(PREPARE_PROVING_KEY)).expect("load prepare key");
+        load_show_key(key(SHOW_PROVING_KEY)).expect("load show key");
+        flow_prepare(docs.clone(), format!("{docs}/jwt_input.json")).expect("prepare");
+
+        let present = |id: &str| {
+            let scenario = bundle
+                .scenarios
+                .iter()
+                .find(|s| s.expect == id)
+                .unwrap_or_else(|| panic!("no scenario expecting {id}"));
+            let request = bundle
+                .requests
+                .iter()
+                .find(|r| r.id == scenario.present_for)
+                .expect("request");
+            let input = temp.path().join(format!("show_{}.json", scenario.id));
+            fs::write(&input, serde_json::to_vec(&request.show_input).unwrap()).unwrap();
+            flow_present(docs.clone(), input.to_string_lossy().into_owned()).expect("present")
+        };
+        let write_pair = |prepare: &[u8], show: &[u8]| {
+            fs::write(config.artifact_path(PREPARE_PROOF), prepare).unwrap();
+            fs::write(config.artifact_path(SHOW_PROOF), show).unwrap();
+        };
+
+        let accepted_a = present("accepted");
+        let accepted_b = present("accepted");
+        let policy_false = present("policy_false");
+
+        write_pair(&accepted_a.prepare_proof, &accepted_a.show_proof);
+        assert!(verify_presentation(docs.clone()).unwrap(), "linked, policy true");
+
+        // Each presentation carries fresh shared blinds, so mixing halves breaks the link.
+        write_pair(&accepted_a.prepare_proof, &accepted_b.show_proof);
+        assert!(!verify_presentation(docs.clone()).unwrap(), "mismatched pair");
+
+        write_pair(&policy_false.prepare_proof, &policy_false.show_proof);
+        assert!(!verify_presentation(docs.clone()).unwrap(), "linked, policy false");
+
         flow_unload();
     }
 }

@@ -51,6 +51,7 @@ class FlowController extends ChangeNotifier {
       ? null
       : Verdict.of(
           valid: verifyOutcome!.valid,
+          proofsLinked: verifyOutcome!.proofsLinked,
           expressionResult: verifyOutcome!.expressionResult);
   bool? get matchesExpected =>
       verdict == null ? null : verdict == scenario.expect.verdict;

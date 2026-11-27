@@ -23,6 +23,8 @@ note: This project uses [circomkit](https://github.com/erhant/circomkit) to comp
 
 ## Testing
 
+Run the tests on Node 22. Node 26 breaks the mdoc fixtures, and CI pins Node 22.
+
 You can test the circuits in two main ways:
 
 ### 1. Using circom_tester via typescript
