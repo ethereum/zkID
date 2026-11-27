@@ -53,6 +53,24 @@ describe("HashModScalarField", () => {
     }
   });
 
+  it("accepts a hash made only of bits", async () => {
+    await circuit.expectPass({ hash: toBits(p - 5n) }, { out: (p - 5n) % q });
+  });
+
+  // Bits2Num sums its inputs without checking they are bits, so a 2 in a
+  // limb would otherwise give a consistent but unintended value.
+  it("rejects a non-bit value in the low limb", async () => {
+    const hash = toBits(7n);
+    hash[255] = 2;
+    await circuit.expectFail({ hash });
+  });
+
+  it("rejects a non-bit value in the high limb", async () => {
+    const hash = toBits(1n << 200n);
+    hash[0] = 2;
+    await circuit.expectFail({ hash });
+  });
+
   it("reduces a digest below the base-field modulus correctly", async () => {
     const digest = p - 5n;
     const w = await circuit.calculateWitness({ hash: toBits(digest) });
