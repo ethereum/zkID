@@ -62,7 +62,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const claimFormats = [PredicateFormat.STRING_EQ, PredicateFormat.ROC_DATE];
 
   const mockData = await generateMockData({
-    // Short identifiers so the 1k payload fits with the revocation commitment.
+    // Short identifiers so the 1k payload fits with the revocation value.
     issuer: "https://issuer.example",
     subject: "did:example:holder",
     circuitParams: params,
@@ -108,6 +108,10 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     fs.rmSync(wtnsPath, { force: true });
   }
 
+  const issuer = {
+    x: base64urlToBigInt(mockData.issuerKey.x),
+    y: base64urlToBigInt(mockData.issuerKey.y),
+  };
   const showInputs = generateShowInputs(
     showParams,
     nonce,
@@ -118,10 +122,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     [], // normalizedClaimValues (derived from claims)
     claimIdentifierHashes,
     // Issuer hiding: Show must see the same issuer key the JWT circuit verified.
-    generateIssuerMembershipInputs({
-      x: base64urlToBigInt(mockData.issuerKey.x),
-      y: base64urlToBigInt(mockData.issuerKey.y),
-    }),
+    generateIssuerMembershipInputs(issuer),
   );
 
   // Show predicate: claim[ROC_BIRTHDAY_SLOT] <= 1070101 (ROC adult cutoff).
@@ -143,7 +144,10 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const registry = createRevocationRegistry(
     Array.from({ length: 5 }, () => bytesToBigInt(nodeCrypto.randomBytes(32))),
   );
-  Object.assign(showInputs, buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH));
+  Object.assign(
+    showInputs,
+    buildRevocationWitness(issuer, mockData.revocationValue, registry, REVOCATION_MAX_DEPTH),
+  );
 
   const circomDir = path.resolve(__dirname, "..");
   // The "default" pseudo-size writes to inputs/{jwt,show}/default.json directly,

@@ -25,7 +25,9 @@ export interface RevocationAuthorityState {
 
 /**
  * OpenAC's revocation registry, held off chain and shared by every issuer: a
- * SHA-256 LeanIMT+ of revoked `sha256(r)` commitments. Behaves like
+ * SHA-256 LeanIMT+ of revocation commitments `sha256(be32(x) || be32(y) || be32(r) || be32(3))`
+ * for issuer key (x, y) and signed revocation value r (`computeRevocationCommitment` in
+ * openac-sdk). Writes take commitments, not r itself. Behaves like
  * `OpenACRevocationRegistry` over `Sha256Revocation`: the same tree, roots and
  * root history. Only the owner writes, on behalf of every issuer.
  *

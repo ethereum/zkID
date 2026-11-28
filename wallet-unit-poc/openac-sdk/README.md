@@ -24,9 +24,9 @@ import {
 const openac = await OpenAC.init();
 const keys = await openac.loadKeysFromUrl("1k");
 const issuerPublicKey = { kty: "EC", crv: "P-256", x: "...", y: "..." } as const;
-// The holder's revocation secret and the shared revocation registry, synced and
-// checked against the published root (see "Revocation" below).
-const revocation = { secret: revocationSecret, registry: revocationRegistry };
+// The shared revocation registry, synced and checked against the published root
+// (see "Revocation" below).
+const revocation = { registry: revocationRegistry };
 
 const predicate = {
   claim: "roc_birthday",
@@ -127,37 +127,39 @@ Reuse a `PrecomputedCredential` across sessions only for predicates over the sam
 
 ## Revocation
 
-The credential carries `revocation_commitment`: `C = sha256(r)` as 32 bytes base64url, where `r` is a 32-byte secret only the holder knows. `present()` proves `sha256(r) = C` and that `C` is not revoked, and the proof outputs the registry root it was built against (`0` for an empty registry).
+The credential carries `revocation_value`: a random 32-byte revocation value `r` as base64url, signed by the issuer. Its revocation commitment is `v = sha256(be32(x) || be32(y) || be32(r) || be32(3))` for the issuer key `(x, y)`. `present()` proves that `v`, derived from the signed `r` and the issuer key the credential verifies under, is not revoked, and the proof outputs the registry root it was built against (`0` for an empty registry).
 
-There is a single revocation registry shared by all issuers. With one registry per issuer, the revocation root in a proof would name the issuer and undo [issuer hiding](#issuer-hiding).
+There is a single revocation registry shared by all issuers. With one registry per issuer, the revocation root in a proof would name the issuer and undo [issuer hiding](#issuer-hiding). The issuer key in `v` keeps equal values under different issuers apart. `r` must be unpredictable, since anyone who knows `r` and the issuer key can compute `v`.
 
 ```typescript
 import {
-  generateRevocationSecret,
+  generateRevocationValue,
   computeRevocationCommitment,
-  encodeRevocationCommitment,
+  encodeRevocationValue,
   revocationRegistryFromLeaves,
   acceptRevocationRoots,
 } from "openac-sdk";
 
-// Holder, at issuance: keep r private, send C to the issuer.
-const secret = generateRevocationSecret();
-const commitment = computeRevocationCommitment(secret);
+// Issuer, at issuance: sign a fresh random value into the payload and keep it.
+const value = generateRevocationValue();
+payload.revocation_value = encodeRevocationValue(value);
 
-// Issuer: sign it into the payload, revoke by inserting C into the shared registry.
-payload.revocation_commitment = encodeRevocationCommitment(commitment);
+// Issuer, to revoke: insert the commitment into the shared registry.
+const commitment = computeRevocationCommitment(issuerPublicKey, value);
+// With registry-server: await new RegistryClient(url, { token }).revoke(commitment)
+// On chain: OpenACRevocationRegistry.revoke(commitment, lowLeafIndex)
 
 // Holder, at presentation: rebuild the registry (e.g. from the contract's getLeaf).
 const registry = revocationRegistryFromLeaves(leaves);
 if (registry.root !== publishedRoot) throw new Error("stale registry");
-await openac.present({ ...request, revocation: { secret, registry } });
+await openac.present({ ...request, revocation: { registry } });
 
 // Verifier: accept only roots of the shared registry, e.g. OpenACRevocationRegistry.isValidRoot
 // on chain, or a fixed set of known roots.
 const expected = { ...statement, isValidRevocationRoot: acceptRevocationRoots([publishedRoot]) };
 ```
 
-The registry is [`@coordination-network/revocation-registry`](https://www.npmjs.com/package/@coordination-network/revocation-registry) with its `sha256Scheme`, exported here as `revocationSha256Scheme` (`createRevocationRegistry`), matching the [`solidity`](../solidity/README.md) contracts. `present()` throws `CREDENTIAL_REVOKED` for a revoked commitment. Max tree depth is 10.
+The registry is [`@coordination-network/revocation-registry`](https://www.npmjs.com/package/@coordination-network/revocation-registry) with its `sha256Scheme`, exported here as `revocationSha256Scheme` (`createRevocationRegistry`), matching the [`solidity`](../solidity/README.md) contracts. `present()` throws `CREDENTIAL_REVOKED` when the credential's commitment is revoked. Max tree depth is 10.
 
 ## Verifier
 
@@ -208,7 +210,7 @@ const result = await openac.verify(
 
 ## Issuer hiding
 
-The issuer key never appears in a proof. Show derives the leaf `sha256(be32(x) || be32(y))` from the issuer key it shares with Prepare, proves it is in a SHA-256 [LeanIMT](https://zkkit.pse.dev/classes/_zk_kit_lean_imt.LeanIMT.html) of approved issuers (max depth 8) and outputs only the root, as `[hi, lo]` 128-bit limbs (`root = hi * 2^128 + lo`).
+The issuer key never appears in a proof. Show derives the leaf `sha256(be32(x) || be32(y) || be32(2))` from the issuer key it shares with Prepare, proves it is in a SHA-256 [LeanIMT](https://zkkit.pse.dev/classes/_zk_kit_lean_imt.LeanIMT.html) of approved issuers (max depth 8) and outputs only the root, as `[hi, lo]` 128-bit limbs (`root = hi * 2^128 + lo`).
 
 - **Registry**: [`OpenACIssuerRegistry`](../solidity) on chain; `createIssuerRegistry` (a [`@coordination-network/issuer-registry`](https://www.npmjs.com/package/@coordination-network/issuer-registry) `IssuerRegistry` with its `sha256Scheme`, exported here as `issuerSha256Scheme`) off chain. Compare the mirror's `root` with the contract's `getIssuerRoot()` before building proofs.
 - **Holder**: pass `issuerProof` to `present()`. It must be for the credential's issuer.
@@ -237,7 +239,7 @@ const cred = generateDummyCredential({
   ],
 });
 // cred.jwt, cred.disclosures, cred.issuerPublicKey, cred.devicePrivateKeyHex,
-// cred.revocationSecretHex, cred.revocationCommitment
+// cred.revocationValue
 ```
 
 Deterministic keys; JWT is sized to fit the chosen circuit slot.

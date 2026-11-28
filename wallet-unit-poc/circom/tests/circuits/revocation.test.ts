@@ -11,19 +11,27 @@ import {
   bytesToBigInt,
   computeRevocationCommitment,
   createRevocationRegistry,
+  generateRevocationValue,
+  issuerKeyBits,
   toLimbs,
   type RevocationWitness,
 } from "../../src/revocation.ts";
+import { DEFAULT_TEST_ISSUER, type IssuerKeyPoint } from "../../src/issuer-hiding.ts";
+import { p256 } from "@noble/curves/nist.js";
 
 const MAX_DEPTH = 4;
 
-const newSecret = () => new Uint8Array(randomBytes(32));
+const ISSUER = DEFAULT_TEST_ISSUER;
+const OTHER_ISSUER: IssuerKeyPoint = (() => {
+  const { x, y } = p256.Point.BASE.multiply(2n).toAffine();
+  return { x, y };
+})();
 const randomCommitments = (n: number) => Array.from({ length: n }, () => bytesToBigInt(randomBytes(32)));
 
-function checkInputs(w: RevocationWitness) {
+function checkInputs(w: RevocationWitness, issuer: IssuerKeyPoint = ISSUER) {
   return {
-    secret: w.revocationSecret,
-    commitment: w.revocationCommitment,
+    issuerKeyBits: issuerKeyBits(issuer),
+    value: w.revocationValue,
     leafValue: w.revocationLeafValue,
     leafNextValue: w.revocationLeafNextValue,
     leafIndex: w.revocationLeafIndex,
@@ -32,9 +40,9 @@ function checkInputs(w: RevocationWitness) {
   };
 }
 
-// Reuses the Merkle path of a leaf `value` is a member of.
-function withLeafOf(w: RevocationWitness, registry: ReturnType<typeof createRevocationRegistry>, value: bigint) {
-  const proof = registry.generateProof(value);
+// Reuses the Merkle path of a leaf `commitment` is a member of.
+function withLeafOf(w: RevocationWitness, registry: ReturnType<typeof createRevocationRegistry>, commitment: bigint) {
+  const proof = registry.generateProof(commitment);
   const siblings = Array.from({ length: MAX_DEPTH }, (_, i) => toLimbs(proof.siblings[i] ?? 0n));
   return {
     ...checkInputs(w),
@@ -45,6 +53,35 @@ function withLeafOf(w: RevocationWitness, registry: ReturnType<typeof createRevo
     siblings,
   };
 }
+
+describe("RevocationCommitment", () => {
+  let circuit: WitnessTester<["issuerKeyBits", "value"], ["out"]>;
+
+  before(async () => {
+    circuit = await circomkit.WitnessTester("RevocationCommitment", {
+      file: "components/revocation",
+      template: "RevocationCommitment",
+      recompile: true,
+    });
+  });
+
+  it("matches sha256(be32(x) || be32(y) || be32(value) || be32(3))", async () => {
+    const value = generateRevocationValue();
+    await circuit.expectPass(
+      { issuerKeyBits: issuerKeyBits(ISSUER), value: toLimbs(value) },
+      { out: toLimbs(computeRevocationCommitment(ISSUER, value)) },
+    );
+  });
+
+  it("gives different commitments for the same value under different issuers", () => {
+    const value = generateRevocationValue();
+    assert.notStrictEqual(computeRevocationCommitment(ISSUER, value), computeRevocationCommitment(OTHER_ISSUER, value));
+  });
+
+  it("rejects a limb above 128 bits", async () => {
+    await circuit.expectFail({ issuerKeyBits: issuerKeyBits(ISSUER), value: [1n << 128n, 0n] });
+  });
+});
 
 describe("RevocationCheck", () => {
   let circuit: WitnessTester<any, ["root"]>;
@@ -58,48 +95,60 @@ describe("RevocationCheck", () => {
     });
   });
 
-  it("proves an unrevoked commitment and outputs the registry root", async () => {
+  it("proves an unrevoked credential and outputs the registry root", async () => {
     const registry = createRevocationRegistry(randomCommitments(7));
-    const witness = buildRevocationWitness(newSecret(), registry, MAX_DEPTH);
+    const witness = buildRevocationWitness(ISSUER, generateRevocationValue(), registry, MAX_DEPTH);
 
     await circuit.expectPass(checkInputs(witness), { root: toLimbs(registry.root) });
   });
 
   it("outputs root 0 for an empty registry", async () => {
-    const witness = buildRevocationWitness(newSecret(), createRevocationRegistry(), MAX_DEPTH);
+    const witness = buildRevocationWitness(ISSUER, generateRevocationValue(), createRevocationRegistry(), MAX_DEPTH);
 
     await circuit.expectPass(checkInputs(witness), { root: [0n, 0n] });
   });
 
   it("rejects a revoked commitment", async () => {
-    const secret = newSecret();
-    const commitment = computeRevocationCommitment(secret);
+    const value = generateRevocationValue();
+    const commitment = computeRevocationCommitment(ISSUER, value);
     const registry = createRevocationRegistry([...randomCommitments(3), commitment]);
-    const witness = buildRevocationWitness(secret, createRevocationRegistry(), MAX_DEPTH);
+    const witness = buildRevocationWitness(ISSUER, value, createRevocationRegistry(), MAX_DEPTH);
 
     await circuit.expectFail(withLeafOf(witness, registry, commitment));
+  });
+
+  it("does not revoke the same value under another issuer", async () => {
+    const value = generateRevocationValue();
+    const registry = createRevocationRegistry([...randomCommitments(3), computeRevocationCommitment(OTHER_ISSUER, value)]);
+    const witness = buildRevocationWitness(ISSUER, value, registry, MAX_DEPTH);
+
+    await circuit.expectPass(checkInputs(witness), { root: toLimbs(registry.root) });
+    assert.throws(() => buildRevocationWitness(OTHER_ISSUER, value, registry, MAX_DEPTH), /revoked/);
+  });
+
+  it("rejects a witness built for another issuer's commitment", async () => {
+    const value = generateRevocationValue();
+    const commitment = computeRevocationCommitment(ISSUER, value);
+    const registry = createRevocationRegistry([...randomCommitments(3), commitment]);
+    // A non-membership path for (OTHER_ISSUER, value) does not cover (ISSUER, value).
+    const witness = buildRevocationWitness(OTHER_ISSUER, value, registry, MAX_DEPTH);
+
+    await circuit.expectFail(checkInputs(witness, ISSUER));
   });
 
   it("rejects a low leaf that does not bracket the commitment", async () => {
     const revoked = randomCommitments(7);
     const registry = createRevocationRegistry(revoked);
-    const witness = buildRevocationWitness(newSecret(), registry, MAX_DEPTH);
+    const witness = buildRevocationWitness(ISSUER, generateRevocationValue(), registry, MAX_DEPTH);
     const lowLeaf = (witness.revocationLeafValue[0] << 128n) | witness.revocationLeafValue[1];
     const other = revoked.find((v) => v !== lowLeaf)!;
 
     await circuit.expectFail(withLeafOf(witness, registry, other));
   });
 
-  it("rejects a secret that does not open the commitment", async () => {
-    const registry = createRevocationRegistry(randomCommitments(3));
-    const witness = buildRevocationWitness(newSecret(), registry, MAX_DEPTH);
-
-    await circuit.expectFail({ ...checkInputs(witness), secret: toLimbs(bytesToBigInt(newSecret())) });
-  });
-
   it("outputs a different root for a tampered path", async () => {
     const registry = createRevocationRegistry(randomCommitments(7));
-    const witness = buildRevocationWitness(newSecret(), registry, MAX_DEPTH);
+    const witness = buildRevocationWitness(ISSUER, generateRevocationValue(), registry, MAX_DEPTH);
     witness.revocationSiblings[0] = toLimbs(1n);
 
     const w = await circuit.calculateWitness(checkInputs(witness));
@@ -134,7 +183,8 @@ describe("Show with revocation", () => {
     );
     await bindPredicateName(inputs, 0, 0, "name");
     const registry = createRevocationRegistry(randomCommitments(5));
-    const witness = buildRevocationWitness(mockData.revocationSecret, registry, MAX_DEPTH);
+    // generateShowInputs proves membership of DEFAULT_TEST_ISSUER, so the commitment is under that key.
+    const witness = buildRevocationWitness(ISSUER, mockData.revocationValue, registry, MAX_DEPTH);
 
     // The Show .sym is too large for circomkit's output check, so read the root by index.
     const showWitness = await circuit.calculateWitness({ ...inputs, ...witness });
@@ -145,9 +195,39 @@ describe("Show with revocation", () => {
       toLimbs(registry.root),
     );
   });
+
+  it("rejects a credential whose commitment under its issuer is revoked", async () => {
+    const mockData = await generateMockData({ circuitParams: [2048, 2000, 4, 50, 128] });
+    const nonce = "revocation-show-nonce";
+    const inputs = generateShowInputs(
+      generateShowCircuitParams(mockData.circuitParams),
+      nonce,
+      signDeviceNonce(nonce, mockData.devicePrivateKey),
+      mockData.deviceKey,
+      [],
+      [],
+      [0n],
+    );
+    await bindPredicateName(inputs, 0, 0, "name");
+    const commitment = computeRevocationCommitment(ISSUER, mockData.revocationValue);
+    const registry = createRevocationRegistry([...randomCommitments(4), commitment]);
+    const witness = buildRevocationWitness(ISSUER, mockData.revocationValue, createRevocationRegistry(), MAX_DEPTH);
+
+    // The membership path of the revoked commitment, under Show's input names.
+    const proof = registry.generateProof(commitment);
+    await circuit.expectFail({
+      ...inputs,
+      ...witness,
+      revocationLeafValue: toLimbs(proof.leaf.value),
+      revocationLeafNextValue: toLimbs(proof.leaf.nextValue),
+      revocationLeafIndex: BigInt(proof.leafIndex),
+      revocationDepth: BigInt(proof.siblings.length),
+      revocationSiblings: Array.from({ length: MAX_DEPTH }, (_, i) => toLimbs(proof.siblings[i] ?? 0n)),
+    });
+  });
 });
 
-describe("JWT revocation commitment extraction", () => {
+describe("JWT revocation value extraction", () => {
   const PARAMS = [2048, 2000, 4, 50, 128];
   let circuit: WitnessTester<any, any>;
 
@@ -160,22 +240,22 @@ describe("JWT revocation commitment extraction", () => {
     });
   });
 
-  it("extracts the signed commitment as [hi, lo] limbs", async () => {
+  it("extracts the signed revocation value as [hi, lo] limbs", async () => {
     const mockData = await generateMockData({ circuitParams: PARAMS });
     const witness = await circuit.calculateWitness(mockData.circuitInputs);
     await circuit.expectConstraintPass(witness);
 
-    const indices = await witnessIndices(circuit, ["main.RevocationCommitment[0]", "main.RevocationCommitment[1]"]);
+    const indices = await witnessIndices(circuit, ["main.RevocationValue[0]", "main.RevocationValue[1]"]);
     assert.deepStrictEqual(
       indices.map((i) => witness[i]),
-      toLimbs(mockData.revocationCommitment),
+      toLimbs(mockData.revocationValue),
     );
   });
 
   it("rejects an index that does not point at the anchor", async () => {
     const mockData = await generateMockData({ circuitParams: PARAMS });
     const inputs = { ...mockData.circuitInputs };
-    inputs.revocationCommitmentIndex += 1;
+    inputs.revocationValueIndex += 1;
 
     await circuit.expectFail(inputs);
   });

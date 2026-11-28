@@ -27,6 +27,12 @@ export function bigintToLimbs(x: bigint, n: number, k: number): bigint[] {
   return ret;
 }
 
+/** 32-byte big-endian encoding; throws if `value` is negative or not below 2^256. */
+export function be32(value: bigint): Buffer {
+  if (value < 0n || value >= 1n << 256n) throw new RangeError(`${value} does not fit in 32 bytes`);
+  return Buffer.from(value.toString(16).padStart(64, "0"), "hex");
+}
+
 // Convert a buffer to a BigInt
 export function bufferToBigInt(buffer: Buffer) {
   // Convert the buffer to a hexadecimal string then to BigInt.
@@ -103,8 +109,7 @@ export const base64urlToBase64 = (b64url: string) => {
 };
 
 export function bigintToBase64url(value: bigint): string {
-  const hex = value.toString(16).padStart(64, "0");
-  return Buffer.from(hex, "hex").toString("base64url");
+  return be32(value).toString("base64url");
 }
 
 export function pointToJwk(point: { x: bigint; y: bigint }): { kty: string; crv: string; x: string; y: string } {

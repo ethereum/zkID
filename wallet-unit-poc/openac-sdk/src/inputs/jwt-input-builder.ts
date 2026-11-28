@@ -17,7 +17,7 @@ import { issuerPublicKeyToPoint } from "./issuer-key.js";
 import {
   assertUnambiguousPayload,
   DEVICE_KEY_ANCHORS,
-  REVOCATION_COMMITMENT_ANCHOR,
+  REVOCATION_VALUE_ANCHOR,
 } from "./payload-anchors.js";
 import type {
   JwtCircuitParams,
@@ -182,9 +182,9 @@ export function buildJwtCircuitInputs(
     claimLengths,
     decodeFlags: decodeFlagsOut,
     claimFormats: claimFormatsOut,
-    revocationCommitmentIndex: byteOffset(
+    revocationValueIndex: byteOffset(
       decodedPayload,
-      decodedPayload.indexOf(REVOCATION_COMMITMENT_ANCHOR),
+      decodedPayload.indexOf(REVOCATION_VALUE_ANCHOR),
     ),
   };
 }

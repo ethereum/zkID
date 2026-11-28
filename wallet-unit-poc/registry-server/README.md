@@ -23,7 +23,7 @@ Shared by both registries:
 
 Issuer registry:
 
-- Leaves are `sha256(be32(pubKeyX) || be32(pubKeyY))`, i.e. `issuerCommitment(key)` in `openac-sdk`.
+- Leaves are `sha256(be32(pubKeyX) || be32(pubKeyY) || be32(2))`, i.e. `issuerCommitment(key)` in `openac-sdk`.
 - The empty root `0` is never valid.
 - `expireRoots` rejects every superseded root. Call it after removing a compromised issuer. As on chain, a root superseded in the same second as the expiry stays valid only if it was the current root at the expiry.
 
@@ -84,7 +84,7 @@ Values are uint256s, returned as decimal strings. Requests may also use `0x` hex
 
 Errors are `{ error, message }`: `400 INVALID_INPUT`, `401 UNAUTHORIZED`, `403 FORBIDDEN`, `404 NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `409 MAX_DEPTH_EXCEEDED` (issuer adds), `413 PAYLOAD_TOO_LARGE`, `503 STORAGE_FAILED`.
 
-`/issuer` and `/revocation` return every leaf (removed issuers as `0`, revocation tombstones included), like `getLeaf` on chain. Holders should not query `/revocation/commitments/:c` for their own commitment, since that tells the server which credential they hold.
+`/issuer` and `/revocation` return every leaf (removed issuers as `0`, revocation tombstones included), like `getLeaf` on chain. Revocation commitments are `computeRevocationCommitment(issuerKey, r)` from `openac-sdk`, not the credential's `revocation_value` `r`. Holders should not query `/revocation/commitments/:c` for their own commitment, since that tells the server which credential they hold.
 
 ## Client
 
@@ -99,7 +99,7 @@ const registry = new RegistryClient("https://registry.example")
 const issuers = await registry.syncIssuerRegistry() // IssuerRegistry, root checked
 const revoked = await registry.syncRevocationRegistry() // RevocationRegistry, root checked
 const issuerProof = issuers.generateProof(issuerCommitment(issuerPublicKey))
-// present(..., { issuerProof, revocation: { secret, registry: revoked } })
+// present(..., { issuerProof, revocation: { registry: revoked } })
 
 // Verifier
 // verify(..., { isValidIssuerRoot: registry.isValidIssuerRoot, isValidRevocationRoot: registry.isValidRevocationRoot })
@@ -108,7 +108,7 @@ const issuerProof = issuers.generateProof(issuerCommitment(issuerPublicKey))
 await new RegistryClient(url, { token: issuerOwnerToken }).addIssuers([issuerCommitment(newIssuerKey)])
 
 // Revocation registry owner
-await new RegistryClient(url, { token: revocationOwnerToken }).revoke(computeRevocationCommitment(secret))
+await new RegistryClient(url, { token: revocationOwnerToken }).revoke(computeRevocationCommitment(issuerPublicKey, revocationValue))
 ```
 
 The authorities (`IssuerRegistryAuthority`, `RevocationRegistryAuthority`) can also be used in-process without the server, with `toJSON` / `fromJSON` for persistence.

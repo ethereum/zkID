@@ -30,7 +30,7 @@ export interface IssuerAuthorityState {
 
 /**
  * The approved-issuer set, held off chain: a SHA-256 LeanIMT of issuer
- * commitments `sha256(be32(pubKeyX) || be32(pubKeyY))`. Behaves like
+ * commitments `sha256(be32(pubKeyX) || be32(pubKeyY) || be32(2))`. Behaves like
  * `OpenACIssuerRegistry` over `Sha256IssuerRegistry`: the same tree and roots,
  * a depth cap, a root history with `rootDuration`, and `expireRoots`.
  *

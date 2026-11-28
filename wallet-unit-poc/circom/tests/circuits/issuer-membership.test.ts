@@ -1,6 +1,7 @@
 import type { WitnessTester } from "circomkit";
 import { p256 } from "@noble/curves/nist.js";
 import assert from "assert";
+import { createHash } from "crypto";
 import { circomkit } from "../common/index.ts";
 import {
   buildIssuerRegistry,
@@ -60,6 +61,15 @@ describe("IssuerMembership (SHA-256 LeanIMT)", () => {
     );
   });
 
+  it("hashes the leaf as sha256(be32(x) || be32(y) || be32(2))", () => {
+    const issuer = issuers[0]!;
+    const be32 = (v: bigint) => Buffer.from(v.toString(16).padStart(64, "0"), "hex");
+    const digest = (...words: bigint[]) =>
+      BigInt("0x" + createHash("sha256").update(Buffer.concat(words.map(be32))).digest("hex"));
+    assert.strictEqual(issuerCommitment(issuer), digest(issuer.x, issuer.y, 2n));
+    assert.notStrictEqual(issuerCommitment(issuer), digest(issuer.x, issuer.y));
+  });
+
   it("gives a different root for a key outside the registry", async () => {
     const outsider = randomIssuer();
     const w = await circuit.calculateWitness({ ...inputsFor(issuers[1]!), pubKeyX: outsider.x, pubKeyY: outsider.y });
@@ -74,4 +84,71 @@ describe("IssuerMembership (SHA-256 LeanIMT)", () => {
   it("rejects a depth above the maximum", async () => {
     await circuit.expectFail({ ...inputsFor(issuers[0]!), depth: MAX_DEPTH + 1 });
   });
+});
+
+describe("IssuerMembership key bits", () => {
+  let circuit: WitnessTester<["pubKeyX", "pubKeyY", "depth", "index", "siblings"], ["root", "keyBits"]>;
+
+  before(async () => {
+    circuit = await circomkit.WitnessTester("IssuerMembership", {
+      file: "components/issuer-membership",
+      template: "IssuerMembership",
+      params: [MAX_DEPTH],
+    });
+  });
+
+  it("outputs be32(x) || be32(y) as big-endian bits", async () => {
+    const issuer = randomIssuer();
+    const m = generateIssuerMembershipInputs(issuer, buildIssuerRegistry([issuer]), MAX_DEPTH);
+    const bits = (v: bigint) => v.toString(2).padStart(256, "0").split("").map(BigInt);
+    const w = await circuit.calculateWitness({
+      pubKeyX: m.issuerKeyX,
+      pubKeyY: m.issuerKeyY,
+      depth: m.issuerTreeDepth,
+      index: m.issuerTreeIndex,
+      siblings: m.issuerTreeSiblings,
+    });
+    const { keyBits } = await circuit.readWitnessSignals(w, ["keyBits"]);
+    assert.deepStrictEqual(keyBits, [...bits(issuer.x), ...bits(issuer.y)]);
+  });
+});
+
+describe("BitsBelowFieldModulus", () => {
+  // P-256 base prime, the secq256r1 field modulus.
+  const P = BigInt("0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF");
+  const leBits = (v: bigint) => Array.from({ length: 256 }, (_, i) => Number((v >> BigInt(i)) & 1n));
+  let circuit: WitnessTester<["in"], []>;
+
+  before(async () => {
+    circuit = await circomkit.WitnessTester("BitsBelowFieldModulus", {
+      file: "components/issuer-membership",
+      template: "BitsBelowFieldModulus",
+      recompile: true,
+    });
+  });
+
+  for (const [name, value] of [
+    ["0", 0n],
+    ["1", 1n],
+    ["the generator x", p256.Point.BASE.x],
+    ["2^255", 1n << 255n],
+    ["p - 1", P - 1n],
+    ["p - 2^96", P - (1n << 96n)],
+  ] as const) {
+    it(`accepts ${name}`, async () => {
+      await circuit.expectConstraintPass(await circuit.calculateWitness({ in: leBits(value) }));
+    });
+  }
+
+  for (const [name, value] of [
+    ["p", P],
+    ["p + 1", P + 1n],
+    ["x + p for a small x", 5n + P],
+    ["2^256 - 1", (1n << 256n) - 1n],
+    ["p + 2^191, setting a bit p has clear", P + (1n << 191n)],
+  ] as const) {
+    it(`rejects ${name}`, async () => {
+      await circuit.expectFail({ in: leBits(value) });
+    });
+  }
 });

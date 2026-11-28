@@ -13,9 +13,8 @@ import {
   circuitInputsToJson,
   issuerPublicKeyToPoint,
   buildRevocationWitness,
-  computeRevocationCommitment,
   createRevocationRegistry,
-  encodeRevocationCommitment,
+  encodeRevocationValue,
   buildIssuerMembershipInputs,
   createIssuerRegistry,
   issuerCommitment,
@@ -35,9 +34,8 @@ const KEYS_DIR = join(__dirname, "..", "..", "ecdsa-spartan2", "keys");
 const WASM_PKG_DIR = join(__dirname, "..", "wasm", "pkg");
 const ASSETS_DIR = join(__dirname, "..", "assets");
 
-const REVOCATION_SECRET_HEX =
-  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-const REVOCATION_COMMITMENT = computeRevocationCommitment(REVOCATION_SECRET_HEX);
+// The revocation value the issuer signs as `revocation_value`.
+const REVOCATION_VALUE = 0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789n;
 
 // Witness index of the private issuer `main.pubKeyX` in jwt_1k (pubKeyY follows).
 // Mirrors CircuitSize::issuer_key_witness_start in ecdsa-spartan2.
@@ -176,7 +174,7 @@ function generateTestJwt(): TestJwtData {
     nbf: 1700000000,
     exp: 1800000000,
     cnf: { jwk: DEVICE_PUBLIC_KEY },
-    revocation_commitment: encodeRevocationCommitment(REVOCATION_COMMITMENT),
+    revocation_value: encodeRevocationValue(REVOCATION_VALUE),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],
@@ -384,8 +382,8 @@ describe.skipIf(!checkArtifactsExist())(
         claimIdentifierHashes,
         predicates: [],
         revocation: buildRevocationWitness(
-          REVOCATION_SECRET_HEX,
-          REVOCATION_COMMITMENT,
+          ISSUER_PUBLIC_KEY,
+          REVOCATION_VALUE,
           revocationRegistry,
         ),
         issuer: buildIssuerMembershipInputs(
@@ -414,9 +412,9 @@ describe.skipIf(!checkArtifactsExist())(
     expect(showResult.proof.length).toBeGreaterThan(0);
 
     // Shared values match across circuits, in SHARED_LAYOUT order. JWT 1k:
-    // KeyBindingX/Y and RevocationCommitment[2] follow claimIdentifierHashes, and
+    // KeyBindingX/Y and RevocationValue[2] follow claimIdentifierHashes, and
     // the private issuer key sits at w[JWT_1K_ISSUER_KEY_START..]. Show: deviceKeyX/Y
-    // at w[161..=162], issuerKeyX/Y at w[169..=170], revocationCommitment[2] at
+    // at w[161..=162], issuerKeyX/Y at w[169..=170], revocationValue[2] at
     // w[173..=174] (after issuerTreeDepth/Index; the siblings are optimized out).
     const keyStart = identityStart + maxClaims;
     expect(jwtWitness.slice(keyStart, keyStart + 2)).toEqual(showWitness.slice(161, 163));

@@ -120,3 +120,21 @@ export function issuerPublicKeyToPoint(key: IssuerPublicKey): IssuerKeyPoint {
   return { x, y };
 }
 
+
+/**
+ * An issuer key as a validated point: decodes a JWK or PEM key, or checks a given
+ * point is on P-256 with coordinates below p, the only encoding the Show circuit
+ * accepts. Throws `InputError("INVALID_KEY")` otherwise.
+ */
+export function toIssuerKeyPoint(key: IssuerPublicKey | IssuerKeyPoint): IssuerKeyPoint {
+  if (!("x" in key && typeof key.x === "bigint")) {
+    return issuerPublicKeyToPoint(key as IssuerPublicKey);
+  }
+  const { x, y } = key as IssuerKeyPoint;
+  try {
+    p256.ProjectivePoint.fromAffine({ x, y }).assertValidity();
+  } catch {
+    throw new InputError("INVALID_KEY", "Issuer key is not a valid P-256 curve point");
+  }
+  return { x, y };
+}

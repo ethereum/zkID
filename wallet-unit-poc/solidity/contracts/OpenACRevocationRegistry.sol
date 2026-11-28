@@ -7,7 +7,9 @@ import { IRevocationRegistries } from "@coordination-network/contracts/revocatio
 
 /// @title OpenACRevocationRegistry
 /// @notice OpenAC's revocation registry, shared by every issuer: one SHA-256 LeanIMT+ of revoked
-/// `sha256(r)` commitments, held on a `Sha256Revocation` service. Only the owner writes; verifiers
+/// commitments `sha256(be32(x) || be32(y) || be32(r) || be32(3))` (issuer key (x, y), signed revocation
+/// value r), held on a `Sha256Revocation` service. Writes take commitments (`computeRevocationCommitment`
+/// in openac-sdk), not the credential's `revocation_value` r. Only the owner writes; verifiers
 /// accept a presentation's revocation root with {isValidRoot}.
 /// @dev The Show circuit outputs the revocation root, and issuer hiding keeps the issuer private. With
 /// one registry per issuer the root would name the issuer, so all issuers share this one tree.

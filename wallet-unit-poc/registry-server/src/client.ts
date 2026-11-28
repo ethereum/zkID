@@ -141,7 +141,7 @@ export class RegistryClient {
   };
 
   /**
-   * Whether a commitment is revoked. A holder asking this reveals its
+   * Whether a revocation commitment is revoked. A holder asking this reveals its
    * commitment to the server, so holders should sync the tree instead.
    */
   async isRevoked(commitment: BigNumberish): Promise<boolean> {
@@ -171,7 +171,9 @@ export class RegistryClient {
     await this.request("POST", "/issuer/expire-roots");
   }
 
-  // Revocation registry owner writes. Each commitment write returns the new root.
+  // Revocation registry owner writes. Each returns the new root. A revocation
+  // commitment is `computeRevocationCommitment(issuerKey, r)` from openac-sdk,
+  // not the credential's `revocation_value` r itself.
 
   async revoke(commitments: BigNumberish | BigNumberish[]): Promise<bigint> {
     const list = Array.isArray(commitments) ? commitments : [commitments];

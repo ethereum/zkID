@@ -227,6 +227,7 @@ export {
   IssuerRegistry,
   issuerSha256Scheme,
   ISSUER_TREE_MAX_DEPTH,
+  ISSUER_COMMITMENT_TAG,
   issuerCommitment,
   createIssuerRegistry,
   buildIssuerMembershipInputs,
@@ -235,14 +236,16 @@ export {
 export type { IssuerProof, IssuerMembershipInputs, IssuerRootCheck } from "./issuer-hiding.js";
 // [hi, lo] 128-bit limb helpers for registry roots.
 export { toLimbs, fromLimbs } from "./limbs.js";
-// Revocation: commitments, the shared SHA-256 LeanIMT+ registry and root checks.
+// Revocation: issuer-signed values, their registry commitments, the shared SHA-256
+// LeanIMT+ registry and root checks.
 export {
   REVOCATION_MAX_DEPTH,
-  REVOCATION_COMMITMENT_CLAIM,
-  generateRevocationSecret,
+  REVOCATION_VALUE_CLAIM,
+  REVOCATION_COMMITMENT_TAG,
+  generateRevocationValue,
   computeRevocationCommitment,
-  encodeRevocationCommitment,
-  decodeRevocationCommitment,
+  encodeRevocationValue,
+  decodeRevocationValue,
   createRevocationRegistry,
   revocationRegistryFromLeaves,
   acceptRevocationRoots,

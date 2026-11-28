@@ -3,24 +3,24 @@ pragma circom 2.2.3;
 include "circomlib/circuits/comparators.circom";
 include "../utils/utils.circom";
 
-/// @title RevocationCommitmentExtractor
-/// @notice Reads `"revocation_commitment":"<43 base64url chars>"` starting at `index`
-///         in the decoded JWT payload and outputs the 32-byte commitment as
+/// @title RevocationValueExtractor
+/// @notice Reads `"revocation_value":"<43 base64url chars>"` starting at `index`
+///         in the decoded JWT payload and outputs the 32-byte revocation value as
 ///         [hi, lo] 128-bit limbs.
 /// @notice The anchor bytes and the closing quote are pinned here, so the prover only
 ///         chooses the position. The anchor must occur once in the signed payload.
-template RevocationCommitmentExtractor(maxPayloadLength) {
-    var ANCHOR_LEN = 25;
-    // "revocation_commitment":"
-    var ANCHOR[ANCHOR_LEN] = [34, 114, 101, 118, 111, 99, 97, 116, 105, 111, 110, 95, 99,
-                              111, 109, 109, 105, 116, 109, 101, 110, 116, 34, 58, 34];
+template RevocationValueExtractor(maxPayloadLength) {
+    var ANCHOR_LEN = 20;
+    // "revocation_value":"
+    var ANCHOR[ANCHOR_LEN] = [34, 114, 101, 118, 111, 99, 97, 116, 105, 111, 110, 95,
+                              118, 97, 108, 117, 101, 34, 58, 34];
     var VALUE_LEN = 43;
     var WINDOW_LEN = ANCHOR_LEN + VALUE_LEN + 1;
 
     signal input payload[maxPayloadLength];
     signal input index;
 
-    signal output commitment[2];
+    signal output out[2];
 
     // VarShiftLeft wraps around, so keep the window inside the payload.
     component inBounds = LessEqThan(log2Ceil(maxPayloadLength) + 1);
@@ -52,6 +52,6 @@ template RevocationCommitmentExtractor(maxPayloadLength) {
         lo.in[i] <== decode.base64Out[16 + i];
     }
 
-    commitment[0] <== hi.out;
-    commitment[1] <== lo.out;
+    out[0] <== hi.out;
+    out[1] <== lo.out;
 }
