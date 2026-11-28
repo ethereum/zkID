@@ -6,7 +6,7 @@ import {
   utf8Decode,
 } from "./utils.js";
 import { InputError } from "./errors.js";
-import { REVOCATION_COMMITMENT_CLAIM, decodeRevocationCommitment } from "./revocation.js";
+import { REVOCATION_VALUE_CLAIM, decodeRevocationValue } from "./revocation.js";
 import type { DisclosedClaim, EcdsaPublicKey } from "./types.js";
 
 export class Credential {
@@ -122,10 +122,10 @@ export class Credential {
     return jwk;
   }
 
-  /** The signed `revocation_commitment` claim, or null when absent. */
-  get revocationCommitment(): bigint | null {
-    const encoded = this.payload[REVOCATION_COMMITMENT_CLAIM];
-    return typeof encoded === "string" ? decodeRevocationCommitment(encoded) : null;
+  /** The signed `revocation_value` claim, or null when absent. */
+  get revocationValue(): bigint | null {
+    const encoded = this.payload[REVOCATION_VALUE_CLAIM];
+    return typeof encoded === "string" ? decodeRevocationValue(encoded) : null;
   }
 
   get decodedPayload(): string {

@@ -142,7 +142,7 @@ describe.skipIf(!HAS_1K_KEYS)("WASM Verifier: proof verification via Verifier cl
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
-      revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
+      revocation: { registry: createRevocationRegistry() },
       keys,
       predicates: claimToClaimPredicate,
     });

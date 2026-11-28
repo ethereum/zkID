@@ -12,9 +12,8 @@ import {
   DEFAULT_JWT_PARAMS,
   DEFAULT_SHOW_PARAMS,
   buildRevocationWitness,
-  computeRevocationCommitment,
   createRevocationRegistry,
-  encodeRevocationCommitment,
+  encodeRevocationValue,
 } from "../src/index.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
@@ -25,15 +24,8 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ASSETS_DIR = join(__dirname, "..", "assets");
 
-const REVOCATION_SECRET_HEX =
-  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-const REVOCATION_COMMITMENT = computeRevocationCommitment(REVOCATION_SECRET_HEX);
-// Non-revocation inputs against an empty registry (root 0).
-const REVOCATION = buildRevocationWitness(
-  REVOCATION_SECRET_HEX,
-  REVOCATION_COMMITMENT,
-  createRevocationRegistry(),
-);
+// The revocation value the issuer signs as `revocation_value`.
+const REVOCATION_VALUE = 0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789n;
 
 function derivePublicKey(privateKeyBytes: Uint8Array) {
   let hex = "";
@@ -66,6 +58,13 @@ const DEVICE_PUBLIC_KEY = {
 };
 
 const VERIFIER_NONCE = "test-nonce-12345";
+
+// Non-revocation inputs against an empty registry (root 0).
+const REVOCATION = buildRevocationWitness(
+  { x: ISSUER_POINT.x, y: ISSUER_POINT.y },
+  REVOCATION_VALUE,
+  createRevocationRegistry(),
+);
 
 /** Encode a JavaScript object as a base64url string. */
 function jsonToBase64url(obj: unknown): string {
@@ -134,7 +133,7 @@ function generateTestJwt(): TestJwtData {
     nbf: 1700000000,
     exp: 1800000000,
     cnf: { jwk: DEVICE_PUBLIC_KEY },
-    revocation_commitment: encodeRevocationCommitment(REVOCATION_COMMITMENT),
+    revocation_value: encodeRevocationValue(REVOCATION_VALUE),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],
@@ -426,9 +425,9 @@ describe("JWT (Prepare) Circuit via SDK", () => {
     expect(witness[identifierStart + maxClaims + 1]).toBe(
       base64urlToBigInt(data.devicePublicKey.y),
     );
-    // RevocationCommitment [hi, lo] follows the device key.
+    // RevocationValue [hi, lo] follows the device key.
     expect(witness.slice(identifierStart + maxClaims + 2, identifierStart + maxClaims + 4)).toEqual(
-      REVOCATION.revocationCommitment,
+      REVOCATION.revocationValue,
     );
   }, 120_000);
 

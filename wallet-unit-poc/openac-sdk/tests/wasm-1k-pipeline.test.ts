@@ -14,9 +14,8 @@ import {
   extractIssuerKeyFromPreparePublicValues,
   issuerPublicKeyToPoint,
   buildRevocationWitness,
-  computeRevocationCommitment,
   createRevocationRegistry,
-  encodeRevocationCommitment,
+  encodeRevocationValue,
 } from "../src/index.js";
 import { CLAIM_IDENTITY_WITNESS_START, CLAIM_VALUES_WITNESS_START } from "../src/sizing.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
@@ -32,9 +31,8 @@ const KEYS_DIR = join(__dirname, "..", "..", "ecdsa-spartan2", "keys");
 const WASM_PKG_DIR = join(__dirname, "..", "wasm", "pkg");
 const ASSETS_DIR = join(__dirname, "..", "assets");
 
-const REVOCATION_SECRET_HEX =
-  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-const REVOCATION_COMMITMENT = computeRevocationCommitment(REVOCATION_SECRET_HEX);
+// The revocation value the issuer signs as `revocation_value`.
+const REVOCATION_VALUE = 0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789n;
 
 // 1k circuit params: must match circom/circuits.json "jwt_1k" params
 const JWT_PARAMS_1K: JwtCircuitParams = {
@@ -169,7 +167,7 @@ function generateTestJwt(): TestJwtData {
     nbf: 1700000000,
     exp: 1800000000,
     cnf: { jwk: DEVICE_PUBLIC_KEY },
-    revocation_commitment: encodeRevocationCommitment(REVOCATION_COMMITMENT),
+    revocation_value: encodeRevocationValue(REVOCATION_VALUE),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],
@@ -375,7 +373,7 @@ describe.skipIf(!checkArtifactsExist())(
         normalizedClaimValues,
         claimIdentifierHashes,
         predicates: [],
-        revocation: buildRevocationWitness(REVOCATION_SECRET_HEX, REVOCATION_COMMITMENT, registry),
+        revocation: buildRevocationWitness(ISSUER_PUBLIC_KEY, REVOCATION_VALUE, registry),
       },
     );
 
@@ -397,12 +395,15 @@ describe.skipIf(!checkArtifactsExist())(
     );
     expect(showResult.proof.length).toBeGreaterThan(0);
 
-    // Shared values match across circuits. JWT: KeyBindingX/Y and
-    // RevocationCommitment[2] follow claimIdentifierHashes. Show: deviceKeyX/Y at
-    // w[159..160], revocationCommitment[2] after claimValues/claimIdentifierHashes.
+    // Shared values match across circuits. JWT 1k: KeyBindingX/Y and
+    // RevocationValue[2] follow claimIdentifierHashes, and the public issuer key
+    // is at w[1..=2]. Show: deviceKeyX/Y at w[159..=160], then issuerKeyX/Y at
+    // w[167..=168] and revocationValue[2] at w[169..=170], after
+    // claimValues/claimIdentifierHashes.
     const keyStart = identityStart + maxClaims;
     expect(jwtWitness.slice(keyStart, keyStart + 2)).toEqual(showWitness.slice(159, 161));
-    expect(jwtWitness.slice(keyStart + 2, keyStart + 4)).toEqual(showWitness.slice(167, 169));
+    expect(jwtWitness.slice(1, 3)).toEqual(showWitness.slice(167, 169));
+    expect(jwtWitness.slice(keyStart + 2, keyStart + 4)).toEqual(showWitness.slice(169, 171));
 
     const presentResult = await bridge.present(
       preparePk,
@@ -429,7 +430,7 @@ describe.skipIf(!checkArtifactsExist())(
     expect(verifyResult.valid).toBe(true);
     expect(verifyResult.error).toBeUndefined();
     // Show public IO: expressionResult, revocationRoot[2], then the 155-value
-    // verifier statement. The device key and commitment stay in comm_W_shared.
+    // verifier statement. The device key and revocation value stay in comm_W_shared.
     expect(verifyResult.showPublicValues.length).toBe(158);
     // Prepare public IO is 2n + 2 for n = 2 claim slots: the issuer key
     // (pubKeyX, pubKeyY) then decodeFlags and claimFormats. Claim values and the

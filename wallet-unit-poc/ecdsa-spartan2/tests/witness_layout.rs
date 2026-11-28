@@ -84,8 +84,8 @@ fn jwt_claim_value_offsets_match_sym() {
             .chain([
                 "main.KeyBindingX".into(),
                 "main.KeyBindingY".into(),
-                "main.RevocationCommitment[0]".into(),
-                "main.RevocationCommitment[1]".into(),
+                "main.RevocationValue[0]".into(),
+                "main.RevocationValue[1]".into(),
             ])
             .collect();
 
@@ -100,8 +100,8 @@ fn jwt_claim_value_offsets_match_sym() {
             .chain([
                 layout.keybinding_x_index,
                 layout.keybinding_y_index,
-                layout.revocation_commitment_index,
-                layout.revocation_commitment_index + 1,
+                layout.revocation_value_index,
+                layout.revocation_value_index + 1,
             ])
             .collect();
 
@@ -126,7 +126,7 @@ fn jwt_claim_value_offsets_match_sym() {
         for idx in layout.claim_values_range().chain([
             layout.keybinding_x_index,
             layout.keybinding_y_index,
-            layout.revocation_commitment_index,
+            layout.revocation_value_index,
         ]) {
             assert!(
                 idx > layout.num_public(),
@@ -210,10 +210,14 @@ fn show_claim_value_offsets_match_sym() {
                 layout.device_key_y_index,
             ])
             .collect();
-        if let Some(i) = layout.revocation_commitment_index {
+        if let Some(i) = layout.issuer_key_x_index {
+            wanted.extend(["main.issuerKeyX".into(), "main.issuerKeyY".into()]);
+            expected.extend([i, i + 1]);
+        }
+        if let Some(i) = layout.revocation_value_index {
             wanted.extend([
-                "main.revocationCommitment[0]".into(),
-                "main.revocationCommitment[1]".into(),
+                "main.revocationValue[0]".into(),
+                "main.revocationValue[1]".into(),
             ]);
             expected.extend([i, i + 1]);
         }

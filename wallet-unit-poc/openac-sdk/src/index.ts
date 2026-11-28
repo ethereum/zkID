@@ -225,14 +225,16 @@ export {
   extractClaimNormalizationFromPreparePublicValues,
 } from "./inputs/prepare-public-io.js";
 export type { IssuerKeyPoint } from "./inputs/prepare-public-io.js";
-// Revocation: commitments, the SHA-256 LeanIMT+ registry and root checks.
+// Revocation: issuer-signed values, their registry commitments, the SHA-256
+// LeanIMT+ registry and root checks.
 export {
   REVOCATION_MAX_DEPTH,
-  REVOCATION_COMMITMENT_CLAIM,
-  generateRevocationSecret,
+  REVOCATION_VALUE_CLAIM,
+  REVOCATION_COMMITMENT_TAG,
+  generateRevocationValue,
   computeRevocationCommitment,
-  encodeRevocationCommitment,
-  decodeRevocationCommitment,
+  encodeRevocationValue,
+  decodeRevocationValue,
   createRevocationRegistry,
   revocationRegistryFromLeaves,
   acceptRevocationRoots,

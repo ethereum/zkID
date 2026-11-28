@@ -1,4 +1,4 @@
-use super::{bind_shared, synthesize_all_vars, synthesize_witness_only};
+use super::{alloc_shared_issuer_key, bind_shared, synthesize_all_vars, synthesize_witness_only};
 use crate::{paths::PathConfig, utils::*, Scalar, E};
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, SynthesisError};
 use circom_scotia::reader::load_r1cs;
@@ -259,8 +259,8 @@ impl SpartanCircuit<E> for ShowCircuit {
         //   [KeyBindingX, KeyBindingY,
         //    claimValues[0..n_claims],
         //    claimIdentifierHashes[0..n_claims],
-        //    revocationCommitment[0..2] (`show` only)]
-        let mut shared_values = Vec::with_capacity(4 + 2 * layout.claim_values_len);
+        //    issuerKeyX, issuerKeyY, revocationValue[0..2] (`show` only)]
+        let mut shared_values = Vec::with_capacity(6 + 2 * layout.claim_values_len);
         shared_values.push(kb_x);
         shared_values.push(kb_y);
 
@@ -288,14 +288,17 @@ impl SpartanCircuit<E> for ShowCircuit {
             shared_values.push(id_alloc);
         }
 
-        if let Some(start) = layout.revocation_commitment_index {
+        if let Some(start) = layout.issuer_key_x_index {
+            shared_values.extend(alloc_shared_issuer_key(cs, witness.as_deref(), start)?);
+        }
+        if let Some(start) = layout.revocation_value_index {
             for limb in 0..2 {
                 let value = witness
                     .as_ref()
                     .map(|w| w[start + limb])
                     .unwrap_or(Scalar::ZERO);
                 shared_values.push(AllocatedNum::alloc(
-                    cs.namespace(|| format!("RevocationCommitment{limb}")),
+                    cs.namespace(|| format!("RevocationValue{limb}")),
                     move || Ok(value),
                 )?);
             }

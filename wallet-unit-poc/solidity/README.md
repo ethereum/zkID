@@ -1,6 +1,6 @@
 # OpenAC revocation contracts
 
-On-chain revocation for OpenAC credentials. An issuer revokes a credential by publishing its commitment `C = sha256(r)` to a SHA-256 [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs). Holders prove in the Show circuit that `C` is absent and output the tree root; verifiers accept the root with `isValidRoot`.
+On-chain revocation for OpenAC credentials. An issuer revokes a credential by publishing its revocation commitment `v = sha256(be32(x) || be32(y) || be32(r) || be32(3))` to a SHA-256 [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs), where `(x, y)` is the issuer key and `r` the revocation value signed into the credential. Holders prove in the Show circuit that `v` is absent and output the tree root; verifiers accept the root with `isValidRoot`. Writes take `v` (`computeRevocationCommitment` in `openac-sdk`), not `r`.
 
 Built on [`@coordination-network/contracts`](https://github.com/ethereum/coordination-network/tree/main/packages/contracts/src/revocation) (`Sha256Revocation`).
 

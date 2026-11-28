@@ -9,6 +9,7 @@ import { generateMockData } from "./mock-vc-generator";
 import { generateShowCircuitParams, generateShowInputs, signDeviceNonce, nameToBuffer } from "./show";
 import { PredicateFormat } from "./predicate-types";
 import { buildRevocationWitness, createRevocationRegistry, bytesToBigInt } from "./revocation";
+import { base64urlToBigInt } from "./utils";
 
 // Witness index of claimIdentifierHashes[0] per compiled JWT size (.sym column $2).
 // Read from the JWT witness because H(name) can't be computed off-circuit
@@ -60,7 +61,7 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const claimFormats = [PredicateFormat.STRING_EQ, PredicateFormat.ROC_DATE];
 
   const mockData = await generateMockData({
-    // Short identifiers so the 1k payload fits with the revocation commitment.
+    // Short identifiers so the 1k payload fits with the revocation value.
     issuer: "https://issuer.example",
     subject: "did:example:holder",
     circuitParams: params,
@@ -106,6 +107,10 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
     fs.rmSync(wtnsPath, { force: true });
   }
 
+  const issuer = {
+    x: base64urlToBigInt(mockData.issuerKey.x),
+    y: base64urlToBigInt(mockData.issuerKey.y),
+  };
   const showInputs = generateShowInputs(
     showParams,
     nonce,
@@ -136,7 +141,10 @@ async function generateInputsForSize(sizeName: string): Promise<void> {
   const registry = createRevocationRegistry(
     Array.from({ length: 5 }, () => bytesToBigInt(nodeCrypto.randomBytes(32))),
   );
-  Object.assign(showInputs, buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH));
+  Object.assign(
+    showInputs,
+    buildRevocationWitness(issuer, mockData.revocationValue, registry, REVOCATION_MAX_DEPTH),
+  );
 
   const circomDir = path.resolve(__dirname, "..");
   // The "default" pseudo-size writes to inputs/{jwt,show}/default.json directly,

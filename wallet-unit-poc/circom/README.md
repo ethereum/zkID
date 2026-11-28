@@ -24,8 +24,9 @@ note: This project uses [circomkit](https://github.com/erhant/circomkit) to comp
 
 ### Revocation
 
-- `components/revocation-commitment-extractor.circom`: reads the signed `revocation_commitment` from the JWT payload. Every JWT credential must carry it.
-- `components/revocation.circom`: `RevocationCheck(MAX_DEPTH)` proves `commitment = sha256(secret)` and non-membership in a SHA-256 LeanIMT+ ([`@zk-kit/lean-imt-plus-sha256.circom`](https://www.npmjs.com/package/@zk-kit/lean-imt-plus-sha256.circom)), and outputs the root.
+- `components/revocation-value-extractor.circom`: reads the signed `revocation_value` from the JWT payload. Every JWT credential must carry it.
+- `components/issuer-key.circom`: `IssuerKeyBits` decomposes the issuer key into its canonical `be32(x) || be32(y)` bits (coordinates below p).
+- `components/revocation.circom`: `RevocationCheck(MAX_DEPTH)` derives the commitment `sha256(be32(x) || be32(y) || be32(r) || be32(3))` from the issuer key bits and the signed revocation value `r`, proves its non-membership in a SHA-256 LeanIMT+ ([`@zk-kit/lean-imt-plus-sha256.circom`](https://www.npmjs.com/package/@zk-kit/lean-imt-plus-sha256.circom)), and outputs the root. Show receives the issuer key and `r` from Prepare through `comm_W_shared`.
 - `Show(..., revocationMaxDepth)`: `0` disables revocation.
 
 ## Testing

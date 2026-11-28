@@ -62,7 +62,7 @@ pub fn parse_jwt_inputs(
         ("messageLength", FieldParser::U64Scalar),
         ("periodIndex", FieldParser::U64Scalar),
         ("matchesCount", FieldParser::U64Scalar),
-        ("revocationCommitmentIndex", FieldParser::U64Scalar),
+        ("revocationValueIndex", FieldParser::U64Scalar),
         // Array fields
         ("message", FieldParser::BigIntArray),
         ("matchIndex", FieldParser::U64Array),
@@ -122,8 +122,9 @@ pub fn parse_show_inputs(
         ("tokenValues", FieldParser::BigIntArray),
     ];
     let revocation_defs: &[(&str, FieldParser)] = &[
-        ("revocationCommitment", FieldParser::BigIntArray),
-        ("revocationSecret", FieldParser::BigIntArray),
+        ("issuerKeyX", FieldParser::BigIntScalar),
+        ("issuerKeyY", FieldParser::BigIntScalar),
+        ("revocationValue", FieldParser::BigIntArray),
         ("revocationLeafValue", FieldParser::BigIntArray),
         ("revocationLeafNextValue", FieldParser::BigIntArray),
         ("revocationLeafIndex", FieldParser::BigIntScalar),
@@ -132,7 +133,7 @@ pub fn parse_show_inputs(
     ];
 
     let mut inputs = parse_inputs(json_value, field_defs)?;
-    if json_value.get("revocationCommitment").is_some() {
+    if json_value.get("revocationValue").is_some() {
         inputs.extend(parse_inputs(json_value, revocation_defs)?);
     }
     Ok(inputs)
@@ -433,9 +434,10 @@ pub struct JwtOutputLayout {
     pub claim_identifier_hashes_start: usize,
     pub keybinding_x_index: usize,
     pub keybinding_y_index: usize,
-    /// Witness index of `RevocationCommitment[0]` (hi limb); the lo limb follows.
-    pub revocation_commitment_index: usize,
-    /// Witness index of the public issuer key coordinate `pubKeyX`.
+    /// Witness index of `RevocationValue[0]` (hi limb); the lo limb follows.
+    pub revocation_value_index: usize,
+    /// Witness index of the public issuer key coordinate `pubKeyX`, also shared
+    /// with Show for the revocation commitment.
     pub issuer_key_x_index: usize,
     /// Witness index of the public issuer key coordinate `pubKeyY`.
     pub issuer_key_y_index: usize,
@@ -475,14 +477,15 @@ impl JwtOutputLayout {
     /// Witness indices the shared partition must equal, in the order
     /// `PrepareCircuit::shared` pushes them:
     /// [KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes..,
-    ///  RevocationCommitment[0], RevocationCommitment[1]].
+    ///  pubKeyX, pubKeyY, RevocationValue[0], RevocationValue[1]].
     pub fn shared_witness_indices(&self) -> Vec<usize> {
         let mut idx = vec![self.keybinding_x_index, self.keybinding_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
+        idx.extend([self.issuer_key_x_index, self.issuer_key_y_index]);
         idx.extend([
-            self.revocation_commitment_index,
-            self.revocation_commitment_index + 1,
+            self.revocation_value_index,
+            self.revocation_value_index + 1,
         ]);
         idx
     }
@@ -499,7 +502,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
     let keybinding_x_index = claim_identifier_hashes_start + claim_values_len;
     let keybinding_y_index = keybinding_x_index + 1;
     // Declared right after KeyBindingY in jwt.circom.
-    let revocation_commitment_index = keybinding_y_index + 1;
+    let revocation_value_index = keybinding_y_index + 1;
     // No public outputs, so the public inputs occupy witness[1..] directly.
     let issuer_key_x_index = 1;
     let issuer_key_y_index = 2;
@@ -512,7 +515,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
         claim_identifier_hashes_start,
         keybinding_x_index,
         keybinding_y_index,
-        revocation_commitment_index,
+        revocation_value_index,
         issuer_key_x_index,
         issuer_key_y_index,
         decode_flags_start,
@@ -598,7 +601,7 @@ pub const SHOW_STATEMENT_LEN: usize = 3
 pub const SHOW_NUM_PUBLIC: usize = 3 + SHOW_STATEMENT_LEN;
 
 /// Which compiled Show circuit to use. The SD-JWT flow proves revocation
-/// (`show`); the MDOC flow has no revocation commitment (`show_mdoc`).
+/// (`show`); the MDOC flow has no revocation value (`show_mdoc`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ShowVariant {
     #[default]
@@ -639,7 +642,8 @@ impl ShowVariant {
 ///   witness[2..=3]              = main.revocationRoot[2] (public output, `show` only)
 ///   witness[..=num_public]      = messageHash + predicate program (public inputs)
 ///   then private: deviceKeyX, deviceKeyY, sig_r, sig_s_inverse,
-///   claimValues[..], claimIdentifierHashes[..], revocationCommitment[2] (`show` only)
+///   claimValues[..], claimIdentifierHashes[..],
+///   issuerKeyX, issuerKeyY, revocationValue[2] (`show` only)
 #[derive(Debug, Clone, Copy)]
 pub struct ShowWitnessLayout {
     pub variant: ShowVariant,
@@ -649,8 +653,10 @@ pub struct ShowWitnessLayout {
     pub claim_values_start: usize,
     pub claim_values_len: usize,
     pub claim_identifier_hashes_start: usize,
-    /// Witness index of `revocationCommitment[0]`; `None` without revocation.
-    pub revocation_commitment_index: Option<usize>,
+    /// Witness index of `issuerKeyX` (`issuerKeyY` follows); `None` without revocation.
+    pub issuer_key_x_index: Option<usize>,
+    /// Witness index of `revocationValue[0]`; `None` without revocation.
+    pub revocation_value_index: Option<usize>,
 }
 
 impl ShowWitnessLayout {
@@ -673,7 +679,10 @@ impl ShowWitnessLayout {
         let mut idx = vec![self.device_key_x_index, self.device_key_y_index];
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
-        if let Some(i) = self.revocation_commitment_index {
+        if let Some(i) = self.issuer_key_x_index {
+            idx.extend([i, i + 1]);
+        }
+        if let Some(i) = self.revocation_value_index {
             idx.extend([i, i + 1]);
         }
         idx
@@ -685,7 +694,7 @@ impl ShowWitnessLayout {
 pub fn calculate_show_witness_indices(n_claims: usize, variant: ShowVariant) -> ShowWitnessLayout {
     // Private signals follow the public prefix: deviceKeyX, deviceKeyY, sig_r,
     // sig_s_inverse, claimValues[..], claimIdentifierHashes[..], then the
-    // revocation inputs.
+    // revocation inputs (issuerKeyX, issuerKeyY, revocationValue[2], ...).
     let device_key_x_index = variant.num_public() + 1;
     let claim_values_start = device_key_x_index + 4;
     let claim_identifier_hashes_start = claim_values_start + n_claims;
@@ -697,9 +706,12 @@ pub fn calculate_show_witness_indices(n_claims: usize, variant: ShowVariant) -> 
         claim_values_start,
         claim_values_len: n_claims,
         claim_identifier_hashes_start,
-        revocation_commitment_index: variant
+        issuer_key_x_index: variant
             .has_revocation()
             .then_some(claim_identifier_hashes_start + n_claims),
+        revocation_value_index: variant
+            .has_revocation()
+            .then_some(claim_identifier_hashes_start + n_claims + 2),
     }
 }
 
@@ -936,11 +948,15 @@ mod show_witness_indices_tests {
                 ("main.claimIdentifierHashes[0]", Some(layout.claim_identifier_hashes_start)),
                 ("main.exprLen", Some(layout.num_public())),
             ];
-            if let Some(i) = layout.revocation_commitment_index {
+            if let Some(i) = layout.issuer_key_x_index {
+                expected.push(("main.issuerKeyX", Some(i)));
+                expected.push(("main.issuerKeyY", Some(i + 1)));
+            }
+            if let Some(i) = layout.revocation_value_index {
                 expected.push(("main.revocationRoot[0]", Some(2)));
                 expected.push(("main.revocationRoot[1]", Some(3)));
-                expected.push(("main.revocationCommitment[0]", Some(i)));
-                expected.push(("main.revocationCommitment[1]", Some(i + 1)));
+                expected.push(("main.revocationValue[0]", Some(i)));
+                expected.push(("main.revocationValue[1]", Some(i + 1)));
             }
 
             for (signal, index) in expected {

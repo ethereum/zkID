@@ -1,6 +1,6 @@
 import { InputError } from "../errors.js";
 import { Credential } from "../credential.js";
-import { REVOCATION_COMMITMENT_CLAIM } from "../revocation.js";
+import { REVOCATION_VALUE_CLAIM } from "../revocation.js";
 
 // The JWT circuit locates the device binding key and the disclosure digests by
 // substring match over the decoded payload. It does not parse JSON, so a match
@@ -11,8 +11,8 @@ import { REVOCATION_COMMITMENT_CLAIM } from "../revocation.js";
 // This module checks that condition on the payload the circuit will run over:
 // each device key anchor occurs once and directly precedes the cnf.jwk
 // coordinate, and each disclosure digest occurs once, as an element of the
-// credential's _sd array, and the revocation commitment anchor occurs once,
-// directly before the signed commitment. The payload is fixed by the issuer signature the
+// credential's _sd array, and the revocation value anchor occurs once,
+// directly before the signed value. The payload is fixed by the issuer signature the
 // circuit verifies, so the condition is a property of the credential and is
 // checked here once, before jwt-input-builder.ts derives the match indices.
 //
@@ -21,8 +21,8 @@ import { REVOCATION_COMMITMENT_CLAIM } from "../revocation.js";
 /** Match patterns for the device binding key coordinates, in circuit slot order. */
 export const DEVICE_KEY_ANCHORS = ['"x":"', '"y":"'] as const;
 
-/** Anchor pinned by the JWT circuit's RevocationCommitmentExtractor. */
-export const REVOCATION_COMMITMENT_ANCHOR = `"${REVOCATION_COMMITMENT_CLAIM}":"`;
+/** Anchor pinned by the JWT circuit's RevocationValueExtractor. */
+export const REVOCATION_VALUE_ANCHOR = `"${REVOCATION_VALUE_CLAIM}":"`;
 
 const SD_ANCHOR = '"_sd":[';
 
@@ -48,7 +48,7 @@ export function assertUnambiguousPayload(
 
   assertDeviceKeyAnchor(decodedPayload, DEVICE_KEY_ANCHORS[0], jwk.x, "x");
   assertDeviceKeyAnchor(decodedPayload, DEVICE_KEY_ANCHORS[1], jwk.y, "y");
-  assertRevocationCommitmentAnchor(credential, decodedPayload);
+  assertRevocationValueAnchor(credential, decodedPayload);
 
   const sdSpan = sdArraySpan(decodedPayload);
 
@@ -107,27 +107,27 @@ function assertDeviceKeyAnchor(
 }
 
 // The circuit reads exactly 43 characters and a closing quote after the anchor.
-function assertRevocationCommitmentAnchor(
+function assertRevocationValueAnchor(
   credential: Credential,
   decodedPayload: string,
 ): void {
-  if (credential.revocationCommitment === null) {
+  if (credential.revocationValue === null) {
     throw new InputError(
       "CLAIM_NOT_FOUND",
-      `Payload has no ${REVOCATION_COMMITMENT_CLAIM} claim`,
+      `Payload has no ${REVOCATION_VALUE_CLAIM} claim`,
     );
   }
 
-  const encoded = credential.payload[REVOCATION_COMMITMENT_CLAIM] as string;
-  const occurrences = occurrenceIndices(decodedPayload, REVOCATION_COMMITMENT_ANCHOR);
-  const start = (occurrences[0] ?? 0) + REVOCATION_COMMITMENT_ANCHOR.length;
+  const encoded = credential.payload[REVOCATION_VALUE_CLAIM] as string;
+  const occurrences = occurrenceIndices(decodedPayload, REVOCATION_VALUE_ANCHOR);
+  const start = (occurrences[0] ?? 0) + REVOCATION_VALUE_ANCHOR.length;
   if (
     occurrences.length !== 1 ||
     decodedPayload.slice(start, start + encoded.length + 1) !== `${encoded}"`
   ) {
     throw new InputError(
       "AMBIGUOUS_PAYLOAD",
-      `Anchor ${REVOCATION_COMMITMENT_ANCHOR} must occur once, directly before the revocation commitment`,
+      `Anchor ${REVOCATION_VALUE_ANCHOR} must occur once, directly before the revocation value`,
     );
   }
 }

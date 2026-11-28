@@ -241,8 +241,8 @@ async function generate(
 
   // The demo proves against an empty revocation registry (root 0).
   const revocation = buildRevocationWitness(
-    cred.revocationSecretHex,
-    cred.revocationCommitment,
+    cred.issuerPublicKey,
+    cred.revocationValue,
     createRevocationRegistry(),
   );
 

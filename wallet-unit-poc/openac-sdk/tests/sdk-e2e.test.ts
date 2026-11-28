@@ -14,9 +14,9 @@ import {
   compilePredicateExpression,
   requiredNormalization,
   acceptRevocationRoots,
-  computeRevocationCommitment,
   createRevocationRegistry,
-  generateRevocationSecret,
+  computeRevocationCommitment,
+  generateRevocationValue,
 } from "../src/index.js";
 import { generateDummyCredential } from "../src/testing/index.js";
 import type { VcSize } from "../src/sizing.js";
@@ -78,13 +78,15 @@ function sha256Hex(buf: Uint8Array): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-// Other holders' revoked commitments; the test credentials are not in it.
+// Revoked commitments of other credentials from the default dummy issuer; the test
+// credentials are not in it.
+const DUMMY_ISSUER = generateDummyCredential({ size: "1k" }).issuerPublicKey;
 const REGISTRY = createRevocationRegistry(
-  Array.from({ length: 6 }, () => computeRevocationCommitment(generateRevocationSecret())),
+  Array.from({ length: 6 }, () => computeRevocationCommitment(DUMMY_ISSUER, generateRevocationValue())),
 );
 
-function revocationFor(cred: { revocationSecretHex: string }) {
-  return { secret: cred.revocationSecretHex, registry: REGISTRY };
+function revocationFor(_cred: unknown) {
+  return { registry: REGISTRY };
 }
 
 function makeDummy1k() {
@@ -566,8 +568,8 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
     // claims satisfy the policy.
     const otherIssuerCred = generateDummyCredential({
       size: "1k",
-      issuerPrivateKey:
-        "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      issuerPrivateKey: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      revocationValue: 0x1111111111111111111111111111111111111111111111111111111111111111n,
       claims: [
         { key: "roc_birthday", value: "0900101" },
         { key: "roc_max", value: "0950101" },
@@ -729,7 +731,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
       precomputed,
       verifierNonce: nonce,
       devicePrivateKey: cred.devicePrivateKeyHex,
-      revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
+      revocation: { registry: createRevocationRegistry() },
       keys,
       predicates: claimToClaimPredicate,
     });
@@ -745,7 +747,10 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
   it("refuses to present a revoked credential", async () => {
     const cred = makeDummy1k();
     const keys = loadLocalKeySet("1k");
-    const registry = createRevocationRegistry([...REGISTRY.commitments, cred.revocationCommitment]);
+    const registry = createRevocationRegistry([
+      ...REGISTRY.commitments,
+      computeRevocationCommitment(cred.issuerPublicKey, cred.revocationValue),
+    ]);
 
     const precomputed = await openac.precompute({
       jwt: cred.jwt,
@@ -760,7 +765,7 @@ describe.skipIf(!HAS_LOCAL_1K)("Typed predicate DSL", () => {
         precomputed,
         verifierNonce: "revoked-credential-nonce",
         devicePrivateKey: cred.devicePrivateKeyHex,
-        revocation: { secret: cred.revocationSecretHex, registry },
+        revocation: { registry },
         keys,
         predicates: claimToClaimPredicate,
       }),

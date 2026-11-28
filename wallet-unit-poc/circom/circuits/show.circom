@@ -3,6 +3,7 @@ pragma circom 2.2.3;
 include "ecdsa/ecdsa.circom";
 include "keyless_zk_proofs/hashtofield.circom";
 include "components/expression.circom";
+include "components/issuer-key.circom";
 include "components/revocation.circom";
 
 /// @title Show
@@ -94,11 +95,14 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, revocationMaxDe
     expressionEval.exprLen <== exprLen;
     expressionResult <== expressionEval.finalResult;
 
-    // Revocation: the credential's commitment (shared with the credential circuit)
-    // must open to the holder's secret and be absent from the revocation tree.
+    // Revocation: the commitment sha256(issuer key || revocation value || 3) must be absent
+    // from the revocation tree. Both the key and the issuer-signed value come from
+    // the credential circuit through the shared witness, so the commitment is the one
+    // of the credential that circuit verified.
     if (revocationMaxDepth > 0) {
-        signal input revocationCommitment[2]; // [hi, lo], shared via comm_W_shared.
-        signal input revocationSecret[2];
+        signal input issuerKeyX; // Credential issuer key, shared via comm_W_shared.
+        signal input issuerKeyY;
+        signal input revocationValue[2]; // [hi, lo] signed revocation value, shared via comm_W_shared.
         signal input revocationLeafValue[2];
         signal input revocationLeafNextValue[2];
         signal input revocationLeafIndex;
@@ -107,9 +111,12 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, revocationMaxDe
 
         signal output revocationRoot[2]; // [hi, lo]; [0, 0] for an empty registry.
 
+        // Canonical be32(issuerKeyX) || be32(issuerKeyY).
+        signal issuerKeyBits[512] <== IssuerKeyBits()(issuerKeyX, issuerKeyY);
+
         component revocation = RevocationCheck(revocationMaxDepth);
-        revocation.secret <== revocationSecret;
-        revocation.commitment <== revocationCommitment;
+        revocation.issuerKeyBits <== issuerKeyBits;
+        revocation.value <== revocationValue;
         revocation.leafValue <== revocationLeafValue;
         revocation.leafNextValue <== revocationLeafNextValue;
         revocation.leafIndex <== revocationLeafIndex;

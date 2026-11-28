@@ -111,7 +111,7 @@ describe("multi-size pipeline", () => {
           precomputed,
           verifierNonce: nonce,
           devicePrivateKey: cred.devicePrivateKeyHex,
-          revocation: { secret: cred.revocationSecretHex, registry: createRevocationRegistry() },
+          revocation: { registry: createRevocationRegistry() },
           keys,
           predicates: claimToClaimPredicate,
         });

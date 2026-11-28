@@ -104,14 +104,17 @@ describe("Complete Flow: Register (JWT) → Show Circuit", () => {
       showInputs.exprLen = 1n;
       await bindPredicateName(showInputs, 0, 0, "roc_birthday");
 
-      // The commitment Show proves against is the one the JWT circuit extracted.
-      const [hi, lo] = await witnessIndices(jwtCircuit, [
-        "main.RevocationCommitment[0]",
-        "main.RevocationCommitment[1]",
+      // The issuer key and revocation value Show proves against are the JWT circuit's.
+      const [keyX, keyY, hi, lo] = await witnessIndices(jwtCircuit, [
+        "main.pubKeyX",
+        "main.pubKeyY",
+        "main.RevocationValue[0]",
+        "main.RevocationValue[1]",
       ]);
+      const issuer = { x: jwtWitness[keyX], y: jwtWitness[keyY] };
       const registry = createRevocationRegistry(Array.from({ length: 5 }, () => bytesToBigInt(randomBytes(32))));
-      const revocation = buildRevocationWitness(mockData.revocationSecret, registry, REVOCATION_MAX_DEPTH);
-      revocation.revocationCommitment = [jwtWitness[hi], jwtWitness[lo]];
+      const revocation = buildRevocationWitness(issuer, mockData.revocationValue, registry, REVOCATION_MAX_DEPTH);
+      revocation.revocationValue = [jwtWitness[hi], jwtWitness[lo]];
 
       await showCircuit.expectPass(
         { ...showInputs, ...revocation },
