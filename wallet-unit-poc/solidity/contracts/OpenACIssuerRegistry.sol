@@ -8,7 +8,7 @@ import { IIssuerRegistries } from "@coordination-network/contracts/issuer-regist
 
 /// @title OpenACIssuerRegistry
 /// @notice OpenAC's approved-issuer set: one SHA-256 LeanIMT of issuer commitments
-/// `sha256(be32(pubKeyX) || be32(pubKeyY))`, held on a shared {IIssuerRegistry} service.
+/// `sha256(be32(pubKeyX) || be32(pubKeyY) || be32(2))`, held on a shared {IIssuerRegistry} service.
 /// @dev The Show circuit proves the issuer is a leaf and outputs the root, so a verifier only calls
 /// {isValidRoot}: the issuer never appears. This contract is the registry admin and adds owner gating
 /// plus a depth cap matching the circuit. Tree reads for holders live on {ISSUER_REGISTRY} under {REGISTRY_ID}.

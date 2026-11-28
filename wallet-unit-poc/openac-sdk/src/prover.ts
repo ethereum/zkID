@@ -187,16 +187,16 @@ export class Prover {
     // same claims under the same formats.
     assertNormalizationSupports(precomputed.claimNormalization, compiled);
 
-    if (!request.revocation?.secret || !request.revocation.registry) {
-      throw new InputError("MISSING_REVOCATION_INPUTS", "present() requires revocation: { secret, registry }");
+    if (!request.revocation?.registry) {
+      throw new InputError("MISSING_REVOCATION_INPUTS", "present() requires revocation: { registry }");
     }
-    const revocationCommitment = parsed.revocationCommitment;
-    if (revocationCommitment === null) {
-      throw new InputError("CLAIM_NOT_FOUND", "Credential has no revocation_commitment claim");
+    const revocationValue = parsed.revocationValue;
+    if (revocationValue === null) {
+      throw new InputError("CLAIM_NOT_FOUND", "Credential has no revocation_value claim");
     }
     const revocation = buildRevocationWitness(
-      request.revocation.secret,
-      revocationCommitment,
+      precomputed.issuerPublicKey,
+      revocationValue,
       request.revocation.registry,
       DEFAULT_SHOW_PARAMS.revocationMaxDepth,
     );

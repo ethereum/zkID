@@ -29,6 +29,12 @@ describe("generateDummyCredential", () => {
     expect(parsed.claims.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("gives each default credential its own revocation value", () => {
+    const a = generateDummyCredential({ size: "1k" });
+    const b = generateDummyCredential({ size: "1k" });
+    expect(a.revocationValue).not.toBe(b.revocationValue);
+  });
+
   it("default keys are deterministic", () => {
     const a = generateDummyCredential({ size: "1k" });
     const b = generateDummyCredential({ size: "1k" });

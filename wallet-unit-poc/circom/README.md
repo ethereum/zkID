@@ -24,12 +24,12 @@ note: This project uses [circomkit](https://github.com/erhant/circomkit) to comp
 
 ### Issuer hiding
 
-- `components/issuer-membership.circom`: proves the issuer key's leaf `sha256(be32(x) || be32(y))` is in a SHA-256 LeanIMT ([`@zk-kit/binary-merkle-root-sha256.circom`](https://www.npmjs.com/package/@zk-kit/binary-merkle-root-sha256.circom)) and outputs the root as `[hi, lo]` limbs. Prepare (`jwt`, `mdoc`) keeps the issuer key private and shares it with Show through `comm_W_shared`.
+- `components/issuer-membership.circom`: proves the issuer key's leaf `sha256(be32(x) || be32(y) || be32(2))` is in a SHA-256 LeanIMT ([`@zk-kit/binary-merkle-root-sha256.circom`](https://www.npmjs.com/package/@zk-kit/binary-merkle-root-sha256.circom)) and outputs the root as `[hi, lo]` limbs. Prepare (`jwt`, `mdoc`) keeps the issuer key private and shares it with Show through `comm_W_shared`.
 
 ### Revocation
 
-- `components/revocation-commitment-extractor.circom`: reads the signed `revocation_commitment` from the JWT payload. Every JWT credential must carry it.
-- `components/revocation.circom`: `RevocationCheck(MAX_DEPTH)` proves `commitment = sha256(secret)` and non-membership in a SHA-256 LeanIMT+ ([`@zk-kit/lean-imt-plus-sha256.circom`](https://www.npmjs.com/package/@zk-kit/lean-imt-plus-sha256.circom)), and outputs the root.
+- `components/revocation-value-extractor.circom`: reads the signed `revocation_value` from the JWT payload. Every JWT credential must carry it.
+- `components/revocation.circom`: `RevocationCheck(MAX_DEPTH)` derives the commitment `sha256(be32(x) || be32(y) || be32(r) || be32(3))` from the issuer key bits (canonical, from `IssuerMembership`) and the signed revocation value `r`, and proves its non-membership in a SHA-256 LeanIMT+ ([`@zk-kit/lean-imt-plus-sha256.circom`](https://www.npmjs.com/package/@zk-kit/lean-imt-plus-sha256.circom)), and outputs the root.
 - `Show(..., maxIssuerDepth, revocationMaxDepth)`: `revocationMaxDepth = 0` disables revocation.
 - There is a single revocation tree shared by all issuers. A per-issuer tree would make the revocation root identify the issuer and undo issuer hiding.
 

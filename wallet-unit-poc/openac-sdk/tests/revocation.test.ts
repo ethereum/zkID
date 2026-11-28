@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { createHash } from "crypto";
 import { RevocationRegistry, poseidonScheme } from "@coordination-network/revocation-registry";
 
+import { p256 } from "@noble/curves/nist.js";
+
 import {
   Credential,
   REVOCATION_MAX_DEPTH,
@@ -9,65 +11,130 @@ import {
   buildRevocationWitness,
   computeRevocationCommitment,
   createRevocationRegistry,
-  decodeRevocationCommitment,
-  encodeRevocationCommitment,
-  generateRevocationSecret,
+  decodeRevocationValue,
+  encodeRevocationValue,
+  generateRevocationValue,
+  issuerCommitment,
   revocationRegistryFromLeaves,
 } from "../src/index.js";
 import { generateDummyCredential } from "../src/testing/index.js";
 import { fromLimbs } from "../src/limbs.js";
 import { Prover, WitnessCalculator, circuitInputsToJson, compilePredicateExpression } from "../src/index.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
+import { issuerPublicKeyToPoint } from "../src/inputs/issuer-key.js";
 import { JWT_PARAMS_BY_SIZE } from "../src/sizing.js";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "assets");
 
+const point = (k: bigint) => {
+  const { x, y } = p256.Point.BASE.multiply(k).toAffine();
+  return { x, y };
+};
+const ISSUER = point(3n);
+const P256_P = p256.CURVE.p;
+const OTHER_ISSUER = point(5n);
+
 const commitments = (n: number) =>
-  Array.from({ length: n }, () => computeRevocationCommitment(generateRevocationSecret()));
+  Array.from({ length: n }, () => computeRevocationCommitment(ISSUER, generateRevocationValue()));
 
-describe("revocation commitments", () => {
-  it("is sha256 of the 32-byte secret and round-trips through the claim encoding", () => {
-    const secret = new Uint8Array(32).fill(7);
-    const commitment = computeRevocationCommitment(secret);
+const be32 = (v: bigint) => Buffer.from(v.toString(16).padStart(64, "0"), "hex");
 
-    expect(commitment).toBe(
-      BigInt("0x" + createHash("sha256").update(secret).digest("hex")),
-    );
-    expect(computeRevocationCommitment(Buffer.from(secret).toString("hex"))).toBe(commitment);
-    expect(decodeRevocationCommitment(encodeRevocationCommitment(commitment))).toBe(commitment);
+const sha256Words = (...words: bigint[]) =>
+  BigInt("0x" + createHash("sha256").update(Buffer.concat(words.map(be32))).digest("hex"));
+
+describe("issuer commitments", () => {
+  it("is sha256(be32(x) || be32(y) || be32(2))", () => {
+    expect(issuerCommitment(ISSUER)).toBe(sha256Words(ISSUER.x, ISSUER.y, 2n));
   });
 
-  it("rejects secrets that are not 32 bytes", () => {
-    expect(() => computeRevocationCommitment(new Uint8Array(31))).toThrow(/32 bytes/);
+  it("differs from the internal-node hash sha256(be32(x) || be32(y))", () => {
+    expect(issuerCommitment(ISSUER)).not.toBe(sha256Words(ISSUER.x, ISSUER.y));
+  });
+
+  it("rejects a point off P-256 or with a coordinate not below p", () => {
+    expect(() => issuerCommitment({ x: ISSUER.x, y: ISSUER.y + 1n })).toThrow(/P-256/);
+    expect(() => issuerCommitment({ x: ISSUER.x + P256_P, y: ISSUER.y })).toThrow(/P-256/);
+  });
+});
+
+describe("revocation commitments", () => {
+  it("is sha256(be32(x) || be32(y) || be32(value) || be32(3))", () => {
+    const value = 7n;
+
+    expect(computeRevocationCommitment(ISSUER, value)).toBe(sha256Words(ISSUER.x, ISSUER.y, value, 3n));
+  });
+
+  it("binds the issuer key: the same value gives different commitments under different issuers", () => {
+    const value = generateRevocationValue();
+
+    expect(computeRevocationCommitment(ISSUER, value)).not.toBe(computeRevocationCommitment(OTHER_ISSUER, value));
+  });
+
+  it("accepts the issuer key as a JWK", () => {
+    const cred = generateDummyCredential({ size: "1k" });
+
+    expect(computeRevocationCommitment(cred.issuerPublicKey, cred.revocationValue)).toBe(
+      computeRevocationCommitment(issuerPublicKeyToPoint(cred.issuerPublicKey), cred.revocationValue),
+    );
+  });
+
+  it("rejects an issuer point off P-256 or with a coordinate not below p", () => {
+    const value = generateRevocationValue();
+
+    expect(() => computeRevocationCommitment({ x: ISSUER.x, y: ISSUER.y + 1n }, value)).toThrow(/P-256/);
+    expect(() => computeRevocationCommitment({ x: ISSUER.x, y: ISSUER.y + P256_P }, value)).toThrow(/P-256/);
+  });
+
+  it("rejects a key that is not an object with INVALID_KEY", () => {
+    const value = generateRevocationValue();
+    for (const key of ["abcdef", 42, null, undefined]) {
+      expect(() => computeRevocationCommitment(key as never, value)).toThrow(
+        expect.objectContaining({ code: "INVALID_KEY" }),
+      );
+    }
+  });
+
+  it("rejects a value outside (0, 2^256)", () => {
+    expect(() => computeRevocationCommitment(ISSUER, 0n)).toThrow(/\(0, 2\^256\)/);
+    expect(() => computeRevocationCommitment(ISSUER, 1n << 256n)).toThrow(/\(0, 2\^256\)/);
+  });
+
+  it("round-trips the value through the claim encoding", () => {
+    const value = generateRevocationValue();
+
+    expect(decodeRevocationValue(encodeRevocationValue(value))).toBe(value);
+  });
+
+  it("rejects an all-zero claim value at decode", () => {
+    expect(() => decodeRevocationValue("A".repeat(43))).toThrow(/\(0, 2\^256\)/);
   });
 
   it("is carried by the dummy credential", () => {
     const cred = generateDummyCredential({ size: "1k" });
     const parsed = Credential.parse(cred.jwt, cred.disclosures);
 
-    expect(parsed.revocationCommitment).toBe(cred.revocationCommitment);
-    expect(computeRevocationCommitment(cred.revocationSecretHex)).toBe(cred.revocationCommitment);
+    expect(parsed.revocationValue).toBe(cred.revocationValue);
   });
 });
 
 describe("buildRevocationWitness", () => {
-  const secret = generateRevocationSecret();
-  const commitment = computeRevocationCommitment(secret);
+  const value = generateRevocationValue();
+  const commitment = computeRevocationCommitment(ISSUER, value);
 
   it("proves against root 0 for an empty registry", () => {
-    const w = buildRevocationWitness(secret, commitment, createRevocationRegistry());
+    const w = buildRevocationWitness(ISSUER, value, createRevocationRegistry());
 
     expect(w.revocationDepth).toBe(0n);
     expect(w.revocationLeafValue).toEqual([0n, 0n]);
     expect(w.revocationSiblings).toHaveLength(REVOCATION_MAX_DEPTH);
-    expect(fromLimbs(w.revocationCommitment[0]!, w.revocationCommitment[1]!)).toBe(commitment);
+    expect(fromLimbs(w.revocationValue[0]!, w.revocationValue[1]!)).toBe(value);
   });
 
   it("uses the low leaf that brackets the commitment", () => {
     const registry = createRevocationRegistry(commitments(9));
-    const w = buildRevocationWitness(secret, commitment, registry);
+    const w = buildRevocationWitness(ISSUER, value, registry);
     const low = fromLimbs(w.revocationLeafValue[0]!, w.revocationLeafValue[1]!);
     const next = fromLimbs(w.revocationLeafNextValue[0]!, w.revocationLeafNextValue[1]!);
 
@@ -77,22 +144,23 @@ describe("buildRevocationWitness", () => {
     expect(w.revocationSiblings).toHaveLength(REVOCATION_MAX_DEPTH);
   });
 
-  it("refuses a revoked commitment", () => {
+  it("refuses a revoked credential", () => {
     const registry = createRevocationRegistry([...commitments(3), commitment]);
 
-    expect(() => buildRevocationWitness(secret, commitment, registry)).toThrow(/revoked/);
+    expect(() => buildRevocationWitness(ISSUER, value, registry)).toThrow(/revoked/);
   });
 
-  it("refuses a secret that does not open the commitment", () => {
-    expect(() =>
-      buildRevocationWitness(generateRevocationSecret(), commitment, createRevocationRegistry()),
-    ).toThrow(/does not match/);
+  it("does not treat the same value under another issuer as revoked", () => {
+    const registry = createRevocationRegistry([...commitments(3), computeRevocationCommitment(OTHER_ISSUER, value)]);
+
+    expect(() => buildRevocationWitness(ISSUER, value, registry)).not.toThrow();
+    expect(() => buildRevocationWitness(OTHER_ISSUER, value, registry)).toThrow(/revoked/);
   });
 
   it("refuses a registry over another hash", () => {
     const poseidon = new RevocationRegistry([1n, 2n], poseidonScheme);
 
-    expect(() => buildRevocationWitness(secret, commitment, poseidon)).toThrow(/sha256Scheme/);
+    expect(() => buildRevocationWitness(ISSUER, value, poseidon)).toThrow(/sha256Scheme/);
   });
 
   it("works from a registry rebuilt from its leaf slots", () => {
@@ -100,13 +168,13 @@ describe("buildRevocationWitness", () => {
     const synced = revocationRegistryFromLeaves(registry.leafSlots);
 
     expect(synced.root).toBe(registry.root);
-    expect(buildRevocationWitness(secret, commitment, synced)).toEqual(
-      buildRevocationWitness(secret, commitment, registry),
+    expect(buildRevocationWitness(ISSUER, value, synced)).toEqual(
+      buildRevocationWitness(ISSUER, value, registry),
     );
   });
 });
 
-describe("revocationCommitmentIndex", () => {
+describe("revocationValueIndex", () => {
   it("is a byte offset the JWT circuit accepts, with non-ASCII before the claim", async () => {
     const cred = generateDummyCredential({ size: "1k", issuer: "https://issuer.example/Müller-Straße" });
     const credential = Credential.parse(cred.jwt, cred.disclosures);
@@ -119,7 +187,7 @@ describe("revocationCommitmentIndex", () => {
     );
     const payload = Buffer.from(credential.b64Payload, "base64url");
 
-    expect(payload.indexOf('"revocation_commitment":"')).toBe(inputs.revocationCommitmentIndex);
+    expect(payload.indexOf('"revocation_value":"')).toBe(inputs.revocationValueIndex);
 
     const calculator = new WitnessCalculator(ASSETS_DIR);
     await calculator.init();

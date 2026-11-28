@@ -13,9 +13,9 @@ import type {
 import type { VcSize } from "../sizing.js";
 import { JWT_PARAMS_BY_SIZE } from "../sizing.js";
 import {
-  REVOCATION_COMMITMENT_CLAIM,
-  computeRevocationCommitment,
-  encodeRevocationCommitment,
+  REVOCATION_VALUE_CLAIM,
+  encodeRevocationValue,
+  generateRevocationValue,
 } from "../revocation.js";
 
 export { JWT_PARAMS_BY_SIZE } from "../sizing.js";
@@ -26,9 +26,6 @@ const DEFAULT_ISSUER_PRIVATE_KEY_HEX =
 const DEFAULT_DEVICE_PRIVATE_KEY_HEX =
   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 
-const DEFAULT_REVOCATION_SECRET_HEX =
-  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-
 export interface GenerateDummyCredentialOptions {
   size: VcSize;
   claims?: Array<{ key: string; value: string }>;
@@ -38,8 +35,12 @@ export interface GenerateDummyCredentialOptions {
   issuer?: string;
   nbf?: number;
   exp?: number;
-  /** 32-byte holder secret; the credential carries sha256 of it. */
-  revocationSecret?: Uint8Array | string;
+  /**
+   * 32-byte revocation value the issuer signs as `revocation_value`. Defaults to a
+   * fresh random value, so each credential has its own revocation commitment. Pass
+   * a fixed value when the JWT must be deterministic.
+   */
+  revocationValue?: bigint;
 }
 
 export interface DummyCredential {
@@ -48,8 +49,8 @@ export interface DummyCredential {
   issuerPublicKey: EcdsaPublicKey;
   devicePublicKey: EcdsaPublicKey;
   devicePrivateKeyHex: string;
-  revocationSecretHex: string;
-  revocationCommitment: bigint;
+  /** The signed `revocation_value` value. */
+  revocationValue: bigint;
   meta: {
     signingInputByteLength: number;
     payloadByteLength: number;
@@ -71,10 +72,7 @@ export function generateDummyCredential(
   );
   const devicePrivateKeyHex = bytesToHex(devicePrivateKey);
 
-  const revocationSecret = normalizePrivateKey(
-    opts.revocationSecret ?? DEFAULT_REVOCATION_SECRET_HEX,
-  );
-  const revocationCommitment = computeRevocationCommitment(revocationSecret);
+  const revocationValue = opts.revocationValue ?? generateRevocationValue();
 
   const issuerPublicKey = pubFromPrivate(issuerPrivateKey);
   const devicePublicKey = opts.deviceKey ?? pubFromPrivate(devicePrivateKey);
@@ -115,7 +113,7 @@ export function generateDummyCredential(
       issuer,
       nbf,
       exp,
-      revocationCommitment,
+      revocationValue,
     );
     signingInputLen = signingInputBytes.byteLength;
     if (signingInputLen >= cap) {
@@ -136,7 +134,7 @@ export function generateDummyCredential(
     issuer,
     nbf,
     exp,
-    revocationCommitment,
+    revocationValue,
   );
   const signature = signES256(signingInputBytes, issuerPrivateKey);
   const jwt = `${signingInput}.${bytesToBase64url(signature)}`;
@@ -147,8 +145,7 @@ export function generateDummyCredential(
     issuerPublicKey,
     devicePublicKey,
     devicePrivateKeyHex,
-    revocationSecretHex: bytesToHex(revocationSecret),
-    revocationCommitment,
+    revocationValue,
     meta: {
       signingInputByteLength: signingInputBytes.byteLength,
       payloadByteLength: payloadBytes.byteLength,
@@ -164,7 +161,7 @@ function buildSigningInput(
   issuer: string,
   nbf: number,
   exp: number,
-  revocationCommitment: bigint,
+  revocationValue: bigint,
 ): { signingInput: string; signingInputBytes: Uint8Array; payloadBytes: Uint8Array } {
   const header = { alg: "ES256", typ: "vc+sd-jwt" };
   const payload = {
@@ -173,7 +170,7 @@ function buildSigningInput(
     nbf,
     exp,
     cnf: { jwk: devicePublicKey },
-    [REVOCATION_COMMITMENT_CLAIM]: encodeRevocationCommitment(revocationCommitment),
+    [REVOCATION_VALUE_CLAIM]: encodeRevocationValue(revocationValue),
     vc: {
       "@context": ["https://www.w3.org/2018/credentials/v1"],
       type: ["VerifiableCredential"],

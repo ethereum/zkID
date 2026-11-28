@@ -213,7 +213,6 @@ export type ErrorCode =
   | "WASM_LOAD_FAILED"
   | "WASM_OOM"
   | "WASM_NOT_INITIALIZED"
-  | "INVALID_REVOCATION_SECRET"
   | "INVALID_REVOCATION_REGISTRY"
   | "MISSING_REVOCATION_INPUTS"
   | "CREDENTIAL_REVOKED";
@@ -280,8 +279,8 @@ export interface JwtCircuitInputs {
   claimLengths: bigint[];
   decodeFlags: number[];
   claimFormats: bigint[];
-  /** Position of `"revocation_commitment":"` in the decoded payload. */
-  revocationCommitmentIndex: number;
+  /** Position of `"revocation_value":"` in the decoded payload. */
+  revocationValueIndex: number;
 }
 
 export interface ShowCircuitInputs extends Partial<import("./revocation.js").RevocationWitness> {
@@ -426,7 +425,7 @@ export interface PresentRequest {
   /** Predicates to evaluate against the precomputed credential. */
   predicates: import("./predicates.js").PredicateExpression;
 
-  /** The revocation secret and the registry to prove non-revocation against. */
+  /** The registry to prove the credential's non-revocation against. */
   revocation: import("./revocation.js").RevocationRequest;
 
   /**

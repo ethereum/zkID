@@ -17,10 +17,11 @@ We're actively scoping support for additional credential formats (e.g. W3C VC-JW
 
 ## Revocation
 
-SD-JWT credentials carry `revocation_commitment`: `C = sha256(r)` (base64url, 32 bytes), where `r` is a 32-byte secret only the holder knows. The issuer signs `C` into the credential and revokes it by inserting `C` into a SHA-256 [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs) registry. There is one registry for all issuers: with one per issuer, the revocation root in a presentation would identify the issuer and undo issuer hiding.
+SD-JWT credentials carry `revocation_value`: a random 32-byte revocation value `r` (base64url) that the issuer signs into the credential. The revocation commitment of the credential binds `r` to the issuer key `(x, y)`: `v = sha256(be32(x) || be32(y) || be32(r) || be32(3))`, where the trailing `3` is a domain tag. The issuer revokes the credential by inserting `v` into a SHA-256 [LeanIMT+](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs) registry. There is one registry for all issuers: with one per issuer, the revocation root in a presentation would identify the issuer and undo issuer hiding. The issuer key in `v` keeps equal values under different issuers apart.
 
-- The JWT circuit extracts the signed `C` and shares it with Show through `comm_W_shared`.
-- The Show circuit proves `sha256(r) = C` and that `C` is not in the tree, and outputs the root (`0` for an empty registry). Max tree depth is 10.
+- The JWT circuit extracts the signed `r` and shares it with Show through `comm_W_shared`, next to the issuer key it verified the signature under.
+- The Show circuit derives `v` from that shared key and value, proves that `v` is not in the tree, and outputs the root (`0` for an empty registry). Max tree depth is 10.
+- `r` must be unpredictable: anyone who knows `r` and the issuer key can compute `v` and look it up in the registry.
 - The verifier accepts the proof only if the root is valid, e.g. `OpenACRevocationRegistry.isValidRoot` on the [registry contract](./solidity/README.md).
 
 MDOC keeps a Show variant without revocation (`show_mdoc`), which still proves issuer hiding. See the [SDK](./openac-sdk/README.md#revocation) for usage.

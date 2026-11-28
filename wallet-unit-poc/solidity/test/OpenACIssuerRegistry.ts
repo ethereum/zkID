@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { IssuerRegistry, sha256Hash2, sha256Scheme } from "@coordination-network/issuer-registry"
+import { createHash } from "crypto"
+import { IssuerRegistry, sha256Scheme } from "@coordination-network/issuer-registry"
 import { p256 } from "@noble/curves/nist.js"
 import { network } from "hardhat"
 import { getAddress, zeroAddress } from "viem"
@@ -11,11 +12,12 @@ const { viem, networkHelpers } = await network.create()
 const MAX_DEPTH = 8n
 const ROOT_DURATION = 3600n
 
-/** `sha256(be32(x) || be32(y))` of a fresh P-256 key, as the circuit derives the leaf. */
+/** `sha256(be32(x) || be32(y) || be32(2))` of a fresh P-256 key, as the circuit derives the leaf. */
 function randomIssuerCommitment(): bigint {
     const publicKey = p256.getPublicKey(p256.utils.randomSecretKey(), false)
     const { x, y } = p256.Point.fromBytes(publicKey).toAffine()
-    return sha256Hash2(x, y)
+    const be32 = (v: bigint) => Buffer.from(v.toString(16).padStart(64, "0"), "hex")
+    return BigInt("0x" + createHash("sha256").update(Buffer.concat([be32(x), be32(y), be32(2n)])).digest("hex"))
 }
 
 const commitments = (n: number) => Array.from({ length: n }, randomIssuerCommitment)
@@ -253,7 +255,7 @@ describe("OpenACIssuerRegistry", () => {
     })
 
     describe("cross-language root", () => {
-        it("matches new IssuerRegistry(sha256Hash2(x, y) of P-256 keys, sha256Scheme).root", async () => {
+        it("matches new IssuerRegistry(tagged commitments of P-256 keys, sha256Scheme).root", async () => {
             for (const n of [1, 2, 3, 7, 16]) {
                 const { registry } = await deploy()
                 const leaves = commitments(n)

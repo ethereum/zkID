@@ -2,7 +2,7 @@ import { strict as assert } from "assert";
 import { generateES256Inputs } from "./es256.ts";
 import type { Es256CircuitParams, JwkEcdsaPublicKey, PemPublicKey } from "./es256.ts";
 import { encodeClaims, stringToPaddedBigIntArray } from "./utils.ts";
-import { REVOCATION_COMMITMENT_ANCHOR } from "./revocation.ts";
+import { REVOCATION_VALUE_ANCHOR } from "./revocation.ts";
 
 // The JWT Circuit Parameters
 export interface JwtCircuitParams {
@@ -88,12 +88,12 @@ export function generateJwtInputs(
     claimFormatsOut.push(BigInt(i < claimFormats.length ? claimFormats[i] : 1));
   }
 
-  const revocationCommitmentIndex = payload.indexOf(REVOCATION_COMMITMENT_ANCHOR);
-  assert.ok(revocationCommitmentIndex !== -1, "payload has no revocation_commitment");
+  const revocationValueIndex = payload.indexOf(REVOCATION_VALUE_ANCHOR);
+  assert.ok(revocationValueIndex !== -1, "payload has no revocation_value");
 
   return {
     ...es256Inputs,
-    revocationCommitmentIndex,
+    revocationValueIndex,
     periodIndex: token.indexOf("."),
     matchesCount: patterns.length,
     matchSubstring,

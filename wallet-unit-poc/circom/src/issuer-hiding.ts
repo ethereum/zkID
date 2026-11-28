@@ -1,6 +1,7 @@
 import { p256 } from "@noble/curves/nist.js";
-import { IssuerRegistry, sha256Hash2, sha256Scheme } from "@coordination-network/issuer-registry";
-import { toLimbs } from "./utils.ts";
+import { sha256 } from "@noble/hashes/sha2";
+import { IssuerRegistry, sha256Scheme } from "@coordination-network/issuer-registry";
+import { be32, bufferToBigInt, toLimbs } from "./utils.ts";
 
 export { toLimbs };
 
@@ -21,8 +22,12 @@ export type IssuerMembershipInputs = {
 };
 
 
-/** Leaf of an issuer: sha256(be32(x) || be32(y)), as IssuerCommitment derives it. */
-export const issuerCommitment = ({ x, y }: IssuerKeyPoint): bigint => sha256Hash2(x, y);
+/** Domain tag hashed last into an issuer commitment. */
+export const ISSUER_COMMITMENT_TAG = 2n;
+
+/** Leaf of an issuer: sha256(be32(x) || be32(y) || be32(2)), as IssuerCommitment derives it. */
+export const issuerCommitment = ({ x, y }: IssuerKeyPoint): bigint =>
+  bufferToBigInt(Buffer.from(sha256(Buffer.concat([be32(x), be32(y), be32(ISSUER_COMMITMENT_TAG)]))));
 
 /** A SHA-256 issuer registry over the given keys. */
 export function buildIssuerRegistry(issuers: IssuerKeyPoint[]): IssuerRegistry {

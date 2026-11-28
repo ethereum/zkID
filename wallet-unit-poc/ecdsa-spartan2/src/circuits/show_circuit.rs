@@ -259,7 +259,7 @@ impl SpartanCircuit<E> for ShowCircuit {
         //   [KeyBindingX, KeyBindingY,
         //    claimValues[0..n_claims],
         //    claimIdentifierHashes[0..n_claims], issuerKeyX, issuerKeyY,
-        //    revocationCommitment[0..2] (`show` only)]
+        //    revocationValue[0..2] (`show` only)]
         let mut shared_values = Vec::with_capacity(6 + 2 * layout.claim_values_len);
         shared_values.push(kb_x);
         shared_values.push(kb_y);
@@ -293,14 +293,14 @@ impl SpartanCircuit<E> for ShowCircuit {
             witness.as_deref(),
             layout.issuer_key_x_index,
         )?);
-        if let Some(start) = layout.revocation_commitment_index {
+        if let Some(start) = layout.revocation_value_index {
             for limb in 0..2 {
                 let value = witness
                     .as_ref()
                     .map(|w| w[start + limb])
                     .unwrap_or(Scalar::ZERO);
                 shared_values.push(AllocatedNum::alloc(
-                    cs.namespace(|| format!("RevocationCommitment{limb}")),
+                    cs.namespace(|| format!("RevocationValue{limb}")),
                     move || Ok(value),
                 )?);
             }

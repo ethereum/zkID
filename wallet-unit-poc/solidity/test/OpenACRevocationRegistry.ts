@@ -10,7 +10,7 @@ const { viem, networkHelpers } = await network.create()
 
 const ROOT_DURATION = 3600n
 
-/** A holder's commitment: sha256 of a 32-byte secret. */
+/** A random revocation commitment, standing in for computeRevocationCommitment. */
 function newCommitment(): bigint {
     return BigInt("0x" + createHash("sha256").update(randomBytes(32)).digest("hex"))
 }

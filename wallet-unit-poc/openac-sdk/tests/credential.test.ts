@@ -152,6 +152,11 @@ describe("Utils", () => {
       const bytes = bigintToBytes(0n, 4);
       expect(bytesToBigInt(bytes)).toBe(0n);
     });
+
+    it("should reject a value that does not fit", () => {
+      expect(() => bigintToBytes(1n << 32n, 4)).toThrow(RangeError);
+      expect(() => bigintToBytes(-1n, 4)).toThrow(RangeError);
+    });
   });
 
   describe("sha256Pad", () => {

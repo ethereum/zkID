@@ -64,7 +64,9 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth,
     // Output: issuer registry root as [hi, lo] 128-bit limbs.
     signal output issuerRoot[2];
 
-    issuerRoot <== IssuerMembership(maxIssuerDepth)(
+    // Canonical be32(issuerKeyX) || be32(issuerKeyY), reused by the revocation commitment.
+    signal issuerKeyBits[512];
+    (issuerRoot, issuerKeyBits) <== IssuerMembership(maxIssuerDepth)(
         issuerKeyX, issuerKeyY, issuerTreeDepth, issuerTreeIndex, issuerTreeSiblings
     );
 
@@ -109,13 +111,14 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth,
     expressionEval.exprLen <== exprLen;
     expressionResult <== expressionEval.finalResult;
 
-    // Revocation: the credential's commitment (shared with the credential circuit)
-    // must open to the holder's secret and be absent from the revocation tree.
+    // Revocation: the commitment sha256(issuer key || revocation value || 3) must be absent
+    // from the revocation tree. Both the key and the issuer-signed value come from
+    // the credential circuit through the shared witness.
     // There is one revocation tree for all issuers, so its root does not reveal
-    // which issuer signed the credential.
+    // which issuer signed the credential. The key in the commitment keeps equal values
+    // under different issuers apart.
     if (revocationMaxDepth > 0) {
-        signal input revocationCommitment[2]; // [hi, lo], shared via comm_W_shared.
-        signal input revocationSecret[2];
+        signal input revocationValue[2]; // [hi, lo] signed revocation value, shared via comm_W_shared.
         signal input revocationLeafValue[2];
         signal input revocationLeafNextValue[2];
         signal input revocationLeafIndex;
@@ -125,8 +128,8 @@ template Show(nClaims, maxPredicates, maxLogicTokens, valueBits, maxIssuerDepth,
         signal output revocationRoot[2]; // [hi, lo]; [0, 0] for an empty registry.
 
         component revocation = RevocationCheck(revocationMaxDepth);
-        revocation.secret <== revocationSecret;
-        revocation.commitment <== revocationCommitment;
+        revocation.issuerKeyBits <== issuerKeyBits;
+        revocation.value <== revocationValue;
         revocation.leafValue <== revocationLeafValue;
         revocation.leafNextValue <== revocationLeafNextValue;
         revocation.leafIndex <== revocationLeafIndex;

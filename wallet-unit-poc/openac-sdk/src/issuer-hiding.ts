@@ -1,17 +1,18 @@
 // Issuer hiding: the Show circuit proves the issuer's key is in a SHA-256
 // LeanIMT (an `OpenACIssuerRegistry` on chain) and outputs only the root.
 
+import { sha256 } from "@noble/hashes/sha2";
 import {
   IssuerRegistry,
-  sha256Hash2,
   sha256Scheme,
   type IssuerProof,
 } from "@coordination-network/issuer-registry";
 
 import { InputError } from "./errors.js";
 import { toLimbs, fromLimbs } from "./limbs.js";
-import { issuerPublicKeyToPoint, type IssuerKeyPoint } from "./inputs/issuer-key.js";
+import { toIssuerKeyPoint, type IssuerKeyPoint } from "./inputs/issuer-key.js";
 import type { IssuerPublicKey } from "./types.js";
+import { bigintToBytes, bytesToBigInt } from "./utils.js";
 
 export { IssuerRegistry, sha256Scheme as issuerSha256Scheme };
 export { toLimbs, fromLimbs };
@@ -20,12 +21,20 @@ export type { IssuerProof };
 /** Show `maxIssuerDepth`: a registry holds at most 2^8 issuers. */
 export const ISSUER_TREE_MAX_DEPTH = 8;
 
-/** The registry leaf of an issuer: `sha256(be32(x) || be32(y))`, as the circuit derives it. */
+/** Domain tag hashed last into an issuer commitment (revocation entries use 3). */
+export const ISSUER_COMMITMENT_TAG = 2n;
+
+/**
+ * The registry leaf of an issuer: `sha256(be32(x) || be32(y) || be32(2))`, as the
+ * circuit derives it. The tag keeps it from matching an internal node, sha256(left || right).
+ */
 export function issuerCommitment(key: IssuerPublicKey | IssuerKeyPoint): bigint {
-  const { x, y } = "x" in key && typeof key.x === "bigint"
-    ? (key as IssuerKeyPoint)
-    : issuerPublicKeyToPoint(key as IssuerPublicKey);
-  return sha256Hash2(x, y);
+  const { x, y } = toIssuerKeyPoint(key);
+  const input = new Uint8Array(96);
+  input.set(bigintToBytes(x, 32), 0);
+  input.set(bigintToBytes(y, 32), 32);
+  input.set(bigintToBytes(ISSUER_COMMITMENT_TAG, 32), 64);
+  return bytesToBigInt(sha256(input));
 }
 
 /** A SHA-256 issuer registry, as a mirror of the on-chain one or as the authority. */

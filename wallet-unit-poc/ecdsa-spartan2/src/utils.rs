@@ -63,7 +63,7 @@ pub fn parse_jwt_inputs(
         ("messageLength", FieldParser::U64Scalar),
         ("periodIndex", FieldParser::U64Scalar),
         ("matchesCount", FieldParser::U64Scalar),
-        ("revocationCommitmentIndex", FieldParser::U64Scalar),
+        ("revocationValueIndex", FieldParser::U64Scalar),
         // Array fields
         ("message", FieldParser::BigIntArray),
         ("matchIndex", FieldParser::U64Array),
@@ -129,8 +129,7 @@ pub fn parse_show_inputs(
         ("issuerTreeSiblings", FieldParser::BigInt2DArray),
     ];
     let revocation_defs: &[(&str, FieldParser)] = &[
-        ("revocationCommitment", FieldParser::BigIntArray),
-        ("revocationSecret", FieldParser::BigIntArray),
+        ("revocationValue", FieldParser::BigIntArray),
         ("revocationLeafValue", FieldParser::BigIntArray),
         ("revocationLeafNextValue", FieldParser::BigIntArray),
         ("revocationLeafIndex", FieldParser::BigIntScalar),
@@ -139,7 +138,7 @@ pub fn parse_show_inputs(
     ];
 
     let mut inputs = parse_inputs(json_value, field_defs)?;
-    if json_value.get("revocationCommitment").is_some() {
+    if json_value.get("revocationValue").is_some() {
         inputs.extend(parse_inputs(json_value, revocation_defs)?);
     }
     Ok(inputs)
@@ -437,8 +436,8 @@ pub struct JwtOutputLayout {
     pub claim_identifier_hashes_start: usize,
     pub keybinding_x_index: usize,
     pub keybinding_y_index: usize,
-    /// Witness index of `RevocationCommitment[0]` (hi limb); the lo limb follows.
-    pub revocation_commitment_index: usize,
+    /// Witness index of `RevocationValue[0]` (hi limb); the lo limb follows.
+    pub revocation_value_index: usize,
     /// Witness index of the private issuer key coordinate `pubKeyX` (shared).
     pub issuer_key_x_index: usize,
     /// Witness index of the private issuer key coordinate `pubKeyY` (shared).
@@ -483,8 +482,8 @@ impl JwtOutputLayout {
         idx.extend(self.claim_identifier_hashes_range());
         idx.extend([self.issuer_key_x_index, self.issuer_key_y_index]);
         idx.extend([
-            self.revocation_commitment_index,
-            self.revocation_commitment_index + 1,
+            self.revocation_value_index,
+            self.revocation_value_index + 1,
         ]);
         idx
     }
@@ -501,7 +500,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
     let keybinding_x_index = claim_identifier_hashes_start + claim_values_len;
     let keybinding_y_index = keybinding_x_index + 1;
     // Declared right after KeyBindingY in jwt.circom.
-    let revocation_commitment_index = keybinding_y_index + 1;
+    let revocation_value_index = keybinding_y_index + 1;
     let issuer_key_x_index = size.issuer_key_witness_start();
     let issuer_key_y_index = issuer_key_x_index + 1;
     // No public outputs, so the public inputs occupy witness[1..] directly.
@@ -514,7 +513,7 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
         claim_identifier_hashes_start,
         keybinding_x_index,
         keybinding_y_index,
-        revocation_commitment_index,
+        revocation_value_index,
         issuer_key_x_index,
         issuer_key_y_index,
         decode_flags_start,
@@ -524,10 +523,10 @@ pub fn calculate_jwt_output_indices(size: CircuitSize) -> JwtOutputLayout {
 
 /// Order of the shared witness segment, identical in Prepare/MDOC and Show:
 /// `[KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes.., issuerKeyX, issuerKeyY,
-///   RevocationCommitment[0], RevocationCommitment[1]]`. The revocation commitment is
+///   RevocationValue[0], RevocationValue[1]]`. The revocation value is
 /// present only in the JWT flow (`show`); MDOC pairs with `show_mdoc`, which has none.
 pub const SHARED_LAYOUT: &str = "KeyBindingX, KeyBindingY, claimValues.., claimIdentifierHashes.., \
-     issuerKeyX, issuerKeyY, RevocationCommitment[0..2] (JWT only)";
+     issuerKeyX, issuerKeyY, RevocationValue[0..2] (JWT only)";
 
 /// Recombine a `[hi, lo]` pair of 128-bit limbs from a Show proof's public values,
 /// starting at witness index `witness_index`, into the 256-bit root (`hi * 2^128 + lo`).
@@ -604,7 +603,7 @@ pub const SHOW_STATEMENT_LEN: usize = 3
 pub const SHOW_NUM_PUBLIC: usize = 5 + SHOW_STATEMENT_LEN;
 
 /// Which compiled Show circuit to use. The SD-JWT flow proves revocation
-/// (`show`); the MDOC flow has no revocation commitment (`show_mdoc`).
+/// (`show`); the MDOC flow has no revocation value (`show_mdoc`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ShowVariant {
     #[default]
@@ -648,9 +647,9 @@ impl ShowVariant {
 ///   witness[..=num_public]      = messageHash + predicate program (public inputs)
 ///   then private: deviceKeyX, deviceKeyY, sig_r, sig_s_inverse,
 ///   claimValues[n], claimIdentifierHashes[n], issuerKeyX, issuerKeyY,
-///   issuerTreeDepth, issuerTreeIndex, revocationCommitment[2] (`show` only).
+///   issuerTreeDepth, issuerTreeIndex, revocationValue[2] (`show` only).
 /// The tree siblings are linear in the constraints, so the optimizer substitutes
-/// them out of the witness and the revocation commitment directly follows
+/// them out of the witness and the revocation value directly follows
 /// `issuerTreeIndex`.
 #[derive(Debug, Clone, Copy)]
 pub struct ShowWitnessLayout {
@@ -662,8 +661,8 @@ pub struct ShowWitnessLayout {
     pub claim_values_len: usize,
     pub claim_identifier_hashes_start: usize,
     pub issuer_key_x_index: usize,
-    /// Witness index of `revocationCommitment[0]`; `None` without revocation.
-    pub revocation_commitment_index: Option<usize>,
+    /// Witness index of `revocationValue[0]`; `None` without revocation.
+    pub revocation_value_index: Option<usize>,
 }
 
 impl ShowWitnessLayout {
@@ -686,7 +685,7 @@ impl ShowWitnessLayout {
         idx.extend(self.claim_values_range());
         idx.extend(self.claim_identifier_hashes_range());
         idx.extend([self.issuer_key_x_index, self.issuer_key_x_index + 1]);
-        if let Some(i) = self.revocation_commitment_index {
+        if let Some(i) = self.revocation_value_index {
             idx.extend([i, i + 1]);
         }
         idx
@@ -712,7 +711,7 @@ pub fn calculate_show_witness_indices(n_claims: usize, variant: ShowVariant) -> 
         claim_values_len: n_claims,
         claim_identifier_hashes_start,
         issuer_key_x_index,
-        revocation_commitment_index: variant
+        revocation_value_index: variant
             .has_revocation()
             .then_some(issuer_key_x_index + 4),
     }
@@ -960,11 +959,11 @@ mod show_witness_indices_tests {
                 ("main.issuerKeyX", Some(layout.issuer_key_x_index)),
                 ("main.issuerKeyY", Some(layout.issuer_key_x_index + 1)),
             ];
-            if let Some(i) = layout.revocation_commitment_index {
+            if let Some(i) = layout.revocation_value_index {
                 expected.push(("main.revocationRoot[0]", Some(SHOW_REVOCATION_ROOT_INDEX)));
                 expected.push(("main.revocationRoot[1]", Some(SHOW_REVOCATION_ROOT_INDEX + 1)));
-                expected.push(("main.revocationCommitment[0]", Some(i)));
-                expected.push(("main.revocationCommitment[1]", Some(i + 1)));
+                expected.push(("main.revocationValue[0]", Some(i)));
+                expected.push(("main.revocationValue[1]", Some(i + 1)));
             }
 
             for (signal, index) in expected {
@@ -1017,7 +1016,7 @@ mod issuer_root_tests {
     }
 
     /// The issuer key is private everywhere and shared after the claims; the
-    /// JWT flow then shares the revocation commitment.
+    /// JWT flow then shares the revocation value.
     #[test]
     fn issuer_key_is_private_and_shared() {
         let jwt = calculate_jwt_output_indices(CircuitSize::Kb1);
@@ -1028,8 +1027,8 @@ mod issuer_root_tests {
             [
                 jwt.issuer_key_x_index,
                 jwt.issuer_key_y_index,
-                jwt.revocation_commitment_index,
-                jwt.revocation_commitment_index + 1,
+                jwt.revocation_value_index,
+                jwt.revocation_value_index + 1,
             ]
         );
         let show = calculate_show_witness_indices(2, ShowVariant::Jwt);
