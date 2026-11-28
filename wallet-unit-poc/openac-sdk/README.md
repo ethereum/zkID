@@ -164,7 +164,7 @@ const result = await openac.verify(
 
 ## Issuer hiding
 
-The issuer key never appears in a proof. Show derives the leaf `sha256(be32(x) || be32(y))` from the issuer key it shares with Prepare, proves it is in a SHA-256 [LeanIMT](https://zkkit.pse.dev/classes/_zk_kit_lean_imt.LeanIMT.html) of approved issuers (max depth 8) and outputs only the root, as `[hi, lo]` 128-bit limbs (`root = hi * 2^128 + lo`).
+The issuer key never appears in a proof. Show derives the leaf `sha256(be32(x) || be32(y) || be32(2))` from the issuer key it shares with Prepare, proves it is in a SHA-256 [LeanIMT](https://zkkit.pse.dev/classes/_zk_kit_lean_imt.LeanIMT.html) of approved issuers (max depth 8) and outputs only the root, as `[hi, lo]` 128-bit limbs (`root = hi * 2^128 + lo`).
 
 - **Registry**: [`OpenACIssuerRegistry`](../solidity) on chain; `createIssuerRegistry` (a [`@coordination-network/issuer-registry`](https://www.npmjs.com/package/@coordination-network/issuer-registry) `IssuerRegistry` with `sha256Scheme`) off chain. Compare the mirror's `root` with the contract's `getIssuerRoot()` before building proofs.
 - **Holder**: pass `issuerProof` to `present()`. It must be for the credential's issuer.

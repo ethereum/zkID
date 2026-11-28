@@ -81,7 +81,11 @@ export function bytesToBigInt(bytes: Uint8Array): bigint {
   return BigInt("0x" + hex);
 }
 
+/** Big-endian bytes of `value`; throws if it is negative or does not fit in `byteLength` bytes. */
 export function bigintToBytes(value: bigint, byteLength: number): Uint8Array {
+  if (value < 0n || value >= 1n << BigInt(byteLength * 8)) {
+    throw new RangeError(`${value} does not fit in ${byteLength} bytes`);
+  }
   const hex = value.toString(16).padStart(byteLength * 2, "0");
   const bytes = new Uint8Array(byteLength);
   for (let i = 0; i < byteLength; i++) {

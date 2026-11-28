@@ -5,10 +5,10 @@ On-chain issuer hiding for OpenAC. `OpenACIssuerRegistry` keeps OpenAC's approve
 ## Issuer commitment
 
 ```
-commitment = sha256(be32(pubKeyX) || be32(pubKeyY))   // issuer's P-256 key
+commitment = sha256(be32(pubKeyX) || be32(pubKeyY) || be32(2))   // issuer's P-256 key, tag 2
 ```
 
-This is `sha256Hash2(x, y)` from `@coordination-network/issuer-registry`. Node hash is `sha256(left || right)`; off chain use `new IssuerRegistry(commitments, sha256Scheme)`.
+This is `issuerCommitment(key)` from `openac-sdk`. Node hash is `sha256(left || right)`, so the tag makes a commitment a 768-bit hash input that no node shares; off chain use `new IssuerRegistry(commitments, sha256Scheme)`.
 
 ## Root limbs
 

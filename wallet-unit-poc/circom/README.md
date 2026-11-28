@@ -21,7 +21,7 @@ note: This project uses [circomkit](https://github.com/erhant/circomkit) to comp
 - `es256` – ECDSA signature verification (ES256)
 - `jwt` – JWT validation circuit
 - `show` – device binding, predicates and issuer hiding
-- `components/issuer-membership` – issuer hiding: proves the issuer key's leaf `sha256(be32(x) || be32(y))` is in a SHA-256 LeanIMT ([`@zk-kit/binary-merkle-root-sha256.circom`](https://www.npmjs.com/package/@zk-kit/binary-merkle-root-sha256.circom)) and outputs the root as `[hi, lo]` limbs. Prepare (`jwt`, `mdoc`) keeps the issuer key private and shares it with Show through `comm_W_shared`.
+- `components/issuer-membership` – issuer hiding: proves the issuer key's leaf `sha256(be32(x) || be32(y) || be32(2))` is in a SHA-256 LeanIMT ([`@zk-kit/binary-merkle-root-sha256.circom`](https://www.npmjs.com/package/@zk-kit/binary-merkle-root-sha256.circom)) and outputs the root as `[hi, lo]` limbs. Prepare (`jwt`, `mdoc`) keeps the issuer key private and shares it with Show through `comm_W_shared`.
 
 ## Testing
 

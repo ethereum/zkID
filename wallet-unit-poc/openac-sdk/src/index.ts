@@ -223,6 +223,7 @@ export {
   IssuerRegistry,
   sha256Scheme,
   ISSUER_TREE_MAX_DEPTH,
+  ISSUER_COMMITMENT_TAG,
   issuerCommitment,
   createIssuerRegistry,
   buildIssuerMembershipInputs,

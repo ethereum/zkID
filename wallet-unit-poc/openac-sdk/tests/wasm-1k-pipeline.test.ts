@@ -17,6 +17,7 @@ import {
   issuerCommitment,
   fromLimbs,
 } from "../src/index.js";
+import { CLAIM_IDENTITY_WITNESS_START, CLAIM_VALUES_WITNESS_START } from "../src/sizing.js";
 import { buildJwtCircuitInputs } from "../src/inputs/jwt-input-builder.js";
 import {
   buildShowCircuitInputs,
@@ -341,15 +342,18 @@ describe.skipIf(!checkArtifactsExist())(
     const prepareResult = await bridge.precomputeFromWitness(
       preparePk,
       jwtWitnessWtns,
+      "1k",
     );
     expect(prepareResult.proof.length).toBeGreaterThan(0);
     expect(prepareResult.instance.length).toBeGreaterThan(0);
     expect(prepareResult.witness.length).toBeGreaterThan(0);
 
-    // Extract normalizedClaimValues from JWT witness to pass to Show circuit.
-    // JWT 1k (maxMatches=4, maxClaims=2): w[1..2] = normalizedClaimValues
+    // Shared values Show must repeat, read from the private JWT witness.
     const maxClaims = JWT_PARAMS_1K.maxMatches - 2;
-    const normalizedClaimValues = jwtWitness.slice(1, 1 + maxClaims);
+    const valuesStart = CLAIM_VALUES_WITNESS_START["1k"];
+    const identityStart = CLAIM_IDENTITY_WITNESS_START["1k"];
+    const normalizedClaimValues = jwtWitness.slice(valuesStart, valuesStart + maxClaims);
+    const claimIdentifierHashes = jwtWitness.slice(identityStart, identityStart + maxClaims);
 
     const deviceSignature = signDeviceNonce(
       VERIFIER_NONCE,
@@ -363,6 +367,8 @@ describe.skipIf(!checkArtifactsExist())(
       data.devicePublicKey,
       {
         normalizedClaimValues,
+        claimIdentifierHashes,
+        predicates: [],
         issuer: buildIssuerMembershipInputs(
           issuerPublicKeyToPoint(ISSUER_PUBLIC_KEY),
           registry.generateProof(issuerCommitment(ISSUER_PUBLIC_KEY)),
